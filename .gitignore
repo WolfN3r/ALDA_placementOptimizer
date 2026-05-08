@@ -6,6 +6,11 @@ n8n/*
 logs/*
 !logs/.gitkeep
 .env
+
+# WorkDir logs and temp files
+*.log
+*.pyc
+
 # Images
 *.png
 *.jpg

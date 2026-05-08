@@ -1,0 +1,796 @@
+{
+  "generation_params": {
+    "num_of_blocks": 10,
+    "seed": 42
+  },
+  "technology": "gpdk090_simple_tech",
+  "blocks": [
+    {
+      "device_type": "nmos1v_nat",
+      "block_id": 0,
+      "parameters": {
+        "width": 1.35,
+        "length": 0.91,
+        "multiplier": 4,
+        "num_fingers": 5,
+        "total_fingers": 20
+      },
+      "variants": [
+        {
+          "layout": {
+            "rows": 10,
+            "cols": 2,
+            "aspect_ratio": 0.423
+          },
+          "main_bbox": {
+            "x_min": 0.0,
+            "y_min": 0.0,
+            "x_max": 1.6,
+            "y_max": 3.78
+          },
+          "pin_positions": {
+            "P0": {
+              "x": 0.8,
+              "y": 1.89
+            },
+            "P1": {
+              "x": 0.8,
+              "y": 1.89
+            },
+            "P2": {
+              "x": 0.8,
+              "y": 1.89
+            }
+          },
+          "is_used": true,
+          "rotation_deg": 0
+        }
+      ],
+      "num_pins": 3,
+      "generation_attempts": 2,
+      "power_rail": null
+    },
+    {
+      "device_type": "nmos1v_nat",
+      "block_id": 1,
+      "parameters": {
+        "width": 7.3,
+        "length": 0.65,
+        "multiplier": 6,
+        "num_fingers": 17,
+        "total_fingers": 102
+      },
+      "variants": [
+        {
+          "layout": {
+            "rows": 17,
+            "cols": 6,
+            "aspect_ratio": 0.655
+          },
+          "main_bbox": {
+            "x_min": 0.0,
+            "y_min": 0.0,
+            "x_max": 6.035,
+            "y_max": 9.22
+          },
+          "pin_positions": {
+            "P0": {
+              "x": 3.02,
+              "y": 0.0
+            },
+            "P1": {
+              "x": 3.02,
+              "y": 4.61
+            },
+            "P2": {
+              "x": 3.02,
+              "y": 4.61
+            }
+          },
+          "is_used": true,
+          "rotation_deg": 0
+        }
+      ],
+      "num_pins": 3,
+      "generation_attempts": 1,
+      "power_rail": "VSS"
+    },
+    {
+      "device_type": "nmos1v_nat",
+      "block_id": 2,
+      "parameters": {
+        "width": 7.3,
+        "length": 0.65,
+        "multiplier": 6,
+        "num_fingers": 17,
+        "total_fingers": 102
+      },
+      "variants": [
+        {
+          "layout": {
+            "rows": 17,
+            "cols": 6,
+            "aspect_ratio": 0.655
+          },
+          "main_bbox": {
+            "x_min": 0.0,
+            "y_min": 0.0,
+            "x_max": 6.035,
+            "y_max": 9.22
+          },
+          "pin_positions": {
+            "P0": {
+              "x": 3.02,
+              "y": 0.0
+            },
+            "P1": {
+              "x": 3.02,
+              "y": 4.61
+            },
+            "P2": {
+              "x": 3.02,
+              "y": 4.61
+            }
+          },
+          "is_used": true,
+          "rotation_deg": 0
+        }
+      ],
+      "num_pins": 3,
+      "generation_attempts": 1,
+      "power_rail": "VSS"
+    },
+    {
+      "device_type": "pmos1v_nat",
+      "block_id": 3,
+      "parameters": {
+        "width": 2.0,
+        "length": 0.81,
+        "multiplier": 4,
+        "num_fingers": 14,
+        "total_fingers": 56
+      },
+      "variants": [
+        {
+          "layout": {
+            "rows": 14,
+            "cols": 4,
+            "aspect_ratio": 0.795
+          },
+          "main_bbox": {
+            "x_min": 0.0,
+            "y_min": 0.0,
+            "x_max": 2.83,
+            "y_max": 3.56
+          },
+          "pin_positions": {
+            "P0": {
+              "x": 1.415,
+              "y": 1.78
+            },
+            "P1": {
+              "x": 1.415,
+              "y": 1.78
+            },
+            "P2": {
+              "x": 1.415,
+              "y": 1.78
+            }
+          },
+          "is_used": true,
+          "rotation_deg": 0
+        }
+      ],
+      "num_pins": 3,
+      "generation_attempts": 1,
+      "power_rail": null
+    },
+    {
+      "device_type": "nmos1v_nat",
+      "block_id": 4,
+      "parameters": {
+        "width": 1.4,
+        "length": 0.27,
+        "multiplier": 4,
+        "num_fingers": 12,
+        "total_fingers": 48
+      },
+      "variants": [
+        {
+          "layout": {
+            "rows": 12,
+            "cols": 4,
+            "aspect_ratio": 1.002
+          },
+          "main_bbox": {
+            "x_min": 0.0,
+            "y_min": 0.0,
+            "x_max": 2.725,
+            "y_max": 2.72
+          },
+          "pin_positions": {
+            "P0": {
+              "x": 1.36,
+              "y": 0.0
+            },
+            "P1": {
+              "x": 1.36,
+              "y": 1.36
+            },
+            "P2": {
+              "x": 1.36,
+              "y": 1.36
+            }
+          },
+          "is_used": true,
+          "rotation_deg": 0
+        }
+      ],
+      "num_pins": 3,
+      "generation_attempts": 1,
+      "power_rail": "VSS"
+    },
+    {
+      "device_type": "pmos2v_nat",
+      "block_id": 5,
+      "parameters": {
+        "width": 6.0,
+        "length": 1.95,
+        "multiplier": 6,
+        "num_fingers": 13,
+        "total_fingers": 78
+      },
+      "variants": [
+        {
+          "layout": {
+            "rows": 13,
+            "cols": 6,
+            "aspect_ratio": 0.837
+          },
+          "main_bbox": {
+            "x_min": 0.0,
+            "y_min": 0.0,
+            "x_max": 6.23,
+            "y_max": 7.44
+          },
+          "pin_positions": {
+            "P0": {
+              "x": 3.115,
+              "y": 7.44
+            },
+            "P1": {
+              "x": 3.115,
+              "y": 3.72
+            },
+            "P2": {
+              "x": 3.115,
+              "y": 3.72
+            }
+          },
+          "is_used": true,
+          "rotation_deg": 0
+        }
+      ],
+      "num_pins": 3,
+      "generation_attempts": 1,
+      "power_rail": "VDD"
+    },
+    {
+      "device_type": "nmos2v_nat",
+      "block_id": 6,
+      "parameters": {
+        "width": 6.0,
+        "length": 1.77,
+        "multiplier": 4,
+        "num_fingers": 15,
+        "total_fingers": 60
+      },
+      "variants": [
+        {
+          "layout": {
+            "rows": 10,
+            "cols": 6,
+            "aspect_ratio": 1.154
+          },
+          "main_bbox": {
+            "x_min": 0.0,
+            "y_min": 0.0,
+            "x_max": 5.86,
+            "y_max": 5.08
+          },
+          "pin_positions": {
+            "P0": {
+              "x": 2.93,
+              "y": 5.08
+            },
+            "P1": {
+              "x": 2.93,
+              "y": 2.54
+            },
+            "P2": {
+              "x": 2.93,
+              "y": 2.54
+            },
+            "P3": {
+              "x": 2.93,
+              "y": 2.54
+            }
+          },
+          "is_used": true,
+          "rotation_deg": 0
+        },
+        {
+          "layout": {
+            "rows": 12,
+            "cols": 5,
+            "aspect_ratio": 0.794
+          },
+          "main_bbox": {
+            "x_min": 0.0,
+            "y_min": 0.0,
+            "x_max": 4.86,
+            "y_max": 6.12
+          },
+          "pin_positions": {
+            "P0": {
+              "x": 2.43,
+              "y": 6.12
+            },
+            "P1": {
+              "x": 2.43,
+              "y": 3.06
+            },
+            "P2": {
+              "x": 2.43,
+              "y": 3.06
+            },
+            "P3": {
+              "x": 2.43,
+              "y": 3.06
+            }
+          },
+          "is_used": false,
+          "rotation_deg": 0
+        },
+        {
+          "layout": {
+            "rows": 15,
+            "cols": 4,
+            "aspect_ratio": 0.503
+          },
+          "main_bbox": {
+            "x_min": 0.0,
+            "y_min": 0.0,
+            "x_max": 3.86,
+            "y_max": 7.68
+          },
+          "pin_positions": {
+            "P0": {
+              "x": 1.93,
+              "y": 7.68
+            },
+            "P1": {
+              "x": 1.93,
+              "y": 3.84
+            },
+            "P2": {
+              "x": 1.93,
+              "y": 3.84
+            },
+            "P3": {
+              "x": 1.93,
+              "y": 3.84
+            }
+          },
+          "is_used": false,
+          "rotation_deg": 0
+        }
+      ],
+      "num_pins": 4,
+      "generation_attempts": 2,
+      "power_rail": "VDD"
+    },
+    {
+      "device_type": "nmos1v_nat",
+      "block_id": 7,
+      "parameters": {
+        "width": 2.15,
+        "length": 0.69,
+        "multiplier": 6,
+        "num_fingers": 11,
+        "total_fingers": 66
+      },
+      "variants": [
+        {
+          "layout": {
+            "rows": 11,
+            "cols": 6,
+            "aspect_ratio": 1.384
+          },
+          "main_bbox": {
+            "x_min": 0.0,
+            "y_min": 0.0,
+            "x_max": 4.635,
+            "y_max": 3.35
+          },
+          "pin_positions": {
+            "P0": {
+              "x": 2.315,
+              "y": 3.35
+            },
+            "P1": {
+              "x": 2.315,
+              "y": 1.675
+            },
+            "P2": {
+              "x": 2.315,
+              "y": 1.675
+            }
+          },
+          "is_used": true,
+          "rotation_deg": 0
+        },
+        {
+          "layout": {
+            "rows": 22,
+            "cols": 3,
+            "aspect_ratio": 0.329
+          },
+          "main_bbox": {
+            "x_min": 0.0,
+            "y_min": 0.0,
+            "x_max": 2.245,
+            "y_max": 6.82
+          },
+          "pin_positions": {
+            "P0": {
+              "x": 1.12,
+              "y": 6.82
+            },
+            "P1": {
+              "x": 1.12,
+              "y": 3.41
+            },
+            "P2": {
+              "x": 1.12,
+              "y": 3.41
+            }
+          },
+          "is_used": false,
+          "rotation_deg": 0
+        }
+      ],
+      "num_pins": 3,
+      "generation_attempts": 1,
+      "power_rail": "VDD"
+    },
+    {
+      "device_type": "nmos1v_nat",
+      "block_id": 8,
+      "parameters": {
+        "width": 1.15,
+        "length": 0.52,
+        "multiplier": 6,
+        "num_fingers": 14,
+        "total_fingers": 84
+      },
+      "variants": [
+        {
+          "layout": {
+            "rows": 14,
+            "cols": 6,
+            "aspect_ratio": 1.459
+          },
+          "main_bbox": {
+            "x_min": 0.0,
+            "y_min": 0.0,
+            "x_max": 3.955,
+            "y_max": 2.71
+          },
+          "pin_positions": {
+            "P0": {
+              "x": 1.98,
+              "y": 1.355
+            },
+            "P1": {
+              "x": 1.98,
+              "y": 1.355
+            },
+            "P2": {
+              "x": 1.98,
+              "y": 1.355
+            },
+            "P3": {
+              "x": 1.98,
+              "y": 1.355
+            }
+          },
+          "is_used": true,
+          "rotation_deg": 0
+        },
+        {
+          "layout": {
+            "rows": 21,
+            "cols": 4,
+            "aspect_ratio": 0.628
+          },
+          "main_bbox": {
+            "x_min": 0.0,
+            "y_min": 0.0,
+            "x_max": 2.59,
+            "y_max": 4.125
+          },
+          "pin_positions": {
+            "P0": {
+              "x": 1.295,
+              "y": 2.06
+            },
+            "P1": {
+              "x": 1.295,
+              "y": 2.06
+            },
+            "P2": {
+              "x": 1.295,
+              "y": 2.06
+            },
+            "P3": {
+              "x": 1.295,
+              "y": 2.06
+            }
+          },
+          "is_used": false,
+          "rotation_deg": 0
+        },
+        {
+          "layout": {
+            "rows": 28,
+            "cols": 3,
+            "aspect_ratio": 0.344
+          },
+          "main_bbox": {
+            "x_min": 0.0,
+            "y_min": 0.0,
+            "x_max": 1.905,
+            "y_max": 5.54
+          },
+          "pin_positions": {
+            "P0": {
+              "x": 0.95,
+              "y": 2.77
+            },
+            "P1": {
+              "x": 0.95,
+              "y": 2.77
+            },
+            "P2": {
+              "x": 0.95,
+              "y": 2.77
+            },
+            "P3": {
+              "x": 0.95,
+              "y": 2.77
+            }
+          },
+          "is_used": false,
+          "rotation_deg": 0
+        }
+      ],
+      "num_pins": 4,
+      "generation_attempts": 2,
+      "power_rail": null
+    },
+    {
+      "device_type": "nmos2v_nat",
+      "block_id": 9,
+      "parameters": {
+        "width": 14.95,
+        "length": 0.67,
+        "multiplier": 6,
+        "num_fingers": 19,
+        "total_fingers": 114
+      },
+      "variants": [
+        {
+          "layout": {
+            "rows": 19,
+            "cols": 6,
+            "aspect_ratio": 0.478
+          },
+          "main_bbox": {
+            "x_min": 0.0,
+            "y_min": 0.0,
+            "x_max": 8.18,
+            "y_max": 17.11
+          },
+          "pin_positions": {
+            "P0": {
+              "x": 4.09,
+              "y": 17.11
+            },
+            "P1": {
+              "x": 4.09,
+              "y": 8.555
+            },
+            "P2": {
+              "x": 4.09,
+              "y": 8.555
+            },
+            "P3": {
+              "x": 4.09,
+              "y": 8.555
+            }
+          },
+          "is_used": true,
+          "rotation_deg": 0
+        }
+      ],
+      "num_pins": 4,
+      "generation_attempts": 2,
+      "power_rail": "VDD"
+    }
+  ],
+  "netlist": {
+    "num_nets": 12,
+    "num_power_nets": 2,
+    "num_signal_nets": 10,
+    "num_pins": 33,
+    "density": 1.0,
+    "power_coverage": 0.7,
+    "nets": [
+      {
+        "net_id": "VDD",
+        "net_type": "power",
+        "pins": [
+          "B5_P0",
+          "B6_P0",
+          "B7_P0",
+          "B9_P0"
+        ]
+      },
+      {
+        "net_id": "VSS",
+        "net_type": "power",
+        "pins": [
+          "B1_P0",
+          "B2_P0",
+          "B4_P0"
+        ]
+      },
+      {
+        "net_id": "net_0",
+        "net_type": "signal",
+        "pins": [
+          "B1_P1",
+          "B0_P0"
+        ]
+      },
+      {
+        "net_id": "net_1",
+        "net_type": "signal",
+        "pins": [
+          "B2_P1",
+          "B8_P0"
+        ]
+      },
+      {
+        "net_id": "net_2",
+        "net_type": "signal",
+        "pins": [
+          "B1_P2",
+          "B8_P2"
+        ]
+      },
+      {
+        "net_id": "net_3",
+        "net_type": "signal",
+        "pins": [
+          "B2_P2",
+          "B3_P0"
+        ]
+      },
+      {
+        "net_id": "net_4",
+        "net_type": "signal",
+        "pins": [
+          "B6_P1",
+          "B0_P2"
+        ]
+      },
+      {
+        "net_id": "net_5",
+        "net_type": "signal",
+        "pins": [
+          "B6_P2",
+          "B9_P1"
+        ]
+      },
+      {
+        "net_id": "net_6",
+        "net_type": "signal",
+        "pins": [
+          "B6_P3",
+          "B9_P2"
+        ]
+      },
+      {
+        "net_id": "net_7",
+        "net_type": "signal",
+        "pins": [
+          "B5_P2",
+          "B3_P2",
+          "B0_P1",
+          "B8_P1"
+        ]
+      },
+      {
+        "net_id": "net_8",
+        "net_type": "signal",
+        "pins": [
+          "B5_P1",
+          "B7_P2",
+          "B8_P3",
+          "B4_P2"
+        ]
+      },
+      {
+        "net_id": "net_9",
+        "net_type": "signal",
+        "pins": [
+          "B3_P1",
+          "B4_P1",
+          "B9_P3",
+          "B7_P1"
+        ]
+      }
+    ]
+  },
+  "symmetry_constraints": {
+    "symmetry_axis": "vertical",
+    "groups": [
+      {
+        "group_id": 0,
+        "device_type": "nmos1v_nat",
+        "pairs": [
+          {
+            "block_a": 1,
+            "block_b": 2
+          }
+        ],
+        "self_symmetric": []
+      },
+      {
+        "group_id": 1,
+        "device_type": "nmos2v_nat",
+        "pairs": [],
+        "self_symmetric": [
+          6
+        ]
+      }
+    ],
+    "symmetric_net_pairs": [
+      {
+        "net_a": "net_0",
+        "net_b": "net_1",
+        "block_pair": [
+          1,
+          2
+        ],
+        "pin_index": 1
+      },
+      {
+        "net_a": "net_2",
+        "net_b": "net_3",
+        "block_pair": [
+          1,
+          2
+        ],
+        "pin_index": 2
+      }
+    ],
+    "self_symmetric_nets": [
+      "net_4",
+      "net_5",
+      "net_6"
+    ]
+  }
+}
