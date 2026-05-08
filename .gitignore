@@ -1,0 +1,28 @@
+# n8n data a logy
+n8n/*
+!n8n/workflows/
+!n8n/scripts/
+!n8n/workflows/*.json
+logs/*
+!logs/.gitkeep
+.env
+# Images
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+*.svg
+*.tiff
+*.webp
+
+#IDE
+.vscode/
+.idea/
+
+# Claude Code local config
+.claude/
+
+# OS junk
+.DS_Store
+Thumbs.db

@@ -1,0 +1,86 @@
+{
+    "_source": {
+        "technology": "gpdk090_simple_tech",
+        "description": "Placement rules in the advisor's per-device + between_topologies format. Bounding-rectangle model: each device is a 2D envelope; spacing values describe how envelopes relate along two perpendicular axes."
+    },
+
+    "_directional_convention": {
+        "active":   "spacing along the source-drain axis (the device's intrinsic 'active direction', NOT absolute X)",
+        "poly":     "spacing along the channel-width axis (the device's intrinsic 'poly direction', NOT absolute Y)",
+        "WPE_active / WPE_poly": "Well-Proximity-Effect ordinal cost in the device's active and poly directions respectively. Layer-named (not axis-named) so the values stay correct when the placer rotates devices.",
+        "negative_values": "envelope overlap allowed in that axis — devices share the structure (merged diffusion, etc.)"
+    },
+
+    "device_constraints": {
+        "_comment": "Manufacturing limits per device. Sizing only.",
+        "nmos1v_nat": {"L": {"min": 0.1, "max": 10.0, "default": 0.1}, "W": {"min": 0.12, "max": 100.0, "default": 1.0}},
+        "nmos2v_nat": {"L": {"min": 0.4, "max": 10.0, "default": 0.4}, "W": {"min": 0.4,  "max": 100.0, "default": 2.0}},
+        "pmos1v_nat": {"L": {"min": 0.1, "max": 10.0, "default": 0.1}, "W": {"min": 0.12, "max": 100.0, "default": 1.0}},
+        "pmos2v_nat": {"L": {"min": 0.4, "max": 10.0, "default": 0.4}, "W": {"min": 0.4,  "max": 100.0, "default": 2.0}}
+    },
+
+    "physical_design_rules": {
+        "_comment": "Transistor-level layout rules from gpdk090 DRM. Used by block generator to compute finger dimensions and block sizes.",
+        "poly": {
+            "min_width": 0.1,
+            "min_spacing": 0.14,
+            "extension_over_active": 0.18,
+            "gds_layer": 17,
+            "gds_datatype": 0
+        },
+        "active": {
+            "min_width": 0.12,
+            "min_spacing": 0.12,
+            "extension_past_poly": 0.18,
+            "gds_layer": 6,
+            "gds_datatype": 0
+        },
+        "contact": {
+            "size": 0.12,
+            "min_spacing": 0.14,
+            "enclosure_by_active": 0.06,
+            "enclosure_by_metal1": 0.06,
+            "enclosure_by_metal1_two_sides": 0.06,
+            "gds_layer": 30,
+            "gds_datatype": 0
+        }
+    },
+
+    "device_spacing": {
+        "_comment": "Per-device rules for pairs of the SAME cell type. Negative active = envelope overlap allowed (shared diffusion). Categories follow the advisor's tree: common_bulk (shared bulk only), common_active (shared diffusion), same_cellNames (same cell, no sharing).",
+
+        "nmos1v_nat": {
+            "common_bulk":    {"active": -0.24, "poly": 1.0},
+            "common_active":  {"active": -0.24, "poly": 1.0},
+            "same_cellNames": {"active":  1.0,  "poly": 1.0}
+        },
+
+        "nmos2v_nat": {
+            "common_bulk":    {"active": -0.24, "poly": 1.0},
+            "common_active":  {"active": -1.9,  "poly": 1.0},
+            "same_cellNames": {"active":  1.0,  "poly": 1.0}
+        },
+
+        "pmos1v_nat": {
+            "common_bulk":    {"active": -0.24, "poly": 1.0},
+            "common_active":  {"active": -0.24, "poly": 1.0},
+            "same_cellNames": {"active":  1.0,  "poly": 1.0}
+        },
+
+        "pmos2v_nat": {
+            "common_bulk":    {"active": -0.24, "poly": 1.0},
+            "common_active":  {"active": -1.9,  "poly": 1.0},
+            "same_cellNames": {"active":  1.0,  "poly": 1.0}
+        }
+    },
+
+    "between_topologies": {
+        "_comment": "Topology-distance costs for cross-device pairs (decision-tree leaves). active/poly leaves carry ordinal costs; bulk/group mismatch leaves use WPE-based costs because well-proximity is the dominant electrical effect when devices cross bulk or voltage-class boundaries.",
+
+        "same_cellNames":         {"active": 2, "poly": 3},
+        "same_deviceGroups":      {"active": 4, "poly": 5},
+        "different_cellNames":    {"active": 6, "poly": 7},
+        "different_bulks":        {"WPE_active": 2, "WPE_poly": 3},
+        "different_deviceGroups": {"WPE_active": 5, "WPE_poly": 6}
+    }
+}

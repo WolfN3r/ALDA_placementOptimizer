@@ -1,0 +1,481 @@
+{
+    "technology_info": {
+        "name": "gpdk090_simple_tech",
+        "manufacturing_grid": 0.005,
+        "database_units_per_micron": 2000,
+        "units": "um",
+        "source_reference": "Based on gpdk090 DRM v4.6 (Cadence Generic PDK 90nm)",
+        "num_metal_layers": 7,
+        "comment": "Routing technology file (LEF equivalent). Metal/via routing rules, via definitions, and routing grid. Device-level rules are in gpdk090_device_rules.json. GDS layer map is in gpdk090_gds_layers.json."
+    },
+    "metal_layers": {
+        "_comment": "M1 is thin metal (0.12um rules), M2-M7 are intermediate metals (0.14um rules). Structure mirrors LEF LAYER definitions. preferred_direction: 'horizontal', 'vertical', or 'any'.",
+        "M1": {
+            "min_width": 0.12,
+            "min_spacing": 0.12,
+            "min_area": 0.02,
+            "max_width": 12.0,
+            "pitch": 0.24,
+            "min_bent_length": 0.18,
+            "min_bent_spacing": 0.16,
+            "eol_spacing": 0.14,
+            "eol_within": 0.05,
+            "minstep": 0.12,
+            "minstep_maxedges": 1,
+            "preferred_direction": "any",
+            "gds_layer": 31,
+            "gds_datatype": 0,
+            "spacing_table": {
+                "parallel_run_lengths": [0],
+                "width_entries": [
+                    {"width_threshold": 0, "spacings": [0.12]},
+                    {"width_threshold": 1.5, "spacings": [1.5]},
+                    {"width_threshold": 4.5, "spacings": [3.0]}
+                ]
+            },
+            "resistance_per_sq": 0.08,
+            "thickness": 0.22,
+            "comment": "Thin metal. Local interconnect and pin connections."
+        },
+        "M2": {
+            "min_width": 0.14,
+            "min_spacing": 0.14,
+            "min_area": 0.028,
+            "max_width": 12.0,
+            "pitch": 0.28,
+            "min_bent_length": 0.20,
+            "min_bent_spacing": 0.20,
+            "eol_spacing": 0.16,
+            "eol_within": 0.07,
+            "minstep": 0.14,
+            "minstep_maxedges": 1,
+            "preferred_direction": "vertical",
+            "gds_layer": 32,
+            "gds_datatype": 0,
+            "spacing_table": {
+                "parallel_run_lengths": [0],
+                "width_entries": [
+                    {"width_threshold": 0, "spacings": [0.14]},
+                    {"width_threshold": 1.5, "spacings": [1.5]},
+                    {"width_threshold": 4.5, "spacings": [3.0]}
+                ]
+            },
+            "resistance_per_sq": 0.08,
+            "thickness": 0.22,
+            "comment": "First intermediate metal. Primary vertical routing."
+        },
+        "M3": {
+            "min_width": 0.14,
+            "min_spacing": 0.14,
+            "min_area": 0.028,
+            "max_width": 12.0,
+            "pitch": 0.28,
+            "min_bent_length": 0.20,
+            "min_bent_spacing": 0.20,
+            "eol_spacing": 0.16,
+            "eol_within": 0.07,
+            "minstep": 0.14,
+            "minstep_maxedges": 1,
+            "preferred_direction": "horizontal",
+            "gds_layer": 33,
+            "gds_datatype": 0,
+            "spacing_table": {
+                "parallel_run_lengths": [0],
+                "width_entries": [
+                    {"width_threshold": 0, "spacings": [0.14]},
+                    {"width_threshold": 1.5, "spacings": [1.5]},
+                    {"width_threshold": 4.5, "spacings": [3.0]}
+                ]
+            },
+            "resistance_per_sq": 0.08,
+            "thickness": 0.22,
+            "comment": "Intermediate metal. Primary horizontal routing."
+        },
+        "M4": {
+            "min_width": 0.14,
+            "min_spacing": 0.14,
+            "min_area": 0.028,
+            "max_width": 12.0,
+            "pitch": 0.28,
+            "min_bent_length": 0.20,
+            "min_bent_spacing": 0.20,
+            "eol_spacing": 0.16,
+            "eol_within": 0.07,
+            "minstep": 0.14,
+            "minstep_maxedges": 1,
+            "preferred_direction": "vertical",
+            "gds_layer": 34,
+            "gds_datatype": 0,
+            "spacing_table": {
+                "parallel_run_lengths": [0],
+                "width_entries": [
+                    {"width_threshold": 0, "spacings": [0.14]},
+                    {"width_threshold": 1.5, "spacings": [1.5]},
+                    {"width_threshold": 4.5, "spacings": [3.0]}
+                ]
+            },
+            "resistance_per_sq": 0.08,
+            "thickness": 0.22,
+            "comment": "Intermediate metal. Vertical routing."
+        },
+        "M5": {
+            "min_width": 0.14,
+            "min_spacing": 0.14,
+            "min_area": 0.028,
+            "max_width": 12.0,
+            "pitch": 0.28,
+            "min_bent_length": 0.20,
+            "min_bent_spacing": 0.20,
+            "eol_spacing": 0.16,
+            "eol_within": 0.07,
+            "minstep": 0.14,
+            "minstep_maxedges": 1,
+            "preferred_direction": "horizontal",
+            "gds_layer": 35,
+            "gds_datatype": 0,
+            "spacing_table": {
+                "parallel_run_lengths": [0],
+                "width_entries": [
+                    {"width_threshold": 0, "spacings": [0.14]},
+                    {"width_threshold": 1.5, "spacings": [1.5]},
+                    {"width_threshold": 4.5, "spacings": [3.0]}
+                ]
+            },
+            "resistance_per_sq": 0.08,
+            "thickness": 0.22,
+            "comment": "Intermediate metal. Horizontal routing."
+        },
+        "M6": {
+            "min_width": 0.14,
+            "min_spacing": 0.14,
+            "min_area": 0.028,
+            "max_width": 12.0,
+            "pitch": 0.28,
+            "min_bent_length": 0.20,
+            "min_bent_spacing": 0.20,
+            "eol_spacing": 0.16,
+            "eol_within": 0.07,
+            "minstep": 0.14,
+            "minstep_maxedges": 1,
+            "preferred_direction": "vertical",
+            "gds_layer": 36,
+            "gds_datatype": 0,
+            "spacing_table": {
+                "parallel_run_lengths": [0],
+                "width_entries": [
+                    {"width_threshold": 0, "spacings": [0.14]},
+                    {"width_threshold": 1.5, "spacings": [1.5]},
+                    {"width_threshold": 4.5, "spacings": [3.0]}
+                ]
+            },
+            "resistance_per_sq": 0.08,
+            "thickness": 0.22,
+            "comment": "Intermediate metal. Default power routing layer (M6)."
+        },
+        "M7": {
+            "min_width": 0.14,
+            "min_spacing": 0.14,
+            "min_area": 0.028,
+            "max_width": 12.0,
+            "pitch": 0.28,
+            "min_bent_length": 0.20,
+            "min_bent_spacing": 0.20,
+            "eol_spacing": 0.16,
+            "eol_within": 0.07,
+            "minstep": 0.14,
+            "minstep_maxedges": 1,
+            "preferred_direction": "horizontal",
+            "gds_layer": 37,
+            "gds_datatype": 0,
+            "spacing_table": {
+                "parallel_run_lengths": [0],
+                "width_entries": [
+                    {"width_threshold": 0, "spacings": [0.14]},
+                    {"width_threshold": 1.5, "spacings": [1.5]},
+                    {"width_threshold": 4.5, "spacings": [3.0]}
+                ]
+            },
+            "resistance_per_sq": 0.08,
+            "thickness": 0.22,
+            "comment": "Top intermediate metal. Horizontal routing."
+        }
+    },
+    "via_layers": {
+        "_comment": "Via rules from gpdk090 DRM. Via connects metal N to metal N+1. Enclosure: 'insideOnly' = minimum on any one side, 'two_sides' = minimum on at least two opposite sides. VIA1 has asymmetric enclosure (M1 side = 0.06, M2 side insideOnly = 0.005).",
+        "VIA1": {
+            "connects": ["M1", "M2"],
+            "size": 0.12,
+            "min_spacing": 0.14,
+            "enclosure_by_lower": 0.06,
+            "enclosure_by_lower_two_sides": 0.06,
+            "enclosure_by_upper": 0.005,
+            "enclosure_by_upper_two_sides": 0.06,
+            "gds_layer": 51,
+            "gds_datatype": 0
+        },
+        "VIA2": {
+            "connects": ["M2", "M3"],
+            "size": 0.12,
+            "min_spacing": 0.14,
+            "enclosure_by_lower": 0.005,
+            "enclosure_by_lower_two_sides": 0.06,
+            "enclosure_by_upper": 0.005,
+            "enclosure_by_upper_two_sides": 0.06,
+            "gds_layer": 52,
+            "gds_datatype": 0
+        },
+        "VIA3": {
+            "connects": ["M3", "M4"],
+            "size": 0.12,
+            "min_spacing": 0.14,
+            "enclosure_by_lower": 0.005,
+            "enclosure_by_lower_two_sides": 0.06,
+            "enclosure_by_upper": 0.005,
+            "enclosure_by_upper_two_sides": 0.06,
+            "gds_layer": 53,
+            "gds_datatype": 0
+        },
+        "VIA4": {
+            "connects": ["M4", "M5"],
+            "size": 0.12,
+            "min_spacing": 0.14,
+            "enclosure_by_lower": 0.005,
+            "enclosure_by_lower_two_sides": 0.06,
+            "enclosure_by_upper": 0.005,
+            "enclosure_by_upper_two_sides": 0.06,
+            "gds_layer": 54,
+            "gds_datatype": 0
+        },
+        "VIA5": {
+            "connects": ["M5", "M6"],
+            "size": 0.12,
+            "min_spacing": 0.14,
+            "enclosure_by_lower": 0.005,
+            "enclosure_by_lower_two_sides": 0.06,
+            "enclosure_by_upper": 0.005,
+            "enclosure_by_upper_two_sides": 0.06,
+            "gds_layer": 55,
+            "gds_datatype": 0
+        },
+        "VIA6": {
+            "connects": ["M6", "M7"],
+            "size": 0.12,
+            "min_spacing": 0.14,
+            "enclosure_by_lower": 0.005,
+            "enclosure_by_lower_two_sides": 0.06,
+            "enclosure_by_upper": 0.005,
+            "enclosure_by_upper_two_sides": 0.06,
+            "gds_layer": 56,
+            "gds_datatype": 0
+        }
+    },
+    "via_definitions": {
+        "_comment": "Named via definitions with geometry (LEF VIA equivalent). Each via has rects for lower metal, cut, and upper metal. Rect format: [x_min, y_min, x_max, y_max]. _1C = single cut, _H = both metals horizontal, _V = both metals vertical.",
+        "VIA12_1C": {
+            "layers": ["M1", "VIA1", "M2"],
+            "rects": {
+                "M1":   [[-0.120, -0.060, 0.120, 0.060]],
+                "VIA1": [[-0.060, -0.060, 0.060, 0.060]],
+                "M2":   [[-0.065, -0.120, 0.065, 0.120]]
+            },
+            "comment": "Default M1(H)-VIA1-M2(V)"
+        },
+        "VIA12_1C_H": {
+            "layers": ["M1", "VIA1", "M2"],
+            "rects": {
+                "M1":   [[-0.120, -0.060, 0.120, 0.060]],
+                "VIA1": [[-0.060, -0.060, 0.060, 0.060]],
+                "M2":   [[-0.120, -0.065, 0.120, 0.065]]
+            },
+            "comment": "Both metals horizontal"
+        },
+        "VIA12_1C_V": {
+            "layers": ["M1", "VIA1", "M2"],
+            "rects": {
+                "M1":   [[-0.060, -0.120, 0.060, 0.120]],
+                "VIA1": [[-0.060, -0.060, 0.060, 0.060]],
+                "M2":   [[-0.065, -0.120, 0.065, 0.120]]
+            },
+            "comment": "Both metals vertical"
+        },
+        "VIA23_1C": {
+            "layers": ["M2", "VIA2", "M3"],
+            "rects": {
+                "M2":   [[-0.065, -0.120, 0.065, 0.120]],
+                "VIA2": [[-0.060, -0.060, 0.060, 0.060]],
+                "M3":   [[-0.120, -0.065, 0.120, 0.065]]
+            },
+            "comment": "Default M2(V)-VIA2-M3(H)"
+        },
+        "VIA23_1C_H": {
+            "layers": ["M2", "VIA2", "M3"],
+            "rects": {
+                "M2":   [[-0.120, -0.065, 0.120, 0.065]],
+                "VIA2": [[-0.060, -0.060, 0.060, 0.060]],
+                "M3":   [[-0.120, -0.065, 0.120, 0.065]]
+            },
+            "comment": "Both metals horizontal"
+        },
+        "VIA23_1C_V": {
+            "layers": ["M2", "VIA2", "M3"],
+            "rects": {
+                "M2":   [[-0.065, -0.120, 0.065, 0.120]],
+                "VIA2": [[-0.060, -0.060, 0.060, 0.060]],
+                "M3":   [[-0.065, -0.120, 0.065, 0.120]]
+            },
+            "comment": "Both metals vertical"
+        },
+        "VIA34_1C": {
+            "layers": ["M3", "VIA3", "M4"],
+            "rects": {
+                "M3":   [[-0.120, -0.065, 0.120, 0.065]],
+                "VIA3": [[-0.060, -0.060, 0.060, 0.060]],
+                "M4":   [[-0.065, -0.120, 0.065, 0.120]]
+            },
+            "comment": "Default M3(H)-VIA3-M4(V)"
+        },
+        "VIA34_1C_H": {
+            "layers": ["M3", "VIA3", "M4"],
+            "rects": {
+                "M3":   [[-0.120, -0.065, 0.120, 0.065]],
+                "VIA3": [[-0.060, -0.060, 0.060, 0.060]],
+                "M4":   [[-0.120, -0.065, 0.120, 0.065]]
+            },
+            "comment": "Both metals horizontal"
+        },
+        "VIA34_1C_V": {
+            "layers": ["M3", "VIA3", "M4"],
+            "rects": {
+                "M3":   [[-0.065, -0.120, 0.065, 0.120]],
+                "VIA3": [[-0.060, -0.060, 0.060, 0.060]],
+                "M4":   [[-0.065, -0.120, 0.065, 0.120]]
+            },
+            "comment": "Both metals vertical"
+        },
+        "VIA45_1C": {
+            "layers": ["M4", "VIA4", "M5"],
+            "rects": {
+                "M4":   [[-0.065, -0.120, 0.065, 0.120]],
+                "VIA4": [[-0.060, -0.060, 0.060, 0.060]],
+                "M5":   [[-0.120, -0.065, 0.120, 0.065]]
+            },
+            "comment": "Default M4(V)-VIA4-M5(H)"
+        },
+        "VIA45_1C_H": {
+            "layers": ["M4", "VIA4", "M5"],
+            "rects": {
+                "M4":   [[-0.120, -0.065, 0.120, 0.065]],
+                "VIA4": [[-0.060, -0.060, 0.060, 0.060]],
+                "M5":   [[-0.120, -0.065, 0.120, 0.065]]
+            },
+            "comment": "Both metals horizontal"
+        },
+        "VIA45_1C_V": {
+            "layers": ["M4", "VIA4", "M5"],
+            "rects": {
+                "M4":   [[-0.065, -0.120, 0.065, 0.120]],
+                "VIA4": [[-0.060, -0.060, 0.060, 0.060]],
+                "M5":   [[-0.065, -0.120, 0.065, 0.120]]
+            },
+            "comment": "Both metals vertical"
+        },
+        "VIA56_1C": {
+            "layers": ["M5", "VIA5", "M6"],
+            "rects": {
+                "M5":   [[-0.120, -0.065, 0.120, 0.065]],
+                "VIA5": [[-0.060, -0.060, 0.060, 0.060]],
+                "M6":   [[-0.065, -0.120, 0.065, 0.120]]
+            },
+            "comment": "Default M5(H)-VIA5-M6(V)"
+        },
+        "VIA67_1C": {
+            "layers": ["M6", "VIA6", "M7"],
+            "rects": {
+                "M6":   [[-0.065, -0.120, 0.065, 0.120]],
+                "VIA6": [[-0.060, -0.060, 0.060, 0.060]],
+                "M7":   [[-0.120, -0.065, 0.120, 0.065]]
+            },
+            "comment": "Default M6(V)-VIA6-M7(H)"
+        }
+    },
+    "via_generation_rules": {
+        "_comment": "Parameterized via array generation (LEF VIARULE GENERATE equivalent). Used by routers to auto-generate via arrays for wide wires. Enclosure format: [overhang_preferred, overhang_non_preferred].",
+        "VIAG12": {
+            "lower": "M1", "upper": "M2", "cut": "VIA1",
+            "enclosure_lower": [0.06, 0.0],
+            "enclosure_upper": [0.06, 0.0],
+            "cut_rect": [-0.06, -0.06, 0.06, 0.06],
+            "cut_spacing": [0.26, 0.26],
+            "width_range_lower": [0.12, 12.0],
+            "width_range_upper": [0.14, 12.0]
+        },
+        "VIAG23": {
+            "lower": "M2", "upper": "M3", "cut": "VIA2",
+            "enclosure_lower": [0.06, 0.0],
+            "enclosure_upper": [0.06, 0.0],
+            "cut_rect": [-0.06, -0.06, 0.06, 0.06],
+            "cut_spacing": [0.26, 0.26],
+            "width_range_lower": [0.14, 12.0],
+            "width_range_upper": [0.14, 12.0]
+        },
+        "VIAG34": {
+            "lower": "M3", "upper": "M4", "cut": "VIA3",
+            "enclosure_lower": [0.06, 0.0],
+            "enclosure_upper": [0.06, 0.0],
+            "cut_rect": [-0.06, -0.06, 0.06, 0.06],
+            "cut_spacing": [0.26, 0.26],
+            "width_range_lower": [0.14, 12.0],
+            "width_range_upper": [0.14, 12.0]
+        },
+        "VIAG45": {
+            "lower": "M4", "upper": "M5", "cut": "VIA4",
+            "enclosure_lower": [0.06, 0.0],
+            "enclosure_upper": [0.06, 0.0],
+            "cut_rect": [-0.06, -0.06, 0.06, 0.06],
+            "cut_spacing": [0.26, 0.26],
+            "width_range_lower": [0.14, 12.0],
+            "width_range_upper": [0.14, 12.0]
+        },
+        "VIAG56": {
+            "lower": "M5", "upper": "M6", "cut": "VIA5",
+            "enclosure_lower": [0.06, 0.0],
+            "enclosure_upper": [0.06, 0.0],
+            "cut_rect": [-0.06, -0.06, 0.06, 0.06],
+            "cut_spacing": [0.26, 0.26],
+            "width_range_lower": [0.14, 12.0],
+            "width_range_upper": [0.14, 12.0]
+        },
+        "VIAG67": {
+            "lower": "M6", "upper": "M7", "cut": "VIA6",
+            "enclosure_lower": [0.06, 0.0],
+            "enclosure_upper": [0.06, 0.0],
+            "cut_rect": [-0.06, -0.06, 0.06, 0.06],
+            "cut_spacing": [0.26, 0.26],
+            "width_range_lower": [0.14, 12.0],
+            "width_range_upper": [0.14, 12.0]
+        }
+    },
+    "routing_widths": {
+        "_comment": "Default wire widths by net type. Maps to MAGICAL Params.py wire width tables.",
+        "signal_nm": 120,
+        "power_nm": 200,
+        "wire_width_tables": {
+            "signal_analog": [[0, 0.1], [120, 0.2]],
+            "signal_digital": [[0, 0.1], [100, 0.12]],
+            "power": [[0, 0.5]],
+            "digital_power": [[0, 0.3]]
+        },
+        "via_cuts_tables": {
+            "signal_analog": [[0, 2, 1, 2], [80, 4, 2, 2], [120, 9, 3, 3]],
+            "signal_digital": [[0, 2, 1, 2], [120, 4, 2, 2]],
+            "power": [[0, 4, 2, 2], [100, 9, 3, 3]]
+        }
+    },
+    "routing_grid": {
+        "horizontal_pitch": 0.28,
+        "vertical_pitch": 0.28,
+        "offset_x": 0.14,
+        "offset_y": 0.14,
+        "comment": "Routing grid pitch = 2x min_spacing for intermediate metals (2 x 0.14 = 0.28)."
+    }
+}

@@ -1,0 +1,90 @@
+{
+    "_source": {
+        "technology": "gpdk090_simple_tech",
+        "description": "GDS layer map for gpdk090 90nm. Based on MAGICAL's techfile.simple layer numbering (matches gpdk090 DRM). Professional PDKs ship this as a standalone layer mapping file for GDS-II stream export.",
+        "format": "Each entry: layer_name -> {layer: GDS layer number, datatype: GDS datatype, purpose: human description}"
+    },
+    "layers": {
+        "NW":       {"layer":   3, "datatype": 0, "purpose": "N-well implant",           "category": "well"},
+        "OD":       {"layer":   6, "datatype": 0, "purpose": "Active/diffusion (oxide definition)", "category": "transistor"},
+        "VTL_N":    {"layer":  12, "datatype": 0, "purpose": "Low-Vt NMOS marker",       "category": "threshold"},
+        "VTL_P":    {"layer":  13, "datatype": 0, "purpose": "Low-Vt PMOS marker",       "category": "threshold"},
+        "PO":       {"layer":  17, "datatype": 0, "purpose": "Polysilicon gate",          "category": "transistor"},
+        "OD_25":    {"layer":  18, "datatype": 0, "purpose": "2.5V thick-oxide active",   "category": "transistor"},
+        "PP":       {"layer":  25, "datatype": 0, "purpose": "P+ implant",                "category": "implant"},
+        "NP":       {"layer":  26, "datatype": 0, "purpose": "N+ implant",                "category": "implant"},
+        "RPO":      {"layer":  29, "datatype": 0, "purpose": "Resistor protection oxide", "category": "passive"},
+        "CO":       {"layer":  30, "datatype": 0, "purpose": "Contact (active/poly to M1)","category": "contact"},
+        "M1":       {"layer":  31, "datatype": 0, "purpose": "Metal 1 (thin, local)",     "category": "metal"},
+        "M2":       {"layer":  32, "datatype": 0, "purpose": "Metal 2 (intermediate)",    "category": "metal"},
+        "M3":       {"layer":  33, "datatype": 0, "purpose": "Metal 3 (intermediate)",    "category": "metal"},
+        "M4":       {"layer":  34, "datatype": 0, "purpose": "Metal 4 (intermediate)",    "category": "metal"},
+        "M5":       {"layer":  35, "datatype": 0, "purpose": "Metal 5 (intermediate)",    "category": "metal"},
+        "M6":       {"layer":  36, "datatype": 0, "purpose": "Metal 6 (intermediate)",    "category": "metal"},
+        "M7":       {"layer":  37, "datatype": 0, "purpose": "Metal 7 (top intermediate)","category": "metal"},
+        "M8":       {"layer":  38, "datatype": 0, "purpose": "Metal 8 (thick, optional)", "category": "metal"},
+        "M9":       {"layer":  39, "datatype": 0, "purpose": "Metal 9 (AP, optional)",    "category": "metal"},
+        "M10":      {"layer":  40, "datatype": 0, "purpose": "Metal 10 (AP, optional)",   "category": "metal"},
+        "VIA1":     {"layer":  51, "datatype": 0, "purpose": "Via M1-M2",                 "category": "via"},
+        "VIA2":     {"layer":  52, "datatype": 0, "purpose": "Via M2-M3",                 "category": "via"},
+        "VIA3":     {"layer":  53, "datatype": 0, "purpose": "Via M3-M4",                 "category": "via"},
+        "VIA4":     {"layer":  54, "datatype": 0, "purpose": "Via M4-M5",                 "category": "via"},
+        "VIA5":     {"layer":  55, "datatype": 0, "purpose": "Via M5-M6",                 "category": "via"},
+        "VIA6":     {"layer":  56, "datatype": 0, "purpose": "Via M6-M7",                 "category": "via"},
+        "VIA7":     {"layer":  57, "datatype": 0, "purpose": "Via M7-M8 (optional)",      "category": "via"},
+        "VIA8":     {"layer":  58, "datatype": 0, "purpose": "Via M8-M9 (optional)",      "category": "via"},
+        "VIA9":     {"layer":  59, "datatype": 0, "purpose": "Via M9-M10 (optional)",     "category": "via"},
+        "TECHDB":   {"layer":  63, "datatype": 0, "purpose": "Technology database marker", "category": "marker"},
+        "VTH_N":    {"layer":  67, "datatype": 0, "purpose": "High-Vt NMOS marker",      "category": "threshold"},
+        "VTH_P":    {"layer":  68, "datatype": 0, "purpose": "High-Vt PMOS marker",      "category": "threshold"},
+        "RPDMY":    {"layer": 115, "datatype": 0, "purpose": "Resistor poly dummy",       "category": "passive"},
+        "RH":       {"layer": 117, "datatype": 0, "purpose": "High-sheet resistor",       "category": "passive"},
+        "MRDMY":    {"layer": 150, "datatype": 0, "purpose": "Metal resistor dummy",      "category": "passive"},
+        "TSV_PPI":  {"layer": 155, "datatype": 0, "purpose": "Through-silicon via pad",   "category": "special"},
+        "STDPIN":   {"layer": 171, "datatype": 0, "purpose": "Standard cell pin marker",  "category": "marker"},
+        "LVS_DUMMY":{"layer": 208, "datatype": 0, "purpose": "LVS dummy marker",         "category": "marker"}
+    },
+    "device_layer_stacks": {
+        "_comment": "Layer stacks for each device type. Defines which GDS layers are needed to construct each device. Useful for GDS export and device recognition.",
+        "nmos1v_nat": {
+            "active": "OD",
+            "gate": "PO",
+            "implant": "NP",
+            "well": null,
+            "threshold": "VTL_N",
+            "contact": "CO",
+            "metal1": "M1",
+            "comment": "1V native NMOS in P-substrate (no N-well)"
+        },
+        "nmos2v_nat": {
+            "active": "OD_25",
+            "gate": "PO",
+            "implant": "NP",
+            "well": null,
+            "threshold": "VTH_N",
+            "contact": "CO",
+            "metal1": "M1",
+            "comment": "2.5V NMOS in P-substrate, thick oxide"
+        },
+        "pmos1v_nat": {
+            "active": "OD",
+            "gate": "PO",
+            "implant": "PP",
+            "well": "NW",
+            "threshold": "VTL_P",
+            "contact": "CO",
+            "metal1": "M1",
+            "comment": "1V native PMOS in N-well"
+        },
+        "pmos2v_nat": {
+            "active": "OD_25",
+            "gate": "PO",
+            "implant": "PP",
+            "well": "NW",
+            "threshold": "VTH_P",
+            "contact": "CO",
+            "metal1": "M1",
+            "comment": "2.5V PMOS in N-well, thick oxide"
+        }
+    }
+}

@@ -1,0 +1,28 @@
+{
+  "name": "test02_JSONmemoryTest",
+  "nodes": [
+    {
+      "parameters": {
+        "functionCode": "import json\nimport subprocess\nimport sys\nimport gc\n\ndef process_with_minimal_memory():\n    script_path = './scripts/example/scriptName.py'  # 👈 CHANGE ONLY THIS PATH\n    \n    # Convert items to single dict if it's a list\n    if isinstance(items, list) and len(items) == 1:\n        payload = items[0]\n    elif isinstance(items, list):\n        payload = {\"batch\": items}  # Wrap multiple items\n    else:\n        payload = items\n    \n    proc = subprocess.Popen(\n        ['python3', script_path],\n        stdin=subprocess.PIPE,\n        stdout=subprocess.PIPE,\n        stderr=subprocess.PIPE,\n        text=True,\n    )\n    \n    # Send JSON efficiently\n    json_data = json.dumps(payload)\n    stdout, stderr = proc.communicate(json_data)\n    \n    # Cleanup input data immediately\n    del json_data, payload\n    gc.collect()\n    \n    if stderr:\n        print(stderr, file=sys.stderr)\n    \n    # Parse result\n    response = json.loads(stdout)\n    del stdout\n    \n    # Return in n8n format\n    if isinstance(response, list):\n        return response\n    else:\n        return [response]\n\n# Main execution\nresult = process_with_minimal_memory()\nreturn result\n"
+      },
+      "id": "40dd1b1b-5249-4bbb-8c7d-5aec8332db0d",
+      "name": "Python Processor",
+      "type": "n8n-nodes-python.pythonFunction",
+      "typeVersion": 1,
+      "position": [
+        920,
+        520
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {},
+  "active": false,
+  "settings": {},
+  "versionId": "783e00ca-9445-4bbd-8d6b-ba010e1668e1",
+  "id": "1",
+  "meta": {
+    "instanceId": "c223901f6c15b8fb487054350397584634967a389fd3bdab4186bd739585c792"
+  },
+  "tags": []
+}

@@ -1,0 +1,372 @@
+{
+  "name": "BT_SP_SimulatedAnnealing_optimizer",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "28db7a22-f20a-438a-8b3a-d4d1c1a3cd09",
+      "name": "When clicking \"Execute Workflow\"",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -360,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "import sys\nsys.path.insert(0, './scripts/lib')\nfrom n8n_json_handler import run_n8n_script\n\nSCRIPT_PATH = './scripts/01_load_tech_json.py'  # 👈 CHANGE ONLY THIS PATH\n\nreturn run_n8n_script(SCRIPT_PATH, items)"
+      },
+      "id": "75d7a07b-ba35-4ffe-b99d-98ab5c794651",
+      "name": "Load tech lib",
+      "type": "n8n-nodes-python.pythonFunction",
+      "typeVersion": 1,
+      "position": [
+        -200,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get input data\nconst inputData = $input.all();\nconst outputData = [];\n\n// Process each input item\nfor (const item of inputData) {\n  const data = item.json;\n  const replication = data.gen_params.repetition;\n  const initialSeed = data.gen_params.seed;\n  \n  // Replicate the structure n times with incremented seed\n  for (let i = 0; i < replication; i++) {\n    const replicated = JSON.parse(JSON.stringify(data)); // Deep copy\n    replicated.gen_params.seed = initialSeed + i;\n    outputData.push({ json: replicated });\n  }\n}\n\nreturn outputData;"
+      },
+      "id": "cea3b963-82ef-4f77-a4b6-c6eabd0d7ab2",
+      "name": "Code",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        120,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "values": {
+          "number": [
+            {
+              "name": "gen_params.num_of_blocks",
+              "value": "=9"
+            },
+            {
+              "name": "gen_params.seed",
+              "value": "=13"
+            },
+            {
+              "name": "gen_params.repetition",
+              "value": 1
+            }
+          ]
+        },
+        "options": {
+          "dotNotation": true
+        }
+      },
+      "id": "c0d2dbc7-a643-42d6-b3d7-f9ad25dd81cd",
+      "name": "Set seed + Num_Blocks + Repetitions",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        -40,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "import sys\nsys.path.insert(0, './scripts/lib')\nfrom n8n_json_handler import run_n8n_script\n\nSCRIPT_PATH = './scripts/02_transistor_block_generator.py'  # 👈 CHANGE ONLY THIS PATH\n\nreturn run_n8n_script(SCRIPT_PATH, items)"
+      },
+      "id": "93e9ef25-0806-4640-88fe-51426c68c1d7",
+      "name": "Generate blocks",
+      "type": "n8n-nodes-python.pythonFunction",
+      "typeVersion": 1,
+      "position": [
+        560,
+        700
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "import json\nimport subprocess\nimport sys\nimport gc\n\ndef process_with_minimal_memory():\n    script_path = './scripts/03_initial_placer.py'  # 👈 CHANGE ONLY THIS PATH\n    \n    # Convert items to single dict if it's a list\n    if isinstance(items, list) and len(items) == 1:\n        payload = items[0]\n    elif isinstance(items, list):\n        payload = {\"batch\": items}  # Wrap multiple items\n    else:\n        payload = items\n    \n    proc = subprocess.Popen(\n        ['python3', script_path],\n        stdin=subprocess.PIPE,\n        stdout=subprocess.PIPE,\n        stderr=subprocess.PIPE,\n        text=True,\n    )\n    \n    # Send JSON efficiently\n    json_data = json.dumps(payload)\n    stdout, stderr = proc.communicate(json_data)\n    \n    # Cleanup input data immediately\n    del json_data, payload\n    gc.collect()\n    \n    if stderr:\n        print(stderr, file=sys.stderr)\n    \n    # Parse result\n    response = json.loads(stdout)\n    del stdout\n    \n    # Return in n8n format\n    if isinstance(response, list):\n        return response\n    else:\n        return [response]\n\n# Main execution\nresult = process_with_minimal_memory()\nreturn result\n"
+      },
+      "id": "2a0b45d1-b0b7-4a8a-82a5-d65a92896adf",
+      "name": "Initial placer",
+      "type": "n8n-nodes-python.pythonFunction",
+      "typeVersion": 1,
+      "position": [
+        760,
+        700
+      ]
+    },
+    {
+      "parameters": {
+        "batchSize": "=1",
+        "options": {
+          "reset": false
+        }
+      },
+      "id": "9298f5e0-3245-4a4e-930a-f55adb1dbd6e",
+      "name": "Batcher",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 2,
+      "position": [
+        300,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "import json\nimport subprocess\nimport sys\nimport gc\n\ndef process_with_minimal_memory():\n    script_path = './scripts/05_pareto_frontier_visualizer.py'  # 👈 CHANGE ONLY THIS PATH\n    \n    # Convert items to single dict if it's a list\n    if isinstance(items, list) and len(items) == 1:\n        payload = items[0]\n    elif isinstance(items, list):\n        payload = {\"batch\": items}  # Wrap multiple items\n    else:\n        payload = items\n    \n    proc = subprocess.Popen(\n        ['python3', script_path],\n        stdin=subprocess.PIPE,\n        stdout=subprocess.PIPE,\n        stderr=subprocess.PIPE,\n        text=True,\n    )\n    \n    # Send JSON efficiently\n    json_data = json.dumps(payload)\n    stdout, stderr = proc.communicate(json_data)\n    \n    # Cleanup input data immediately\n    del json_data, payload\n    gc.collect()\n    \n    if stderr:\n        print(stderr, file=sys.stderr)\n    \n    # Parse result\n    response = json.loads(stdout)\n    del stdout\n    \n    # Return in n8n format\n    if isinstance(response, list):\n        return response\n    else:\n        return [response]\n\n# Main execution\nresult = process_with_minimal_memory()\nreturn result\n"
+      },
+      "id": "222c7697-775d-4ee6-9a4a-14b646c523b7",
+      "name": "Visualize pareto frontier",
+      "type": "n8n-nodes-python.pythonFunction",
+      "typeVersion": 1,
+      "position": [
+        720,
+        1020
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "import sys\nsys.path.insert(0, './scripts/lib')\nfrom n8n_json_handler import run_n8n_script\n\nSCRIPT_PATH = './scripts/03_initial_placer_gif.py'  # 👈 CHANGE ONLY THIS PATH\n\nreturn run_n8n_script(SCRIPT_PATH, items)"
+      },
+      "id": "e0c8dc24-61c2-48f4-a445-ba4f3d21bba9",
+      "name": "Initial placer with GIF",
+      "type": "n8n-nodes-python.pythonFunction",
+      "typeVersion": 1,
+      "position": [
+        920,
+        1020
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "import sys\nsys.path.insert(0, './scripts/lib')\nfrom n8n_json_handler import run_n8n_script\n\nSCRIPT_PATH = './scripts/10_bStar_tree_cutter.py'  # 👈 CHANGE ONLY THIS PATH\n\nreturn run_n8n_script(SCRIPT_PATH, items)"
+      },
+      "id": "77e822a2-f826-49f7-94a0-581ef27134e2",
+      "name": "Bstar Tree Creation",
+      "type": "n8n-nodes-python.pythonFunction",
+      "typeVersion": 1,
+      "position": [
+        960,
+        700
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "import sys\nsys.path.insert(0, './scripts/lib')\nfrom n8n_json_handler import run_n8n_script\n\nSCRIPT_PATH = './scripts/12_bStarTree_simulatedAnnealing.py'  # 👈 CHANGE ONLY THIS PATH\n\nreturn run_n8n_script(SCRIPT_PATH, items)"
+      },
+      "id": "2828ed0b-5044-48d9-bcd3-af0fe47defa9",
+      "name": "B* tree - SA",
+      "type": "n8n-nodes-python.pythonFunction",
+      "typeVersion": 1,
+      "position": [
+        1180,
+        700
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "import sys\nsys.path.insert(0, './scripts/lib')\nfrom n8n_json_handler import run_n8n_script\n\nSCRIPT_PATH = './scripts/11_bStarTree_visualizer.py'  # 👈 CHANGE ONLY THIS PATH\n\nreturn run_n8n_script(SCRIPT_PATH, items)"
+      },
+      "id": "d01c0dae-f005-4799-9386-0cd804b06d31",
+      "name": "B* tree visualizer",
+      "type": "n8n-nodes-python.pythonFunction",
+      "typeVersion": 1,
+      "position": [
+        1400,
+        700
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "import sys\nsys.path.insert(0, './scripts/lib')\nfrom n8n_json_handler import run_n8n_script\n\nSCRIPT_PATH = './scripts/13_sequence_pair_cutter.py'  # 👈 CHANGE ONLY THIS PATH\n\nreturn run_n8n_script(SCRIPT_PATH, items)"
+      },
+      "id": "4f658a72-77cb-4983-9fc5-3a27d3e52996",
+      "name": "SP cutter",
+      "type": "n8n-nodes-python.pythonFunction",
+      "typeVersion": 1,
+      "position": [
+        960,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "import sys\nsys.path.insert(0, './scripts/lib')\nfrom n8n_json_handler import run_n8n_script\n\nSCRIPT_PATH = './scripts/14_sequence_pair_simulatedAnnealing.py'  # 👈 CHANGE ONLY THIS PATH\n\nreturn run_n8n_script(SCRIPT_PATH, items)"
+      },
+      "id": "432470ab-de84-4669-9579-bf46fa80169e",
+      "name": "SP SA optimizer",
+      "type": "n8n-nodes-python.pythonFunction",
+      "typeVersion": 1,
+      "position": [
+        1180,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "import sys\nsys.path.insert(0, './scripts/lib')\nfrom n8n_json_handler import run_n8n_script\n\nSCRIPT_PATH = './scripts/15_sequence_pair_visualizer.py'  # 👈 CHANGE ONLY THIS PATH\n\nreturn run_n8n_script(SCRIPT_PATH, items)"
+      },
+      "id": "1bebb104-402d-4b91-b65d-28e4ef904a53",
+      "name": "SP visualizer",
+      "type": "n8n-nodes-python.pythonFunction",
+      "typeVersion": 1,
+      "position": [
+        1400,
+        500
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking \"Execute Workflow\"": {
+      "main": [
+        [
+          {
+            "node": "Load tech lib",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load tech lib": {
+      "main": [
+        [
+          {
+            "node": "Set seed + Num_Blocks + Repetitions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "Batcher",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set seed + Num_Blocks + Repetitions": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate blocks": {
+      "main": [
+        [
+          {
+            "node": "Initial placer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Batcher": {
+      "main": [
+        [
+          {
+            "node": "Generate blocks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Initial placer": {
+      "main": [
+        [
+          {
+            "node": "Bstar Tree Creation",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "SP cutter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bstar Tree Creation": {
+      "main": [
+        [
+          {
+            "node": "B* tree - SA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Initial placer with GIF": {
+      "main": [
+        []
+      ]
+    },
+    "B* tree - SA": {
+      "main": [
+        [
+          {
+            "node": "B* tree visualizer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "B* tree visualizer": {
+      "main": [
+        [
+          {
+            "node": "Batcher",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SP cutter": {
+      "main": [
+        [
+          {
+            "node": "SP SA optimizer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SP SA optimizer": {
+      "main": [
+        [
+          {
+            "node": "SP visualizer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {},
+  "versionId": "2e876059-962a-4640-8660-4dc184cd4fac",
+  "id": "1",
+  "meta": {
+    "instanceId": "200dc06ce83476c54d351c0dbc9e9529fe6b332038b2da7d1307e87c7816d29f"
+  },
+  "tags": []
+}

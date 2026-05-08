@@ -1,0 +1,19 @@
+services:
+  n8n:
+    build: .
+    image: alda-placement-optimizer:latest
+    container_name: alda-placement-optimizer
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    volumes:
+      - ./n8n:/home/node/.n8n      # settings of n8n
+      - ./scripts:/home/node/scripts # python scripts
+      - ./logs:/home/node/logs     # output logs
+      # For X11 forwarding:
+      - /tmp/.X11-unix:/tmp/.X11-unix
+    environment:
+      - N8N_LOG_LEVEL=debug        # detailed loging
+      # For X11 forwarding:
+      - DISPLAY=host.docker.internal:0.0
+      - QT_X11_NO_MITSHM=1
