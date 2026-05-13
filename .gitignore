@@ -6,6 +6,7 @@ n8n/*
 logs/*
 !logs/.gitkeep
 .env
+*.jsonl
 
 # WorkDir logs and temp files
 *.log

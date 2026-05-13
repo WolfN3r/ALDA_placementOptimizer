@@ -57,8 +57,9 @@ if __name__ == "__main__":
     if SAVE_FILES:
         _save(blocks_data, "001")
 
-    # --- Stage 2: (add next script here) ---
-    # stage2 = _load_script("002_NextScript.py")
-    # stage2_data: dict = stage2.run(blocks_data, ...)
-    # if SAVE_FILES:
-    #     _save(stage2_data, "002")
+    # --- Stage 1, Script 01: Placement optimization ---
+    opt = _load_script("101_placementOptimizer.py")
+    placement_data: dict = opt.run(blocks_data)
+
+    if SAVE_FILES:
+        _save(placement_data, "101")
