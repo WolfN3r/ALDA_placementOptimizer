@@ -43,6 +43,11 @@ class TopologyBase(ABC):
     def capabilities(self) -> set[str]:
         """Return capability tokens, e.g. {'SA', 'GA'}."""
 
+    def get_variant_map(self) -> dict[str, int]:
+        """Return {block_id: active_variant_idx} for the current topology state.
+        Override in topologies that support variant selection."""
+        return {}
+
 
 class SAMixin(ABC):
 

@@ -151,8 +151,11 @@ class SimulatedAnnealingOptimizer:
             # Generate pre-computed random values for the epoch to cut Python overhead
             randoms = [random.random() for _ in range(epoch_size)]
 
+            # Normalize temperature to [0, 1] as required by perturb() contract:
+            # 1 = hot (exploration), 0 = cold (fine-tuning).
+            t_norm = min(1.0, max(0.0, temp / cfg.initial_temp))
             for r in randoms:
-                undo = topo.perturb(temp)
+                undo = topo.perturb(t_norm)
                 new_positions = topo.decode()
                 new_cost = self._eval.evaluate(new_positions)
 

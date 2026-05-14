@@ -11,6 +11,14 @@
         "negative_values": "envelope overlap allowed in that axis — devices share the structure (merged diffusion, etc.)"
     },
 
+    "device_topology": {
+        "_comment": "Topology classification per device type. device_group (LV/HV) drives the voltage-class branch of the spacing decision tree. bulk identifies the well/substrate connection; devices with different bulks are separated by a well boundary and incur WPE-based spacing costs.",
+        "nmos1v_nat": {"device_group": "LV", "bulk": "VSSA"},
+        "nmos2v_nat": {"device_group": "HV", "bulk": "VSSD"},
+        "pmos1v_nat": {"device_group": "LV", "bulk": "VDDA"},
+        "pmos2v_nat": {"device_group": "HV", "bulk": "VDDD"}
+    },
+
     "device_constraints": {
         "_comment": "Manufacturing limits per device. Sizing only.",
         "nmos1v_nat": {"L": {"min": 0.1, "max": 10.0, "default": 0.1}, "W": {"min": 0.12, "max": 100.0, "default": 1.0}},

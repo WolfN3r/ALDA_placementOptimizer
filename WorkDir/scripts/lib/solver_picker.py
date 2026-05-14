@@ -114,6 +114,7 @@ class SolverPicker:
         self._weights       = weights       or CostWeights()
         self._result_log    = result_log    or ResultLog()
         self._auto_calibrate = auto_calibrate
+        self._last_results: list = []
 
     def run_random(
         self,
@@ -141,6 +142,9 @@ class SolverPicker:
         for t_cls, o_cls in pairs:
             r = self._run_one(t_cls, o_cls, blocks, nets, seed_mode)
             results.append(r)
+
+        # Store results list so callers can retrieve PipelineResult objects
+        self._last_results = results
 
         doc = _build_exhaustive_doc(results, blocks, nets, netlist_id, seed_mode, self._sa_config)
         self._result_log.record(doc)

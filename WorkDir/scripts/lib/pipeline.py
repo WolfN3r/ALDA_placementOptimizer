@@ -106,6 +106,7 @@ class PipelineResult:
     aspect_ratio:     float           = 0.0
     n_iterations:     int             = 0
     positions:        dict            = field(default_factory=dict)
+    placed_blocks:    dict            = field(default_factory=dict)
     t_seed_ms:        float           = 0.0
     t_first_decode_ms: float          = 0.0
     t_optimize_ms:    float           = 0.0
@@ -232,12 +233,15 @@ class OptimizationPipeline:
             topology.restore_state(opt_result.best_state)
             final_positions = topology.decode()
 
-            result.status      = "success"
-            result.final_cost  = opt_result.best_cost
+            variant_map = topology.get_variant_map()
+
+            result.status       = "success"
+            result.final_cost   = opt_result.best_cost
             result.n_iterations = opt_result.n_iterations
-            result.positions   = final_positions
-            result.area_um2    = _bbox_area(final_positions, blocks)
-            result.hpwl_um     = _hpwl(final_positions, blocks, nets)
+            result.positions    = final_positions
+            result.placed_blocks = _compute_placed_blocks(final_positions, blocks, variant_map)
+            result.area_um2     = _bbox_area(final_positions, blocks)
+            result.hpwl_um      = _hpwl(final_positions, blocks, nets)
             result.aspect_ratio = _aspect_ratio(final_positions, blocks)
 
         except IncompatibleCombinationError as exc:
@@ -305,3 +309,38 @@ def _aspect_ratio(positions: dict, blocks: dict) -> float:
     width  = max(xe) - min(xs)
     height = max(ye) - min(ys)
     return width / height if height > 0.0 else float("inf")
+
+
+def _compute_placed_blocks(
+    positions:   dict[str, tuple[float, float]],
+    blocks:      dict,
+    variant_map: dict[str, int],
+) -> dict:
+    """
+    Build absolute placed geometry for every block in positions.
+    Uses variant_map to select the correct variant (as chosen by the optimizer).
+    Returns {block_id: {"x", "y", "main_bbox": {x_min,y_min,x_max,y_max}, "pins": {name: {x,y}}}}.
+    """
+    placed = {}
+    for bid, (bx, by) in positions.items():
+        block    = blocks.get(bid, {})
+        variants = block.get("variants", [])
+        vidx     = variant_map.get(bid, 0)
+        v        = variants[vidx] if vidx < len(variants) else (variants[0] if variants else {})
+        bb       = v.get("main_bbox", {})
+        w        = bb.get("x_max", 0.0)
+        h        = bb.get("y_max", 0.0)
+        abs_pins = {
+            pname: {"x": round(bx + pc["x"], 6), "y": round(by + pc["y"], 6)}
+            for pname, pc in v.get("pin_positions", {}).items()
+        }
+        placed[bid] = {
+            "main_bbox": {
+                "x_min": round(bx,     6),
+                "y_min": round(by,     6),
+                "x_max": round(bx + w, 6),
+                "y_max": round(by + h, 6),
+            },
+            "pins": abs_pins,
+        }
+    return placed

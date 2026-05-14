@@ -188,6 +188,9 @@ class SequencePairTopology(TopologyBase, SAMixin, GAMixin):
     def random_init(self) -> None:
         self.seed(self._blocks, mode="random")
 
+    def get_variant_map(self) -> dict[str, int]:
+        return dict(self._variant)
+
     # ------------------------------------------------------------------
     # Utility
     # ------------------------------------------------------------------

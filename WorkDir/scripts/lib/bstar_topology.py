@@ -3,10 +3,19 @@ B*-tree topology — supports both SA and GA optimizers.
 
 Internal state: binary tree where left-child = x-neighbour, right-child = y-neighbour.
 decode() uses DFS pre-order with a typed contour (skyline) to derive block coordinates.
+
+SA operators follow Lin, Yi & Chang (2001):
+  Op1 (_op_variant) — change active variant (size/rotation) of one block.
+  Op2 (_op_swap)    — exchange block assignments of two nodes.
+  Op3 (_op_move)    — detach one node, re-insert via push-down.
+  Extra (_op_rotate) — flip left/right children of one node (project addition).
+
+perturb(temperature) expects temperature in [0, 1] (normalised fraction,
+  1 = hot start, 0 = cold end).  The SA optimiser is responsible for
+  mapping its internal schedule to this range before calling perturb().
 """
 from __future__ import annotations
 
-import copy
 import random
 from typing import Any, Callable
 
@@ -41,9 +50,10 @@ def _contour_query(
     dt_new: str,
 ) -> float:
     """
-    Return the effective height that blocks already in contour present to a new
-    block of type dt_new placed in the x-range [x_l, x_r].
-    effective_h = physical_top + y_spacing(placed_type, dt_new)
+    Return the effective floor height for a new block of type dt_new placed in
+    x-range [x_l, x_r].  For each existing contour segment that overlaps the
+    query range, effective_height = segment.y_top + y_spacing(segment.dtype, dt_new).
+    The caller must NOT add y_spacing again — it is already included here.
     """
     max_h = 0.0
     for (cx_l, cx_r, cy_top, cy_dt) in contour:
@@ -67,6 +77,24 @@ def _contour_update(
 
 
 # =============================================================================
+# TREE HELPERS
+# =============================================================================
+
+def _bfs_subtree(root: _Node) -> list[_Node]:
+    """Return all nodes reachable from root (root included) in BFS order."""
+    result: list[_Node] = []
+    queue = [root]
+    while queue:
+        curr = queue.pop(0)
+        result.append(curr)
+        if curr.left:
+            queue.append(curr.left)
+        if curr.right:
+            queue.append(curr.right)
+    return result
+
+
+# =============================================================================
 # B*-TREE TOPOLOGY
 # =============================================================================
 
@@ -75,8 +103,6 @@ class BStarTopology(TopologyBase, SAMixin, GAMixin):
     B*-tree placement topology.
 
     Capabilities: SA (perturb/undo) and GA (mutate/crossover/random_init).
-    Super-block symmetry constraints are detected during seed() — stub only,
-    full implementation follows architecture step 13.
     """
 
     def __init__(self, blocks: dict, nets: list) -> None:
@@ -134,7 +160,13 @@ class BStarTopology(TopologyBase, SAMixin, GAMixin):
     def decode(self) -> dict[str, tuple[float, float]]:
         """
         DFS pre-order traversal → block (x, y) positions.
-        Typed contour tracks effective height per device-type.
+        Typed contour tracks effective height per device-type pair.
+
+        x-child: cx = parent.x + parent.w + x_spacing(parent→child)
+                 cy = max(parent.y, contour_query(child_x_range, child_dt))
+        y-child: cx = parent.x
+                 cy = contour_query(child_x_range, child_dt)
+                 [contour_query already includes y_spacing — do NOT add it again]
         """
         if self._root is None:
             return {}
@@ -142,9 +174,6 @@ class BStarTopology(TopologyBase, SAMixin, GAMixin):
         positions: dict[str, tuple[float, float]] = {}
         # contour entries: (x_left, x_right, y_top, device_type)
         contour: list[tuple[float, float, float, str]] = []
-
-        # Stack entries: (node, parent_x, parent_y, parent_w, parent_h, parent_dt, is_left_child)
-        stack = [(self._root, None)]
         node_geom: dict[str, tuple[float, float, float, float]] = {}  # block_id → (x,y,w,h)
 
         def _get_block_dims(node: _Node) -> tuple[float, float, str]:
@@ -159,7 +188,7 @@ class BStarTopology(TopologyBase, SAMixin, GAMixin):
         node_geom[self._root.block_id] = (0.0, 0.0, rw, rh)
         _contour_update(contour, 0.0, rw, rh, rdt)
 
-        # Iterative DFS pre-order
+        # Iterative DFS pre-order (right pushed first → left processed first)
         dfs_stack: list[_Node] = []
         if self._root.right:
             dfs_stack.append(self._root.right)
@@ -173,26 +202,23 @@ class BStarTopology(TopologyBase, SAMixin, GAMixin):
             _, _, p_dt = _get_block_dims(parent)
             cw, ch, c_dt = _get_block_dims(node)
 
-            sp = compute_block_spacing(
-                {"device_type": p_dt}, {"device_type": c_dt}
-            )
-
             if node is parent.left:
-                # x-child: place to the right of parent
+                # x-child: placed to the right of parent
+                sp = compute_block_spacing({"device_type": p_dt}, {"device_type": c_dt})
                 cx = px + pw + sp.x_spacing
                 cy = _contour_query(contour, cx, cx + cw, c_dt)
-                # must not fall below parent baseline
-                cy = max(cy, py)
+                cy = max(cy, py)   # x-child must not fall below parent's baseline
             else:
-                # y-child: place above parent (same x)
+                # y-child: same x-column as parent.
+                # Query uses child width (not parent width) so child's full footprint
+                # is checked.  _contour_query already adds y_spacing — never add again.
                 cx = px
-                cy = _contour_query(contour, px, px + pw, c_dt) + sp.y_spacing
+                cy = _contour_query(contour, cx, cx + cw, c_dt)
 
             positions[node.block_id] = (cx, cy)
             node_geom[node.block_id] = (cx, cy, cw, ch)
             _contour_update(contour, cx, cx + cw, cy + ch, c_dt)
 
-            # push children (right first so left is processed first)
             if node.right:
                 dfs_stack.append(node.right)
             if node.left:
@@ -202,14 +228,13 @@ class BStarTopology(TopologyBase, SAMixin, GAMixin):
 
     def copy_state(self) -> Any:
         """Return a deep-copyable representation of the tree structure."""
-        # Store as (block_id, variant_idx, left_index, right_index) with root index 0
         if not self._nodes:
             return ([], -1)
         idx = {id(n): i for i, n in enumerate(self._nodes)}
         rows = []
         for n in self._nodes:
-            l = idx[id(n.left)]  if n.left  else -1
-            r = idx[id(n.right)] if n.right else -1
+            l = idx[id(n.left)]   if n.left   else -1
+            r = idx[id(n.right)]  if n.right  else -1
             p = idx[id(n.parent)] if n.parent else -1
             rows.append((n.block_id, n.variant_idx, l, r, p))
         root_idx = idx[id(self._root)]
@@ -238,20 +263,22 @@ class BStarTopology(TopologyBase, SAMixin, GAMixin):
 
     def perturb(self, temperature: float) -> Callable[[], None]:
         """
-        Choose and apply one SA operator. At high temperature, favour structural
-        moves (swap, move); at low temperature, favour fine-tuning (rotate, variant).
+        Choose and apply one SA operator and return its undo closure.
+
+        temperature — normalised fraction in [0, 1].  1 = hot (start of run),
+          0 = cold (end of run).  The SA optimiser maps its internal schedule
+          to this range before calling.  Operator weights shift from structural
+          (swap, move) at high T to fine-grained (rotate, variant) at low T.
         """
         if not self._nodes:
             return lambda: None
 
-        # Operator weights: [rotate, swap, move, variant_change]
-        # temp_fraction ∈ [0, 1]: 1 = hot, 0 = cold
-        t_frac = min(1.0, temperature / 1.0)
+        t = min(1.0, max(0.0, temperature))
         weights = [
-            0.15 + 0.10 * (1 - t_frac),   # rotate: more at low T
-            0.35 - 0.10 * (1 - t_frac),   # swap
-            0.35 - 0.05 * (1 - t_frac),   # move
-            0.15 + 0.05 * (1 - t_frac),   # variant change
+            0.15 + 0.10 * (1 - t),   # _op_rotate:  more at low T
+            0.35 - 0.10 * (1 - t),   # _op_swap
+            0.35 - 0.05 * (1 - t),   # _op_move
+            0.15 + 0.05 * (1 - t),   # _op_variant
         ]
         r = random.random() * sum(weights)
         cumulative = 0.0
@@ -265,7 +292,7 @@ class BStarTopology(TopologyBase, SAMixin, GAMixin):
         return chosen()
 
     def _op_rotate(self) -> Callable[[], None]:
-        """Swap left and right children of a random node."""
+        """Flip left and right children of a random node (structural perturbation)."""
         node = random.choice(self._nodes)
         old_l, old_r = node.left, node.right
         node.left, node.right = old_r, old_l
@@ -274,12 +301,23 @@ class BStarTopology(TopologyBase, SAMixin, GAMixin):
         return undo
 
     def _op_swap(self) -> Callable[[], None]:
-        """Exchange block assignment (block_id, variant_idx) of two nodes."""
+        """
+        Exchange block assignment (block_id, variant_idx) of two random nodes.
+        Clamps variant_idx to the destination block's variant count to prevent
+        out-of-range access when blocks have different numbers of variants.
+        """
         a, b = random.sample(self._nodes, 2)
-        old_a_bid, old_a_vidx = a.block_id, a.variant_idx
-        old_b_bid, old_b_vidx = b.block_id, b.variant_idx
-        a.block_id, a.variant_idx = old_b_bid, old_b_vidx
-        b.block_id, b.variant_idx = old_a_bid, old_a_vidx
+        old_a_bid,  old_a_vidx = a.block_id, a.variant_idx
+        old_b_bid,  old_b_vidx = b.block_id, b.variant_idx
+
+        n_vars_b = len(self._blocks.get(old_b_bid, {}).get("variants", [1]))
+        n_vars_a = len(self._blocks.get(old_a_bid, {}).get("variants", [1]))
+
+        a.block_id    = old_b_bid
+        a.variant_idx = min(old_b_vidx, max(0, n_vars_b - 1))
+        b.block_id    = old_a_bid
+        b.variant_idx = min(old_a_vidx, max(0, n_vars_a - 1))
+
         def undo() -> None:
             a.block_id, a.variant_idx = old_a_bid, old_a_vidx
             b.block_id, b.variant_idx = old_b_bid, old_b_vidx
@@ -287,146 +325,167 @@ class BStarTopology(TopologyBase, SAMixin, GAMixin):
 
     def _op_move(self) -> Callable[[], None]:
         """
-        Detach a random non-root node and re-insert it at a random free slot.
-        If the detached node had two children, the left child is promoted and
-        the right child is re-inserted into the promoted subtree.
+        Detach a random non-root node and re-insert it via push-down (paper Op3).
+
+        Detach cases:
+          A. Leaf             → clean removal.
+          B. One child C      → C takes n's slot in parent.
+          C. Two children L,R → promote L to n's slot; re-insert R via push-down
+                                on a node outside R's subtree (prevents cycles).
+
+        Insert: push-down at a random target node (any node except n itself).
+        Push-down: n becomes target's child; target's old child becomes n's child.
+
+        All mutations are preceded by a save; undo replays in reverse order.
+        Because the first (chronological) save for any node captures the true
+        original state, reversed replay always restores correctly even if a node
+        is saved more than once.
         """
-        non_root = [n for n in self._nodes if n.parent is not None]
+        # Exclude orphaned nodes: a node is valid only if its parent still
+        # forward-links back to it.  Stale parent pointers (from prior
+        # Bug-1-style corruption) would cause n_is_left to be evaluated
+        # incorrectly, detaching the wrong child and deepening corruption.
+        non_root = [
+            nd for nd in self._nodes
+            if nd.parent is not None
+            and (nd.parent.left is nd or nd.parent.right is nd)
+        ]
         if not non_root:
             return lambda: None
 
-        n        = random.choice(non_root)
-        n_parent = n.parent
+        n         = random.choice(non_root)
+        n_parent  = n.parent
         n_is_left = (n_parent.left is n)
+        n_left    = n.left
+        n_right   = n.right
 
-        # Save all affected node attributes by value (not reference)
         saved: list[tuple] = []
+
         def _save(node: _Node) -> None:
             saved.append((node, node.left, node.right, node.parent))
 
+        def _push_down(target: _Node, node: _Node) -> None:
+            """
+            Insert node as a child of target, pushing target's existing child
+            down as node's child.  node must be a leaf before calling.
+            """
+            go_left = random.random() < 0.5
+            _save(target)
+            _save(node)
+            if go_left:
+                old_child   = target.left
+                target.left = node
+                node.parent = target
+                node.left   = old_child
+                if old_child:
+                    _save(old_child)
+                    old_child.parent = node
+            else:
+                old_child    = target.right
+                target.right = node
+                node.parent  = target
+                node.right   = old_child
+                if old_child:
+                    _save(old_child)
+                    old_child.parent = node
+
+        def _abort() -> Callable[[], None]:
+            for (nd, ol, or_, op) in reversed(saved):
+                nd.left, nd.right, nd.parent = ol, or_, op
+            return lambda: None
+
+        # --- Save initial states ---
         _save(n)
         _save(n_parent)
 
-        n_left  = n.left
-        n_right = n.right
-
-        demoted:          _Node | None = None
-        demoted_old_par:  _Node | None = None
-        demoted_is_left:  bool         = False
-        promoted:         _Node | None = None
-
+        # --- Detach n from the tree ---
         if n_left is None and n_right is None:
-            # Leaf: detach cleanly
+            # Case A: leaf — clean removal
             if n_is_left:
-                n_parent.left = None
+                n_parent.left  = None
             else:
                 n_parent.right = None
 
-        elif n_left is not None and n_right is None:
-            promoted = n_left
-            _save(promoted)
+        elif n_right is None:
+            # Case B: left child only
+            _save(n_left)
             if n_is_left:
-                n_parent.left = promoted
+                n_parent.left  = n_left
             else:
-                n_parent.right = promoted
-            promoted.parent = n_parent
+                n_parent.right = n_left
+            n_left.parent = n_parent
 
-        elif n_left is None and n_right is not None:
-            promoted = n_right
-            _save(promoted)
+        elif n_left is None:
+            # Case B: right child only
+            _save(n_right)
             if n_is_left:
-                n_parent.left = promoted
+                n_parent.left  = n_right
             else:
-                n_parent.right = promoted
-            promoted.parent = n_parent
+                n_parent.right = n_right
+            n_right.parent = n_parent
 
         else:
-            # Two children: promote left, insert right into promoted subtree
-            promoted = n_left
-            demoted  = n_right
-            _save(promoted)
-            _save(demoted)
+            # Case C: two children — promote left, re-attach right subtree.
+            # n_right is a subtree root with its own children; _push_down must
+            # NOT be used here because it does `node.left = old_child`, which
+            # overwrites one of n_right's existing children and orphans it.
+            # Instead, find a node outside n_right's subtree that has an empty
+            # slot and attach n_right there, preserving its subtree intact.
+            _save(n_left)
             if n_is_left:
-                n_parent.left = promoted
+                n_parent.left  = n_left
             else:
-                n_parent.right = promoted
-            promoted.parent = n_parent
+                n_parent.right = n_left
+            n_left.parent = n_parent
 
-            # Find first free slot in promoted subtree (BFS)
-            queue = [promoted]
-            inserted = False
-            while queue and not inserted:
-                curr = queue.pop(0)
-                if curr.left is None:
-                    _save(curr)
-                    demoted_old_par = curr
-                    demoted_is_left = True
-                    curr.left       = demoted
-                    demoted.parent  = curr
-                    inserted = True
-                elif curr.right is None:
-                    _save(curr)
-                    demoted_old_par = curr
-                    demoted_is_left = False
-                    curr.right      = demoted
-                    demoted.parent  = curr
-                    inserted = True
-                else:
-                    queue.append(curr.left)
-                    queue.append(curr.right)
+            r_ids   = {id(nd) for nd in _bfs_subtree(n_right)}
+            valid_r = [
+                nd for nd in self._nodes
+                if nd is not n
+                and id(nd) not in r_ids
+                and (nd.left is None or nd.right is None)
+            ]
+            if not valid_r:
+                return _abort()
+            ins = random.choice(valid_r)
+            _save(ins)
+            _save(n_right)
+            if ins.left is None:
+                ins.left = n_right
+            else:
+                ins.right = n_right
+            n_right.parent = ins
 
-        # Clear n's links before re-inserting
+        # n is now detached — clear all its links before re-inserting
         n.left   = None
         n.right  = None
         n.parent = None
 
-        # Find a free slot anywhere in the tree (excluding n itself)
-        free_slots: list[tuple[_Node, bool]] = []
-        stack = [self._root]
-        while stack:
-            curr = stack.pop()
-            if curr is n:
-                continue
-            if curr.left is None:
-                free_slots.append((curr, True))
-            else:
-                stack.append(curr.left)
-            if curr.right is None:
-                free_slots.append((curr, False))
-            else:
-                stack.append(curr.right)
+        # --- Re-insert n via push-down ---
+        valid = [nd for nd in self._nodes if nd is not n]
+        if not valid:
+            return _abort()
 
-        if not free_slots:
-            # Undo partial changes and return no-op
-            for (node, old_l, old_r, old_p) in reversed(saved):
-                node.left, node.right, node.parent = old_l, old_r, old_p
-            return lambda: None
+        _push_down(random.choice(valid), n)
 
-        target, target_is_left = random.choice(free_slots)
-        _save(target)
-        if target_is_left:
-            target.left = n
-        else:
-            target.right = n
-        n.parent = target
-
-        # Capture for undo closure
-        n_new_parent  = target
-        n_new_is_left = target_is_left
-        saved_snapshot = list(saved)  # copy by value
+        saved_snap = list(saved)
 
         def undo() -> None:
-            for (node, old_l, old_r, old_p) in reversed(saved_snapshot):
-                node.left   = old_l
-                node.right  = old_r
-                node.parent = old_p
+            for (nd, old_l, old_r, old_p) in reversed(saved_snap):
+                nd.left   = old_l
+                nd.right  = old_r
+                nd.parent = old_p
 
         return undo
 
     def _op_variant(self) -> Callable[[], None]:
-        """Change the active size variant of a random block (includes rotation variants)."""
+        """
+        Change the active variant of a random block.
+        Rotation is represented as a separate variant entry — no special
+        rotate operator is needed.
+        """
         node = random.choice(self._nodes)
-        block = self._blocks.get(node.block_id, {})
+        block    = self._blocks.get(node.block_id, {})
         variants = block.get("variants", [])
         if len(variants) <= 1:
             return lambda: None
@@ -478,10 +537,8 @@ class BStarTopology(TopologyBase, SAMixin, GAMixin):
         """DFS pre-order → (block_id permutation, x/y direction bits)."""
         if self._root is None:
             return [], []
-        perm:  list[str] = []
-        dirs:  list[int] = []   # 0 = x-child (left), 1 = y-child (right)
-        stack  = [self._root]
-        parent_seen: set[int] = set()
+        perm: list[str] = []
+        dirs: list[int] = []   # 0 = x-child (left), 1 = y-child (right)
 
         def _dfs(node: _Node) -> None:
             perm.append(node.block_id)
@@ -498,7 +555,7 @@ class BStarTopology(TopologyBase, SAMixin, GAMixin):
     def _reconstruct_from_dirs(self, dirs: list[int]) -> None:
         """
         Attach self._nodes[1:] as children in order, using dirs as preferred slot.
-        Applies four-level slot-conflict fallback (see architecture §4).
+        Applies four-level slot-conflict fallback.
         """
         nodes = self._nodes
         if len(nodes) <= 1:
@@ -513,14 +570,8 @@ class BStarTopology(TopologyBase, SAMixin, GAMixin):
             preferred_left = (dir_idx < len(dirs) and dirs[dir_idx] == 0)
             dir_idx += 1
 
-            # Find insertion point with fallback
             inserted = False
-            target_pool = [nodes[0]]   # start from root
-
-            # Level 1+2: preferred and other slot on a random existing node
-            candidates = [n for n in nodes if n is not node and n.parent is not None or n is nodes[0]]
-            # More precisely: nodes that are already in the tree
-            in_tree = [n for n in nodes if n is nodes[0] or n.parent is not None]
+            in_tree  = [n for n in nodes if n is nodes[0] or n.parent is not None]
             random.shuffle(in_tree)
 
             for candidate in in_tree:
@@ -536,37 +587,40 @@ class BStarTopology(TopologyBase, SAMixin, GAMixin):
                     break
 
             if not inserted:
-                # Level 3: walk right spine from root
+                # Walk right spine from root
                 curr = nodes[0]
                 while curr:
                     if curr.left is None:
-                        curr.left  = node
+                        curr.left   = node
                         node.parent = curr
                         inserted = True
                         break
                     if curr.right is None:
-                        curr.right = node
+                        curr.right  = node
                         node.parent = curr
                         inserted = True
                         break
                     curr = curr.right
 
             if not inserted:
-                # Level 4: BFS scan of all tree nodes
+                # BFS scan of all tree nodes
                 queue = [nodes[0]]
                 while queue and not inserted:
                     curr = queue.pop(0)
                     if curr.left is None:
-                        curr.left  = node
+                        curr.left   = node
                         node.parent = curr
                         inserted = True
                     elif curr.right is None:
-                        curr.right = node
+                        curr.right  = node
                         node.parent = curr
                         inserted = True
                     else:
                         queue.append(curr.left)
                         queue.append(curr.right)
+
+    def get_variant_map(self) -> dict[str, int]:
+        return {node.block_id: node.variant_idx for node in self._nodes}
 
     # ------------------------------------------------------------------
     # Utility
@@ -591,8 +645,7 @@ def _ox_crossover(perm_a: list[str], perm_b: list[str]) -> list[str]:
     if n == 0:
         return []
     i, j = sorted(random.sample(range(n), 2))
-    segment = perm_a[i:j + 1]
+    segment   = perm_a[i:j + 1]
     remaining = [x for x in perm_b if x not in segment]
-    result = remaining[: i] + segment + remaining[i:]
-    # Pad or trim to length n in case of rounding edge case
+    result    = remaining[:i] + segment + remaining[i:]
     return result[:n]
