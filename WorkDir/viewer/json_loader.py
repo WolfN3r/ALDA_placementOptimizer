@@ -42,6 +42,28 @@ class Net:
 
 
 @dataclass
+class PlacedBlockInfo:
+    block_id: int
+    main_bbox: tuple[float, float, float, float]   # x_min, y_min, x_max, y_max (absolute)
+    pins: dict[str, tuple[float, float]]           # pin_name -> (abs_x, abs_y)
+
+
+@dataclass
+class PlacementResult:
+    run_id: str
+    topology: str
+    optimizer: str
+    final_cost: float
+    area_um2: float
+    hpwl_um: float
+    aspect_ratio: float
+    n_iterations: int
+    t_total_ms: float
+    placed_blocks: dict[int, PlacedBlockInfo]
+    all_runs: list[dict]
+
+
+@dataclass
 class PlacementData:
     file_path: str
     generation_params: dict
@@ -49,7 +71,8 @@ class PlacementData:
     blocks: list[Block]
     nets: list[Net]
     symmetry_constraints: dict
-    has_placement: bool  # True when any block has a placed key with x/y
+    has_placement: bool
+    placement_result: PlacementResult | None = None
 
     def block_by_id(self, block_id: int) -> Block | None:
         for b in self.blocks:
@@ -138,8 +161,43 @@ def load(path: str | Path) -> PlacementData:
             pins=list(rn.get("pins", [])),
         ))
 
-    has_placement = any(
-        b.placed and "x" in b.placed and "y" in b.placed for b in blocks
+    # Parse placement.placed_blocks section (py101 format)
+    placement_result = None
+    raw_placement = raw.get("placement", {})
+    if isinstance(raw_placement, dict) and "placed_blocks" in raw_placement:
+        pb_raw = raw_placement["placed_blocks"]
+        placed_blocks: dict[int, PlacedBlockInfo] = {}
+        for bid_str, pb in pb_raw.items():
+            bid = int(bid_str)
+            b = pb["main_bbox"]
+            if isinstance(b, dict):
+                bbox = (float(b["x_min"]), float(b["y_min"]), float(b["x_max"]), float(b["y_max"]))
+            else:
+                bbox = (float(b[0]), float(b[1]), float(b[2]), float(b[3]))
+            pins: dict[str, tuple[float, float]] = {}
+            for pname, ppos in pb.get("pins", {}).items():
+                if isinstance(ppos, dict):
+                    pins[pname] = (float(ppos["x"]), float(ppos["y"]))
+                else:
+                    pins[pname] = (float(ppos[0]), float(ppos[1]))
+            placed_blocks[bid] = PlacedBlockInfo(block_id=bid, main_bbox=bbox, pins=pins)
+        placement_result = PlacementResult(
+            run_id=str(raw_placement.get("run_id", "")),
+            topology=str(raw_placement.get("topology", "")),
+            optimizer=str(raw_placement.get("optimizer", "")),
+            final_cost=float(raw_placement.get("final_cost", 0.0)),
+            area_um2=float(raw_placement.get("area_um2", 0.0)),
+            hpwl_um=float(raw_placement.get("hpwl_um", 0.0)),
+            aspect_ratio=float(raw_placement.get("aspect_ratio", 1.0)),
+            n_iterations=int(raw_placement.get("n_iterations", 0)),
+            t_total_ms=float(raw_placement.get("t_total_ms", 0.0)),
+            placed_blocks=placed_blocks,
+            all_runs=list(raw_placement.get("all_runs", [])),
+        )
+
+    has_placement = bool(
+        (placement_result and placement_result.placed_blocks)
+        or any(b.placed and "x" in b.placed and "y" in b.placed for b in blocks)
     )
 
     return PlacementData(
@@ -150,4 +208,5 @@ def load(path: str | Path) -> PlacementData:
         nets=nets,
         symmetry_constraints=raw.get("symmetry_constraints", {}),
         has_placement=has_placement,
+        placement_result=placement_result,
     )

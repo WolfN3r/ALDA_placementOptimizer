@@ -35,6 +35,7 @@ class LayerManager:
         ("net_signal", "Signal nets",                 80, 220,  80),
         ("labels",     "Labels",                     255, 255, 100),
         ("symmetry",   "Symmetry pairs",             255, 150, 255),
+        ("drc_overlay", "DRC violations",            255, 100, 100),
     ]
 
     def __init__(self) -> None:
