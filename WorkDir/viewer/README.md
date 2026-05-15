@@ -316,7 +316,7 @@ For two axis-aligned bounding boxes:
 
 - **Active check** fires when the blocks share a horizontal band (Y-extents touch or overlap). The gap measured is in X (active direction, rot=0).
 - **Poly check** fires when the blocks share a vertical band (X-extents touch or overlap). The gap measured is in Y (poly direction, rot=0).
-- **Diagonal pairs** (gaps in both X and Y simultaneously) have no facing edges → skipped entirely.
+- **Diagonal pairs** (gaps in both X and Y simultaneously) have no facing edges and are skipped for non-WPE categories. For WPE categories (`different_bulks`, `different_deviceGroups`) a Euclidean corner-distance check is applied instead: `sqrt(active_gap² + poly_gap²)` must exceed `max(req_active, req_poly)`. This avoids false positives where one dimension has a large gap (e.g. 13 µm in Y) that makes the actual corner distance safe even though the other dimension's gap is small.
 
 This avoids false positives for blocks that are side-by-side horizontally but happen to have zero vertical gap — a naive algorithm would report a poly violation of 0 µm for every horizontal neighbor.
 
@@ -336,3 +336,19 @@ All spacing values are in **micrometers (µm)** and reference the placed `main_b
 ## GDS export (optional)
 
 A `gds_exporter.py` stub is included. It requires `pip install gdstk` and is not yet wired to a menu item.
+
+---
+
+## Known limitations / future improvements
+
+### Marginal spacing — boundary pairs
+
+The optimizer sometimes places blocks at **exactly** the required spacing (gap == threshold). These are technically compliant but fragile — any floating-point rounding or PDK update would flip them into violations. The DRC checker currently treats them as clean (gap is not strictly less than threshold). A future improvement would be a separate "marginal" warning level that flags pairs within, say, 5 % of the required spacing.
+
+### `same_deviceGroups` category currently unreachable
+
+With the four device types in `gpdk090_device_rules.json` (`nmos1v`, `nmos2v`, `pmos1v`, `pmos2v`) every same-group pair (LV–LV or HV–HV) always has a different bulk, so all same-group pairs are classified as `different_bulks`. The `same_deviceGroups` spacing rules (active=4 µm, poly=5 µm) are never exercised. Once passive devices (RES, MIMCAP) are added to the PDK they will introduce pairs within the same group and same bulk, making this category active and its spacing rules testable.
+
+### Mixed-rotation block pairs
+
+When one block has rotation 0° and the other has rotation 90°, the checker defaults to treating both as 0°. The `active`/`poly` axes for the rotated block are swapped compared to what the PDK rules assume, so violations on the rotated block's poly axis may be missed or mis-reported. This has no impact while the optimizer only places blocks at 0°, but will need to be fixed once device rotation is enabled.

@@ -208,61 +208,47 @@ class PlacementScene(QGraphicsScene):
             self._drc_items.append(item)
 
     def _drc_gap_polygon(self, v: DRCViolation) -> QGraphicsPolygonItem:
-        """Rectangle spanning the gap between the facing edges of two blocks.
+        """Quadrilateral connecting the full facing edges of two blocks.
 
-        Clips the polygon to the shared extent (the band where edges actually
-        face each other), matching the Calibre-style edge-projection model.
-        All coords: JSON Y-up → converted to scene Y-down via H - y.
+        direction="active" → horizontal gap → polygon spans A's full right edge
+        to B's full left edge: (A top-right)→(A bot-right)→(B bot-left)→(B top-left).
+
+        direction="poly" → vertical gap → polygon spans A's full top edge to B's
+        full bottom edge: (A top-left)→(A top-right)→(B bot-right)→(B bot-left).
+
+        Uses full-side extents (no band clipping) so the polygon is always visible
+        regardless of how much the two blocks overlap in the orthogonal axis.
+        All coords: JSON Y-up → scene Y-down via (H - y).
         """
         ax0, ay0, ax1, ay1 = v.bbox_a
         bx0, by0, bx1, by1 = v.bbox_b
         H = self._H
 
-        x_gap = max(0.0, max(bx0 - ax1, ax0 - bx1))
-        y_gap = max(0.0, max(by0 - ay1, ay0 - by1))
-
-        _MIN_VIS = 0.05   # minimum visible polygon extent (µm) for zero-gap cases
-
-        if x_gap >= y_gap:
-            # Horizontal separation: A's right edge ↔ B's left edge.
-            # Ensure A is on the left (by center X).
+        if v.direction == "active":
+            # Polygon between vertical (left / right) sides.
+            # A = left block (smaller center-X), B = right block.
             if (ax0 + ax1) > (bx0 + bx1):
                 ax0, ay0, ax1, ay1, bx0, by0, bx1, by1 = (
                     bx0, by0, bx1, by1, ax0, ay0, ax1, ay1
                 )
-            # Clip the vertical extent to the shared Y-band between the two blocks.
-            band_y0 = max(ay0, by0)
-            band_y1 = min(ay1, by1)
-            if band_y1 - band_y0 < _MIN_VIS:   # touching at single Y line
-                mid = (band_y0 + band_y1) / 2
-                band_y0, band_y1 = mid - _MIN_VIS / 2, mid + _MIN_VIS / 2
-            # Rectangle in gap (scene Y-down): clockwise
             pts = [
-                QPointF(ax1, H - band_y1),
-                QPointF(ax1, H - band_y0),
-                QPointF(bx0, H - band_y0),
-                QPointF(bx0, H - band_y1),
+                QPointF(ax1, H - ay1),   # A top-right
+                QPointF(ax1, H - ay0),   # A bot-right
+                QPointF(bx0, H - by0),   # B bot-left
+                QPointF(bx0, H - by1),   # B top-left
             ]
         else:
-            # Vertical separation: A's top edge ↔ B's bottom edge.
-            # In JSON Y-up, "higher" block has larger y values.
-            # Ensure A is the lower block (smaller ay1).
+            # Polygon between horizontal (top / bottom) sides.
+            # A = lower block (smaller center-Y in JSON Y-up), B = upper block.
             if (ay0 + ay1) > (by0 + by1):
                 ax0, ay0, ax1, ay1, bx0, by0, bx1, by1 = (
                     bx0, by0, bx1, by1, ax0, ay0, ax1, ay1
                 )
-            # Clip the horizontal extent to the shared X-band.
-            band_x0 = max(ax0, bx0)
-            band_x1 = min(ax1, bx1)
-            if band_x1 - band_x0 < _MIN_VIS:
-                mid = (band_x0 + band_x1) / 2
-                band_x0, band_x1 = mid - _MIN_VIS / 2, mid + _MIN_VIS / 2
-            # Rectangle in gap: A top edge → B bottom edge, clipped to shared X-band
             pts = [
-                QPointF(band_x0, H - ay1),
-                QPointF(band_x1, H - ay1),
-                QPointF(band_x1, H - by0),
-                QPointF(band_x0, H - by0),
+                QPointF(ax0, H - ay1),   # A top-left
+                QPointF(ax1, H - ay1),   # A top-right
+                QPointF(bx1, H - by0),   # B bot-right
+                QPointF(bx0, H - by0),   # B bot-left
             ]
 
         polygon = QPolygonF(pts)

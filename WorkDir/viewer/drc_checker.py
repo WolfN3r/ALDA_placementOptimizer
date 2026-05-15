@@ -6,6 +6,7 @@ rules from a PDK JSON file (gpdk090_device_rules.json format).
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -53,7 +54,7 @@ class DRCViolation:
         if self.category == "physical_overlap":
             return (
                 f"B{self.bid_a} <-> B{self.bid_b}: physical overlap "
-                f"(depth {abs(self.actual):.3f} µm)"
+                f"({self.direction}: depth {abs(self.actual):.3f} µm)"
             )
         return (
             f"B{self.bid_a} <-> B{self.bid_b}: {self.category} ({self.direction})"
@@ -145,12 +146,12 @@ def _classify_pair(
       section  = "device_spacing" or "between_topologies"
       category = the PDK rule key (e.g. "same_cellNames", "different_bulks")
 
-    Same device type → device_spacing / same_cellNames (no sharing assumed).
-    Different types  → between_topologies, category determined by group/bulk.
-    Unknown type     → between_topologies / different_deviceGroups (worst case).
+    Same device type  → between_topologies / same_cellNames.
+    Different types   → between_topologies, category determined by group/bulk.
+    Unknown type      → between_topologies / different_deviceGroups (worst case).
     """
     if dt_a == dt_b:
-        return ("device_spacing", "same_cellNames")
+        return ("between_topologies", "same_cellNames")
 
     topo = rules.device_topology
     info_a = topo.get(dt_a)
@@ -207,13 +208,18 @@ def _check_pair(
 ) -> list[DRCViolation]:
     """Check one block pair using the envelope-overlap / facing-edge model.
 
-    A spacing rule is checked ONLY between edges that face each other:
-      - Active (X for rot=0): checked when the blocks' Y-extents touch or overlap
-        (they are in the same horizontal band → their right/left edges face each other).
-      - Poly  (Y for rot=0): checked when the blocks' X-extents touch or overlap
-        (they are in the same vertical band → their top/bottom edges face each other).
-    Diagonal pairs (x_gap > 0 AND y_gap > 0) have no facing edges → skipped.
-    This matches how Calibre / Virtuoso DRC edge-based checks work.
+    Rotation convention: 0°≡180° and 90°≡270° (same spacing for opposite orientations).
+    rot=0 : active=X, poly=Y.  rot=90: active=Y, poly=X.
+
+    Non-diagonal pairs (only one axis has a gap):
+      - Active edge check fires when blocks share a band along the poly axis.
+      - Poly   edge check fires when blocks share a band along the active axis.
+
+    Diagonal pairs (both axes have a gap):
+      - Non-WPE categories: skipped (no facing edges).
+      - WPE categories (different_bulks / different_deviceGroups): rectangular-well
+        corner check — both axes tested independently, because the well boundary is
+        rectangular and corner clearance must be enforced in each direction.
     """
     ax0, ay0, ax1, ay1 = bbox_a
     bx0, by0, bx1, by1 = bbox_b
@@ -227,41 +233,65 @@ def _check_pair(
 
     # --- Physical overlap: bboxes penetrate in both axes simultaneously ------
     if x_overlap > 1e-9 and y_overlap > 1e-9:
-        depth = -min(x_overlap, y_overlap)
         violations.append(DRCViolation(
             bid_a=bid_a, bid_b=bid_b,
-            category="physical_overlap", direction="overlap",
-            required=0.0, actual=depth,
+            category="physical_overlap", direction="active",
+            required=0.0, actual=-x_overlap,
+            bbox_a=bbox_a, bbox_b=bbox_b,
+        ))
+        violations.append(DRCViolation(
+            bid_a=bid_a, bid_b=bid_b,
+            category="physical_overlap", direction="poly",
+            required=0.0, actual=-y_overlap,
             bbox_a=bbox_a, bbox_b=bbox_b,
         ))
         return violations
 
-    # Diagonal pair: no edges face each other → nothing to check
-    if x_gap > 1e-9 and y_gap > 1e-9:
-        return violations
+    # Rotation normalisation: 0°≡180°, 90°≡270°
+    rot_a = rot_a % 180
+    rot_b = rot_b % 180
 
-    _, category, req_active, req_poly = _get_required_spacing(rules, dt_a, dt_b)
-
-    # Determine active/poly axis and facing conditions per rotation.
-    # rot=0 : active = X, poly = Y
-    #   → faces in active (X) when Y-extents touch: y_gap ≤ 0  (faces_active = y_gap < ε)
-    #   → faces in poly  (Y) when X-extents touch: x_gap ≤ 0  (faces_poly  = x_gap < ε)
-    # rot=90: active = Y, poly = X  (axes swapped)
-    #   → faces in active (Y) when X-extents touch: x_gap ≤ 0
-    #   → faces in poly  (X) when Y-extents touch: y_gap ≤ 0
+    # Axis mapping per rotation:
+    # rot=0: active=X (S/D axis horizontal), poly=Y (channel-width axis vertical)
+    # rot=90: active=Y, poly=X  (axes swapped)
     if rot_a == 90 and rot_b == 90:
         active_gap, poly_gap         = y_gap, x_gap
         active_overlap, poly_overlap = y_overlap, x_overlap
-        faces_active = x_gap < 1e-9
+        faces_active = x_gap < 1e-9   # X-band shared → active edges face each other
         faces_poly   = y_gap < 1e-9
     else:
-        # rot=0 for both, or mixed (treat X as active — conservative)
+        # both rot=0, or mixed (treated as rot=0 — same axis convention)
         active_gap, poly_gap         = x_gap, y_gap
         active_overlap, poly_overlap = x_overlap, y_overlap
-        faces_active = y_gap < 1e-9
+        faces_active = y_gap < 1e-9   # Y-band shared → active edges face each other
         faces_poly   = x_gap < 1e-9
 
-    # --- Active direction check (only when blocks face each other in this axis) ---
+    _, category, req_active, req_poly = _get_required_spacing(rules, dt_a, dt_b)
+
+    is_wpe = category in {"different_bulks", "different_deviceGroups"}
+
+    # --- Diagonal pair -------------------------------------------------------
+    if x_gap > 1e-9 and y_gap > 1e-9:
+        if not is_wpe:
+            return violations  # no facing edges for non-WPE rules
+        # Euclidean closest-point distance between the two rectangles.
+        # Per-axis independent checks produce false positives: a large gap in one
+        # dimension (e.g. 13 µm in Y) makes the real corner distance far exceed
+        # the threshold even when the other gap is small.
+        corner_dist = math.sqrt(active_gap ** 2 + poly_gap ** 2)
+        req_corner = max(req_active, req_poly)  # conservative: largest axis threshold
+        if req_corner >= 0.0 and corner_dist < req_corner - 1e-9:
+            violations.append(DRCViolation(
+                bid_a=bid_a, bid_b=bid_b,
+                category=category, direction="corner",
+                required=req_corner, actual=corner_dist,
+                bbox_a=bbox_a, bbox_b=bbox_b,
+            ))
+        return violations
+
+    # --- Non-diagonal: facing-edge checks ------------------------------------
+
+    # Active direction (fires when blocks share a band along the poly axis)
     if faces_active:
         if req_active >= 0.0:
             if active_gap < req_active - 1e-9:
@@ -272,7 +302,7 @@ def _check_pair(
                     bbox_a=bbox_a, bbox_b=bbox_b,
                 ))
         else:
-            # Negative = controlled overlap allowed; violation if depth exceeds limit
+            # Negative rule: controlled overlap allowed; violation if depth exceeds limit
             allowed = abs(req_active)
             if active_overlap > allowed + 1e-9:
                 violations.append(DRCViolation(
@@ -282,7 +312,7 @@ def _check_pair(
                     bbox_a=bbox_a, bbox_b=bbox_b,
                 ))
 
-    # --- Poly direction check (only when blocks face each other in this axis) ---
+    # Poly direction (fires when blocks share a band along the active axis)
     if faces_poly:
         if req_poly >= 0.0:
             if poly_gap < req_poly - 1e-9:
