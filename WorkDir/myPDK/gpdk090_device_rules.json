@@ -83,7 +83,7 @@
     },
 
     "between_topologies": {
-        "_comment": "Topology-distance costs for cross-device pairs (decision-tree leaves). active/poly leaves carry ordinal costs; bulk/group mismatch leaves use WPE-based costs because well-proximity is the dominant electrical effect when devices cross bulk or voltage-class boundaries.",
+        "_comment": "Rules for pairs of devices with DIFFERENT cell types. Categories follow the advisor's tree: same_cellNames (same cell, no sharing), same_deviceGroups (same voltage class, no sharing), different_cellNames (different cells, no sharing), different_bulks (different wells, WPE-based), different_deviceGroups (different voltage classes, WPE-based).",
 
         "same_cellNames":         {"active": 2, "poly": 3},
         "same_deviceGroups":      {"active": 4, "poly": 5},

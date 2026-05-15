@@ -16,11 +16,12 @@ perturb(temperature) expects temperature in [0, 1] (normalised fraction,
 """
 from __future__ import annotations
 
+import math
 import random
 from typing import Any, Callable
 
 from topology_base import TopologyBase, SAMixin, GAMixin
-from spacing import compute_block_spacing
+from spacing import compute_block_spacing, is_wpe_pair
 
 
 # =============================================================================
@@ -44,36 +45,89 @@ class _Node:
 # =============================================================================
 
 def _contour_query(
-    contour: list[tuple[float, float, float, str]],
+    contour: list[tuple[float, float, float, float, str]],
     x_l: float,
     x_r: float,
     dt_new: str,
+    ch: float,
 ) -> float:
     """
-    Return the effective floor height for a new block of type dt_new placed in
-    x-range [x_l, x_r].  For each existing contour segment that overlaps the
-    query range, effective_height = segment.y_top + y_spacing(segment.dtype, dt_new).
-    The caller must NOT add y_spacing again — it is already included here.
+    2-D contour query — return the y-floor for a new block (type dt_new,
+    x-range [x_l, x_r], height ch) that satisfies *all* pairwise DRC spacing.
+
+    Each contour segment is a 5-tuple (x_l, x_r, y_bot, y_top, dt).
+    Three cases per segment:
+
+    x-overlap (x_gap == 0):
+        Standard 1-D skyline — y_floor = y_top + y_spacing.
+
+    x-gap (x_gap > 0), WPE pair (different_bulks / different_deviceGroups):
+        Well boundary requires Euclidean corner clearance:
+            sqrt(x_gap² + y_gap²) ≥ req = max(WPE_active, WPE_poly)
+        Solved for y_gap:
+            y_floor = y_top + sqrt(req² - x_gap²) + 1e-6
+        The +1e-6 guards against IEEE rounding where the computed sqrt is
+        fractionally below req, which would cause the DRC checker to flag a
+        spurious violation at exactly the limit.
+
+    x-gap (x_gap > 0), non-WPE pair:
+        The DRC checker has no diagonal constraint for non-WPE pairs, BUT it
+        does fire an "active" (x-direction) violation when x_gap < req_active
+        AND the blocks share a y-band.  To prevent sharing a y-band we push
+        the new block above the segment: y_floor = y_top + 1e-6.
+        y_bot is checked against the running max_h to avoid pushing when the
+        new block's y-range cannot actually overlap the segment.
     """
     max_h = 0.0
-    for (cx_l, cx_r, cy_top, cy_dt) in contour:
-        if cx_r <= x_l or cx_l >= x_r:
-            continue
-        sp = compute_block_spacing({"device_type": cy_dt}, {"device_type": dt_new})
-        effective = cy_top + sp.y_spacing
+    blk_new = {"device_type": dt_new}
+    for (cx_l, cx_r, cy_bot, cy_top, cy_dt) in contour:
+        blk_seg = {"device_type": cy_dt}
+        sp      = compute_block_spacing(blk_seg, blk_new)
+        x_gap   = max(0.0, max(x_l - cx_r, cx_l - x_r))
+
+        if x_gap < 1e-9:
+            # Standard y-spacing (1-D skyline)
+            effective = cy_top + sp.y_spacing
+
+        elif is_wpe_pair(blk_seg, blk_new):
+            # WPE corner clearance for diagonal pairs
+            req_corner = max(sp.x_spacing, sp.y_spacing)
+            if x_gap < req_corner:
+                effective = (
+                    cy_top
+                    + math.sqrt(max(0.0, req_corner ** 2 - x_gap ** 2))
+                    + 1e-6   # IEEE rounding guard
+                )
+            else:
+                effective = 0.0  # x-gap already satisfies corner distance
+
+        elif x_gap < sp.x_spacing:
+            # Non-WPE with insufficient x-gap: DRC fires only when y-bands
+            # overlap.  Using max_h as the running y-floor estimate, check
+            # whether [max_h, max_h+ch] and [cy_bot, cy_top] intersect.
+            y_overlap = min(max_h + ch, cy_top) - max(max_h, cy_bot)
+            if y_overlap > 1e-9:
+                effective = cy_top + 1e-6  # push above → diagonal → no DRC
+            else:
+                effective = 0.0
+
+        else:
+            effective = 0.0  # non-WPE, x-gap already sufficient
+
         if effective > max_h:
             max_h = effective
     return max_h
 
 
 def _contour_update(
-    contour: list[tuple[float, float, float, str]],
+    contour: list[tuple[float, float, float, float, str]],
     x_l: float,
     x_r: float,
+    y_bot: float,
     y_top: float,
     dt: str,
 ) -> None:
-    contour.append((x_l, x_r, y_top, dt))
+    contour.append((x_l, x_r, y_bot, y_top, dt))
 
 
 # =============================================================================
@@ -172,8 +226,8 @@ class BStarTopology(TopologyBase, SAMixin, GAMixin):
             return {}
 
         positions: dict[str, tuple[float, float]] = {}
-        # contour entries: (x_left, x_right, y_top, device_type)
-        contour: list[tuple[float, float, float, str]] = []
+        # contour entries: (x_left, x_right, y_bot, y_top, device_type)
+        contour: list[tuple[float, float, float, float, str]] = []
         node_geom: dict[str, tuple[float, float, float, float]] = {}  # block_id → (x,y,w,h)
 
         def _get_block_dims(node: _Node) -> tuple[float, float, str]:
@@ -186,7 +240,7 @@ class BStarTopology(TopologyBase, SAMixin, GAMixin):
         rw, rh, rdt = _get_block_dims(self._root)
         positions[self._root.block_id] = (0.0, 0.0)
         node_geom[self._root.block_id] = (0.0, 0.0, rw, rh)
-        _contour_update(contour, 0.0, rw, rh, rdt)
+        _contour_update(contour, 0.0, rw, 0.0, rh, rdt)
 
         # Iterative DFS pre-order (right pushed first → left processed first)
         dfs_stack: list[_Node] = []
@@ -206,18 +260,18 @@ class BStarTopology(TopologyBase, SAMixin, GAMixin):
                 # x-child: placed to the right of parent
                 sp = compute_block_spacing({"device_type": p_dt}, {"device_type": c_dt})
                 cx = px + pw + sp.x_spacing
-                cy = _contour_query(contour, cx, cx + cw, c_dt)
+                cy = _contour_query(contour, cx, cx + cw, c_dt, ch)
                 cy = max(cy, py)   # x-child must not fall below parent's baseline
             else:
                 # y-child: same x-column as parent.
                 # Query uses child width (not parent width) so child's full footprint
                 # is checked.  _contour_query already adds y_spacing — never add again.
                 cx = px
-                cy = _contour_query(contour, cx, cx + cw, c_dt)
+                cy = _contour_query(contour, cx, cx + cw, c_dt, ch)
 
             positions[node.block_id] = (cx, cy)
             node_geom[node.block_id] = (cx, cy, cw, ch)
-            _contour_update(contour, cx, cx + cw, cy + ch, c_dt)
+            _contour_update(contour, cx, cx + cw, cy, cy + ch, c_dt)
 
             if node.right:
                 dfs_stack.append(node.right)

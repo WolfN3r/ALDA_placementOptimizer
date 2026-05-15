@@ -12,7 +12,7 @@ from collections import defaultdict, deque
 from typing import Any, Callable
 
 from topology_base import TopologyBase, SAMixin, GAMixin
-from spacing import compute_block_spacing
+from spacing import compute_block_spacing, is_wpe_pair
 
 
 class SequencePairTopology(TopologyBase, SAMixin, GAMixin):
@@ -80,25 +80,24 @@ class SequencePairTopology(TopologyBase, SAMixin, GAMixin):
             wa, ha, dta = _dims(a)
             for j in range(i + 1, n):
                 b = bids[j]
-                wb, hb, dtb = _dims(b)
+                _, _, dtb = _dims(b)
                 sp = compute_block_spacing({"device_type": dta}, {"device_type": dtb})
 
                 pa_p, pa_m = pos_plus[a],  pos_minus[a]
                 pb_p, pb_m = pos_plus[b],  pos_minus[b]
 
+                wpe = is_wpe_pair({"device_type": dta}, {"device_type": dtb})
+                req = max(sp.x_spacing, sp.y_spacing) if wpe else None
+
                 if pa_p < pb_p and pa_m < pb_m:
-                    # H-constraint: A left of B
-                    # H-DAG: edge a→b with weight = A.width + x_spacing(A,B)
-                    h_graph[pa_p].append((pb_p, wa + sp.x_spacing))
-                    # V-DAG: edge b→a (critical invariant — not a→b)
-                    v_graph[pb_p].append((pa_p, hb + sp.y_spacing))
+                    # H-constraint: a left of b — H-DAG only
+                    eff_x = req if wpe else sp.x_spacing
+                    h_graph[pa_p].append((pb_p, wa + eff_x))
 
                 elif pa_p < pb_p and pa_m > pb_m:
-                    # V-constraint: A below B
-                    # V-DAG: edge a→b with weight = A.height + y_spacing(A,B)
-                    v_graph[pa_p].append((pb_p, ha + sp.y_spacing))
-                    # H-DAG: edge b→a
-                    h_graph[pb_p].append((pa_p, wb + sp.x_spacing))
+                    # V-constraint: a below b — V-DAG only
+                    eff_y = req if wpe else sp.y_spacing
+                    v_graph[pa_p].append((pb_p, ha + eff_y))
 
         # Source connects to all blocks; all blocks connect to sink
         for i in range(n):

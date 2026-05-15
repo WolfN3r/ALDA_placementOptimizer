@@ -14,8 +14,8 @@ from pathlib import Path
 # =============================================================================
 # CONFIGURATION  (edit here)
 # =============================================================================
-SEED       = 13    # random seed passed to every script
-NUM_BLOCKS = 7    # number of transistor blocks to generate
+SEED       =  42    # random seed passed to every script
+NUM_BLOCKS = 15    # number of transistor blocks to generate
 
 SAVE_FILES = True  # False → run without writing any files to disk
 VERSION    = "v01" # json structure version tag (see testFiles_naming.md)

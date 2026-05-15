@@ -28,7 +28,7 @@ SEED_MODE = "random"      # "random" | "ordered" — initial topology seed strat
 # Set TOPOLOGY + OPTIMIZER to run exactly one combination.
 # Leave both empty to fall back to RUN_MODE (exhaustive or random).
 TOPOLOGY  = ""   # "" | "BStarTopology" | "SequencePairTopology"
-OPTIMIZER = ""   # "" | "SimulatedAnnealingOptimizer"
+OPTIMIZER = "SimulatedAnnealingOptimizer"   # "" | "SimulatedAnnealingOptimizer"
 
 # Used only when TOPOLOGY/OPTIMIZER are empty:
 RUN_MODE  = "exhaustive"  # "exhaustive" → all supported pairs | "random" → one random pair
