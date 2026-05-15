@@ -251,6 +251,13 @@ def wmi_decide_symmetry_roles(num_blocks: int, config: dict, seed: int) -> dict:
     }
 
 
+def _pick_power_rail(device_type: str) -> str:
+    """NMOS → VSS with 80% probability; PMOS → VDD with 80% probability."""
+    natural = "VSS" if device_type.startswith("nmos") else "VDD"
+    opposite = "VDD" if natural == "VSS" else "VSS"
+    return natural if random.random() < 0.8 else opposite
+
+
 def wmi_assign_power_nets(
     valid_blocks: list, power_config: dict, paired_blocks: list
 ) -> dict:
@@ -260,7 +267,7 @@ def wmi_assign_power_nets(
     cov_min  = power_config.get("coverage_min", 0.6)
     n_pwr    = min(math.ceil(cov_min * len(valid_blocks)), len(eligible))
     sampled  = random.sample(eligible, n_pwr)
-    assign   = {b["block_id"]: random.choice(["VDD", "VSS"]) for b in sampled}
+    assign   = {b["block_id"]: _pick_power_rail(b["device_type"]) for b in sampled}
     # block_b inherits block_a's rail so symmetric pairs share the same power net
     for a_id, b_id in paired_blocks:
         if a_id in assign:
