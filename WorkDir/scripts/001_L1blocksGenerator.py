@@ -423,15 +423,14 @@ def wmi_build_symmetry_output(
 ) -> dict:
     groups = [
         {
-            "group_id":       gid,
-            "device_type":    g["device_type"],
-            "pairs":          [{"block_a": a, "block_b": b} for a, b in g["pair_indices"]],
-            "self_symmetric": list(g["self_sym_indices"]),
+            "axis":                      "vertical",
+            "pairs":                     [list(pair) for pair in g["pair_indices"]],
+            "self_symmetric":            list(g["self_sym_indices"]),
+            "enforce_matching_variants": bool(g["pair_indices"]),
         }
-        for gid, g in enumerate(sym_roles["groups"])
+        for g in sym_roles["groups"]
     ]
     return {
-        "symmetry_axis":       "vertical",
         "groups":              groups,
         "symmetric_net_pairs": sym_net_pairs,
         "self_symmetric_nets": self_sym_nets,

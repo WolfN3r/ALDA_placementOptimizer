@@ -102,7 +102,7 @@
     "comment": "Maximum attempts to generate a block with at least one valid variant"
   },
   "power_nets": {
-    "coverage_min": 0.6,
+    "coverage_min": 0.8,
     "comment": "Minimum fraction of blocks connected to VDD or VSS. Each block connects to at most one power rail via pin P0."
   }
 }

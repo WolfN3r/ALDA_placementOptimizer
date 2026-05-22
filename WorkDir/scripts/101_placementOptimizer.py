@@ -27,11 +27,17 @@ SEED_MODE = "random"      # "random" | "ordered" — initial topology seed strat
 # --- Combination selector ---------------------------------------------------
 # Set TOPOLOGY + OPTIMIZER to run exactly one combination.
 # Leave both empty to fall back to RUN_MODE (exhaustive or random).
-TOPOLOGY  = ""   # "" | "BStarTopology" | "SequencePairTopology"
-OPTIMIZER = "SimulatedAnnealingOptimizer"   # "" | "SimulatedAnnealingOptimizer"
+TOPOLOGY  = ""   # "" | "BStarTopology" | "SequencePairTopology" | "ILPTopology"
+OPTIMIZER = ""   # "" | "SimulatedAnnealingOptimizer" | "ILPOptimizer"
 
 # Used only when TOPOLOGY/OPTIMIZER are empty:
 RUN_MODE  = "exhaustive"  # "exhaustive" → all supported pairs | "random" → one random pair
+
+# --- Exhaustive mode output options -----------------------------------------
+# RENORMALIZE: recalculates cost for all exhaustive runs using the best run's
+# area and hpwl as shared references so costs are directly comparable.
+# Best run = 1.0, all others >= 1.0 (higher is worse).
+RENORMALIZE = True
 
 # --- SA tuning (0 → auto-computed from n_blocks) ----------------------------
 SA_INITIAL_TEMP = 0.0    # auto-calibrated when 0.0
@@ -74,13 +80,17 @@ def _resolve_combination():
     from bstar_topology   import BStarTopology
     from seqpair_topology import SequencePairTopology
     from sa_optimizer     import SimulatedAnnealingOptimizer
+    from ilp_topology     import ILPTopology
+    from ilp_optimizer    import ILPOptimizer
 
     topo_map = {
         "BStarTopology":        BStarTopology,
         "SequencePairTopology": SequencePairTopology,
+        "ILPTopology":          ILPTopology,
     }
     opt_map = {
         "SimulatedAnnealingOptimizer": SimulatedAnnealingOptimizer,
+        "ILPOptimizer":               ILPOptimizer,
     }
     t_cls = topo_map.get(TOPOLOGY)
     o_cls = opt_map.get(OPTIMIZER)
@@ -91,22 +101,69 @@ def _resolve_combination():
     return t_cls, o_cls
 
 
-def _run_summary(result) -> dict:
-    """Compact per-run dict for the all_runs comparison list."""
+def _build_run_entry(result) -> dict:
+    """Full per-run dict for exhaustive mode output, including placed_blocks."""
     return {
-        "topology":    result.topology,
-        "optimizer":   result.optimizer,
-        "status":      result.status,
-        "final_cost":  result.final_cost,
-        "area_um2":    round(result.area_um2, 4),
-        "hpwl_um":     round(result.hpwl_um, 4),
-        "aspect_ratio": round(result.aspect_ratio, 4),
-        "n_iterations": result.n_iterations,
-        "t_seed_ms":   round(result.t_seed_ms, 2),
+        "run_id":        result.run_id,
+        "topology":      result.topology,
+        "optimizer":     result.optimizer,
+        "status":        result.status,
+        "is_best":       False,
+        "final_cost":    round(result.final_cost, 6),
+        "area_um2":      round(result.area_um2, 4),
+        "hpwl_um":       round(result.hpwl_um, 4),
+        "aspect_ratio":  round(result.aspect_ratio, 4),
+        "n_iterations":  result.n_iterations,
+        "t_seed_ms":     round(result.t_seed_ms, 2),
         "t_optimize_ms": round(result.t_optimize_ms, 2),
-        "t_total_ms":  round(result.t_total_ms, 2),
-        "error":       result.error_message or None,
+        "t_total_ms":    round(result.t_total_ms, 2),
+        "placed_blocks": result.placed_blocks,
+        "error":         result.error_message or None,
     }
+
+
+def _renormalize_costs(entries: list, weights) -> None:
+    """
+    Add renorm_cost to each entry using element-wise best metrics as shared
+    normalization references so every ratio is guaranteed >= 1.0.
+
+    ref_area = min(area) across successful runs  → all area ratios >= 1.0
+    ref_hpwl = min(hpwl) across successful runs  → all hpwl ratios >= 1.0
+
+    shared_cost(R) = W_A*(R.area/ref_area) + W_WL*(R.hpwl/ref_hpwl) + W_AR*(R.ar-target)²
+
+    renorm_cost(R) = shared_cost(R) / min(shared_cost)   → best = 1.0, others >= 1.0
+    Failed runs get None.
+    """
+    success = [e for e in entries if e["status"] == "success"]
+    if not success:
+        for e in entries:
+            e["renorm_cost"] = None
+        return
+
+    ref_area = min(e["area_um2"] for e in success)
+    ref_hpwl = min(e["hpwl_um"]  for e in success)
+
+    w_a  = weights.area_weight
+    w_wl = weights.wirelength_weight
+    w_ar = weights.aspect_ratio_weight
+    target_ar = weights.target_aspect_ratio
+
+    def _shared_cost(e: dict) -> float:
+        area_term = w_a  * (e["area_um2"] / ref_area) if ref_area > 0.0 else 0.0
+        hpwl_term = w_wl * (e["hpwl_um"]  / ref_hpwl) if ref_hpwl > 0.0 else 0.0
+        ar_term   = w_ar * (e["aspect_ratio"] - target_ar) ** 2
+        return area_term + hpwl_term + ar_term
+
+    shared_costs = {id(e): _shared_cost(e) for e in success}
+    min_shared   = min(shared_costs.values())
+    denom        = min_shared if min_shared > 0.0 else 1.0
+
+    for e in entries:
+        if e["status"] == "success":
+            e["renorm_cost"] = round(_shared_cost(e) / denom, 6)
+        else:
+            e["renorm_cost"] = None
 
 
 def optimize(data: dict) -> dict:
@@ -126,11 +183,13 @@ def optimize(data: dict) -> dict:
     from solver_picker  import SolverPicker, _build_exhaustive_doc
     from pipeline       import OptimizationPipeline, build_default_registry
 
-    raw_blocks = data.get("blocks", [])
-    netlist    = data.get("netlist", {})
-    gen_params = data.get("generation_params", {})
-    blocks     = _build_blocks_dict(raw_blocks)
-    nets       = netlist.get("nets", [])
+    raw_blocks      = data.get("blocks", [])
+    netlist         = data.get("netlist", {})
+    gen_params      = data.get("generation_params", {})
+    blocks          = _build_blocks_dict(raw_blocks)
+    nets            = netlist.get("nets", [])
+    sym_constraints = data.get("symmetry_constraints", {})
+    sym_groups      = sym_constraints.get("groups", []) if sym_constraints else []
 
     n_blks     = gen_params.get("num_of_blocks", len(blocks))
     seed       = gen_params.get("seed", 0)
@@ -168,6 +227,7 @@ def optimize(data: dict) -> dict:
             sa_config      = sa_cfg,
             weights        = weights,
             auto_calibrate = True,
+            sym_groups     = sym_groups,
         )
         run_id = f"{t_cls.__name__}+{o_cls.__name__}"
         result = pipeline.run(blocks, nets, seed_mode=SEED_MODE, run_id=run_id)
@@ -184,6 +244,7 @@ def optimize(data: dict) -> dict:
             sa_config      = sa_cfg,
             weights        = weights,
             auto_calibrate = True,
+            sym_groups     = sym_groups,
         )
         if RUN_MODE == "exhaustive":
             doc = picker.run_exhaustive(
@@ -211,7 +272,31 @@ def optimize(data: dict) -> dict:
         )
 
     placement_meta: dict = {}
-    if best:
+    is_exhaustive = RUN_MODE == "exhaustive" and len(all_results) > 1
+
+    if is_exhaustive:
+        # --- Exhaustive mode: one full entry per run, all with placed_blocks ---
+        run_entries = [_build_run_entry(r) for r in all_results]
+        if RENORMALIZE:
+            _renormalize_costs(run_entries, weights)
+            # After renorm the winner is the entry with renorm_cost == 1.0
+            best_run_id = next(
+                (e["run_id"] for e in run_entries if e.get("renorm_cost") == 1.0),
+                best.run_id if best else "",
+            )
+        else:
+            best_run_id = best.run_id if best else ""
+        for e in run_entries:
+            e["is_best"] = (e["run_id"] == best_run_id)
+        placement_meta = {
+            "mode":         "exhaustive",
+            "seed_mode":    SEED_MODE,
+            "best_run_id":  best_run_id,
+            "renormalized": RENORMALIZE,
+            "runs":         run_entries,
+        }
+    elif best:
+        # --- Single / random mode: flat structure (backward compatible) ---
         placement_meta = {
             "run_id":        best.run_id,
             "topology":      best.topology,
@@ -227,8 +312,6 @@ def optimize(data: dict) -> dict:
             "t_total_ms":    round(best.t_total_ms, 2),
             "placed_blocks": best.placed_blocks,
         }
-        if len(all_results) > 1:
-            placement_meta["all_runs"] = [_run_summary(r) for r in all_results]
 
     return {
         "generation_params":    gen_params,

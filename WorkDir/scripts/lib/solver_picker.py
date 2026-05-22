@@ -108,12 +108,14 @@ class SolverPicker:
         weights:       CostWeights | None           = None,
         result_log:    "ResultLog | None"           = None,
         auto_calibrate: bool                        = True,
+        sym_groups:    list | None                  = None,
     ) -> None:
         self._registry      = registry      or build_default_registry()
         self._sa_config     = sa_config     or SAConfig()
         self._weights       = weights       or CostWeights()
         self._result_log    = result_log    or ResultLog()
         self._auto_calibrate = auto_calibrate
+        self._sym_groups     = sym_groups or []
         self._last_results: list = []
 
     def run_random(
@@ -166,12 +168,13 @@ class SolverPicker:
         seed_mode: str,
     ) -> PipelineResult:
         pipeline = OptimizationPipeline(
-            topology_cls  = topology_cls,
-            optimizer_cls = optimizer_cls,
-            sa_config     = self._sa_config,
-            weights       = self._weights,
-            registry      = self._registry,
+            topology_cls   = topology_cls,
+            optimizer_cls  = optimizer_cls,
+            sa_config      = self._sa_config,
+            weights        = self._weights,
+            registry       = self._registry,
             auto_calibrate = self._auto_calibrate,
+            sym_groups     = self._sym_groups,
         )
         run_id = f"{topology_cls.__name__}+{optimizer_cls.__name__}"
         return pipeline.run(blocks, nets, seed_mode=seed_mode, run_id=run_id)

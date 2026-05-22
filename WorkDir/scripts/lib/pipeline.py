@@ -64,10 +64,14 @@ class CompatibilityRegistry:
         """Return all (topology_cls, optimizer_cls) pairs with status SUPPORTED."""
         from bstar_topology    import BStarTopology
         from seqpair_topology  import SequencePairTopology
+        from ilp_topology      import ILPTopology
+        from ilp_optimizer     import ILPOptimizer
         cls_map = {
             "BStarTopology":               BStarTopology,
             "SequencePairTopology":        SequencePairTopology,
             "SimulatedAnnealingOptimizer": SimulatedAnnealingOptimizer,
+            "ILPTopology":                 ILPTopology,
+            "ILPOptimizer":                ILPOptimizer,
         }
         pairs = []
         for (t_name, o_name), st in self._table.items():
@@ -80,10 +84,13 @@ def build_default_registry() -> CompatibilityRegistry:
     """Build the default compatibility table as specified in the architecture."""
     from bstar_topology   import BStarTopology
     from seqpair_topology import SequencePairTopology
+    from ilp_topology     import ILPTopology
+    from ilp_optimizer    import ILPOptimizer
 
     reg = CompatibilityRegistry()
     reg.register(BStarTopology,          SimulatedAnnealingOptimizer, _SUPPORTED)
     reg.register(SequencePairTopology,   SimulatedAnnealingOptimizer, _SUPPORTED)
+    reg.register(ILPTopology,            ILPOptimizer,                _SUPPORTED)
     # GeneticOptimizer not yet implemented — stubs only
     # reg.register(SequencePairTopology, GeneticOptimizer, _SUPPORTED)
     # reg.register(BStarTopology,        GeneticOptimizer, _EXPERIMENTAL)
@@ -156,6 +163,7 @@ class OptimizationPipeline:
         registry:      CompatibilityRegistry | None = None,
         observer:      Any                  = None,
         auto_calibrate: bool                = True,
+        sym_groups:    list | None          = None,
     ) -> None:
         self._topology_cls  = topology_cls
         self._optimizer_cls = optimizer_cls
@@ -164,6 +172,7 @@ class OptimizationPipeline:
         self._registry      = registry  or build_default_registry()
         self._observer      = observer  or NullObserver()
         self._auto_calibrate = auto_calibrate
+        self._sym_groups     = sym_groups or []
 
         # Check compatibility at construction — not at run time
         st = self._registry.status(topology_cls, optimizer_cls)
@@ -197,7 +206,7 @@ class OptimizationPipeline:
 
         try:
             # Step 3: construct + seed topology
-            topology = self._topology_cls(blocks, nets)
+            topology = self._topology_cls(blocks, nets, sym_groups=self._sym_groups)
             topology.seed(blocks, mode=seed_mode)
             result.t_seed_ms = (time.perf_counter() - t_wall) * 1000
 
@@ -214,7 +223,7 @@ class OptimizationPipeline:
 
             # Step 6: auto-calibrate SA initial temperature if needed
             cfg = SAConfig(**self._sa_config.__dict__)
-            if self._auto_calibrate and cfg.initial_temp <= 0.0:
+            if self._auto_calibrate and cfg.initial_temp <= 0.0 and isinstance(topology, SAMixin):
                 cfg.initial_temp = calibrate_initial_temperature(topology, evaluator)
 
             n_blocks = len([b for b in blocks.values() if "error" not in b])

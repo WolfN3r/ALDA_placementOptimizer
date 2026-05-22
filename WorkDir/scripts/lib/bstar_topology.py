@@ -159,12 +159,13 @@ class BStarTopology(TopologyBase, SAMixin, GAMixin):
     Capabilities: SA (perturb/undo) and GA (mutate/crossover/random_init).
     """
 
-    def __init__(self, blocks: dict, nets: list) -> None:
+    def __init__(self, blocks: dict, nets: list, sym_groups: list | None = None) -> None:
         # block_id → block definition dict (read-only after construction)
         self._blocks: dict = blocks
         self._nets:   list = nets
         self._root:  _Node | None = None
         self._nodes: list[_Node]  = []   # all nodes, positionally stable
+        # sym_groups forwarded by pipeline but not used by B*-tree
 
     # ------------------------------------------------------------------
     # TopologyBase
