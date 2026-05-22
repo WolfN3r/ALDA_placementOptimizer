@@ -11,7 +11,7 @@ logs/*
 # WorkDir logs and temp files
 *.log
 *.pyc
-WorkDir/json_files/
+WorkDir/json_files/*.json
 
 # Images
 *.png

@@ -1,5 +1,6 @@
 """Main application window: tab-per-block layout + placement tab, with right info panel."""
 from __future__ import annotations
+import dataclasses
 import math
 from pathlib import Path
 
@@ -39,6 +40,26 @@ def _swatch(color: QColor, size: int = 14) -> QIcon:
     pix = QPixmap(size, size)
     pix.fill(color)
     return QIcon(pix)
+
+
+def _abbrev_run_id(run_id: str) -> str:
+    """Shorten a run_id like 'BStarTopology+SimulatedAnnealingOptimizer' → 'BStar+SA'."""
+    subs = [
+        ("SimulatedAnnealing", "SA"),
+        ("SequencePair", "SP"),
+        ("Topology", ""),
+        ("Optimizer", ""),
+    ]
+    result = run_id
+    for old, new in subs:
+        result = result.replace(old, new)
+    parts = [p for p in result.split("+") if p]
+    # Deduplicate consecutive identical parts (e.g. ILP+ILP → ILP)
+    dedup: list[str] = []
+    for p in parts:
+        if not dedup or p != dedup[-1]:
+            dedup.append(p)
+    return "+".join(dedup)
 
 
 # -----------------------------------------------------------------------
@@ -813,6 +834,124 @@ class DRCWindow(QMainWindow):
 
 
 # -----------------------------------------------------------------------
+# Right: exhaustive compare panel (shown when mode == "exhaustive")
+# -----------------------------------------------------------------------
+class ExhaustiveComparePanel(QWidget):
+    """Comparison table of all exhaustive runs + selected-block info."""
+
+    _HIGHLIGHT_BG = QColor("#4A3800")
+    _HIGHLIGHT_FG = QColor("#FFD700")
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self._results: list[json_loader.PlacementResult] = []
+        self._build_ui()
+
+    def _build_ui(self) -> None:
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        outer.addWidget(scroll)
+
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(6, 6, 6, 6)
+        layout.setSpacing(6)
+        scroll.setWidget(container)
+
+        layout.addWidget(QLabel("<b>Run Comparison</b>"))
+        sub = QLabel("Sorted: best → worst  (norm. cost)")
+        sub.setStyleSheet("color: #888; font-size: 10px;")
+        layout.addWidget(sub)
+
+        self._table = QTableWidget(0, 6)
+        self._table.setHorizontalHeaderLabels(
+            ["Run", "N.Cost", "Area", "HPWL", "AR", "ms"]
+        )
+        self._table.horizontalHeader().setStretchLastSection(True)
+        self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self._table.setAlternatingRowColors(True)
+        self._table.verticalHeader().setVisible(False)
+        self._table.setMinimumHeight(80)
+        layout.addWidget(self._table)
+
+        layout.addWidget(_separator())
+
+        sel_gb = QGroupBox("Selected Block")
+        sel_layout = QVBoxLayout(sel_gb)
+        sel_layout.setContentsMargins(6, 6, 6, 6)
+        sel_layout.setSpacing(4)
+        self._sel_title = QLabel("<i>Click a block in the view</i>")
+        self._sel_title.setWordWrap(True)
+        sel_layout.addWidget(self._sel_title)
+        self._sel_info = QLabel("")
+        self._sel_info.setWordWrap(True)
+        self._sel_info.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        sel_layout.addWidget(self._sel_info)
+        layout.addWidget(sel_gb)
+
+        layout.addStretch()
+        self.setMinimumWidth(210)
+        self.setMaximumWidth(280)
+
+    # ---- public API ---------------------------------------------------------
+
+    def update_runs(self, results: list[json_loader.PlacementResult]) -> None:
+        self._results = results
+        self._table.setRowCount(len(results))
+        for row, pr in enumerate(results):
+            vals = [
+                _abbrev_run_id(pr.run_id),
+                f"{pr.renorm_cost:.4f}",
+                f"{pr.area_um2:.1f}",
+                f"{pr.hpwl_um:.1f}",
+                f"{pr.aspect_ratio:.3f}",
+                f"{pr.t_optimize_ms:.0f}",
+            ]
+            for col, val in enumerate(vals):
+                item = QTableWidgetItem(val)
+                item.setToolTip(pr.run_id)
+                self._table.setItem(row, col, item)
+        self._table.resizeColumnsToContents()
+
+    def highlight_run(self, run_id: str) -> None:
+        for row, pr in enumerate(self._results):
+            is_cur = pr.run_id == run_id
+            for col in range(self._table.columnCount()):
+                item = self._table.item(row, col)
+                if item:
+                    if is_cur:
+                        item.setBackground(QBrush(self._HIGHLIGHT_BG))
+                        item.setForeground(QBrush(self._HIGHLIGHT_FG))
+                    else:
+                        item.setData(Qt.ItemDataRole.BackgroundRole, None)
+                        item.setData(Qt.ItemDataRole.ForegroundRole, None)
+            if is_cur and self._table.item(row, 0):
+                self._table.scrollToItem(self._table.item(row, 0))
+
+    def update_selected_block(
+        self, block: json_loader.Block, data: json_loader.PlacementData
+    ) -> None:
+        p = block.parameters
+        self._sel_title.setText(
+            f"<b>Block {block.block_id}</b> — {block.device_type}"
+        )
+        self._sel_info.setText(
+            f"W={p.get('width','?')} µm  L={p.get('length','?')} µm\n"
+            f"M={p.get('multiplier','?')}  NF={p.get('num_fingers','?')}\n"
+            f"Rail: {block.power_rail or '—'}"
+        )
+
+    def clear_selection(self) -> None:
+        self._sel_title.setText("<i>Click a block in the view</i>")
+        self._sel_info.setText("")
+
+
+# -----------------------------------------------------------------------
 # Main window
 # -----------------------------------------------------------------------
 class MainWindow(QMainWindow):
@@ -832,6 +971,13 @@ class MainWindow(QMainWindow):
         self._detail_windows: list[BlockDetailWindow] = []
         self._drc_window: DRCWindow | None = None
         self._drc_action: QAction | None = None
+
+        # Exhaustive mode state
+        self._exhaustive_mode: bool = False
+        self._exhaustive_scenes: list[PlacementScene] = []
+        self._exhaustive_views: list[CanvasView] = []
+        self._exhaustive_data: list[json_loader.PlacementData] = []
+        self._exhaustive_tab_start: int = -1
 
         self._build_ui()
         self._build_menus()
@@ -867,6 +1013,9 @@ class MainWindow(QMainWindow):
 
         self._placement_info_panel = PlacementInfoPanel()
         self._right_stack.addWidget(self._placement_info_panel)  # index 1
+
+        self._exhaustive_compare_panel = ExhaustiveComparePanel()
+        self._right_stack.addWidget(self._exhaustive_compare_panel)  # index 2
 
         splitter.addWidget(self._right_stack)
 
@@ -956,6 +1105,10 @@ class MainWindow(QMainWindow):
     # -----------------------------------------------------------------------
     def _current_view(self) -> CanvasView | None:
         idx = self._tabs.currentIndex()
+        if self._exhaustive_mode:
+            et_end = self._exhaustive_tab_start + len(self._exhaustive_views)
+            if self._exhaustive_tab_start <= idx < et_end:
+                return self._exhaustive_views[idx - self._exhaustive_tab_start]
         if idx == self._placement_tab_idx and self._placement_view is not None:
             return self._placement_view
         return self._views[idx] if 0 <= idx < len(self._views) else None
@@ -972,7 +1125,9 @@ class MainWindow(QMainWindow):
     def _fit_all(self) -> None:
         for v in self._views:
             v.fit()
-        if self._placement_view:
+        for v in self._exhaustive_views:
+            v.fit()
+        if not self._exhaustive_mode and self._placement_view:
             self._placement_view.fit()
 
     # -----------------------------------------------------------------------
@@ -1003,15 +1158,49 @@ class MainWindow(QMainWindow):
         self._placement_scene = None
         self._placement_view = None
         self._placement_tab_idx = -1
+        self._exhaustive_mode = False
+        self._exhaustive_scenes.clear()
+        self._exhaustive_views.clear()
+        self._exhaustive_data.clear()
+        self._exhaustive_tab_start = -1
 
         while self._tabs.count():
             self._tabs.removeTab(0)
 
         small, main, vis = self._grid_widget.current_grid()
 
-        if data.has_placement and data.placement_result:
-            # Placement mode: show only the Placement tab; blocks open on demand
-            # via right-click → "Open Block Blueprint"
+        if data.placement_mode == "exhaustive" and data.all_placement_results:
+            # Exhaustive mode: one tab per run, sorted by renorm_cost (best → worst)
+            self._exhaustive_mode = True
+            self._exhaustive_tab_start = self._tabs.count()   # == 0
+            for pr in data.all_placement_results:
+                run_data = dataclasses.replace(
+                    data, placement_result=pr, all_placement_results=[], placement_mode=""
+                )
+                ps = PlacementScene(run_data, self.lm)
+                pv = CanvasView(ps)
+                pv.set_y_up(ps._H)
+                pv.set_grid(small, main, vis)
+                pv.mouse_moved.connect(self._on_mouse_moved)
+                pv.right_clicked.connect(self._on_placement_right_click)
+                ps.block_selected.connect(self._on_placement_block_selected)
+                self._exhaustive_scenes.append(ps)
+                self._exhaustive_views.append(pv)
+                self._exhaustive_data.append(run_data)
+                self._tabs.addTab(pv, _abbrev_run_id(pr.run_id))
+            # First tab = lowest renorm_cost
+            self._placement_scene = self._exhaustive_scenes[0]
+            self._placement_view = self._exhaustive_views[0]
+            self._placement_tab_idx = self._exhaustive_tab_start
+            self._exhaustive_compare_panel.update_runs(data.all_placement_results)
+            self._exhaustive_compare_panel.highlight_run(data.all_placement_results[0].run_id)
+            self._exhaustive_compare_panel.clear_selection()
+            self._right_stack.setCurrentIndex(2)
+            for pv in self._exhaustive_views:
+                pv.fit()
+
+        elif data.has_placement and data.placement_result:
+            # Single-run placement mode: one Placement tab
             ps = PlacementScene(data, self.lm)
             pv = CanvasView(ps)
             pv.set_y_up(ps._H)
@@ -1026,6 +1215,8 @@ class MainWindow(QMainWindow):
             pv.fit()
             self._placement_info_panel.update_placement(data)
             self._placement_info_panel.clear_selection()
+            self._right_stack.setCurrentIndex(1)
+
         else:
             # Browser mode: one tab per block, no placement tab
             for block in data.blocks:
@@ -1047,8 +1238,12 @@ class MainWindow(QMainWindow):
 
             if data.blocks:
                 self._info_panel.update_block(data.blocks[0], data)
+            self._right_stack.setCurrentIndex(0)
 
-        mode = "Placed" if data.has_placement else "Browser"
+        if self._exhaustive_mode:
+            mode = f"Exhaustive ({len(data.all_placement_results)} runs)"
+        else:
+            mode = "Placed" if data.has_placement else "Browser"
         self.setWindowTitle(f"ALDA Placement Viewer — {title}")
         self._mode_label.setText(f"Mode: {mode}  |  Blocks: {len(data.blocks)}")
         self._status.showMessage(f"Loaded {title}  ({len(data.blocks)} blocks)", 3000)
@@ -1058,11 +1253,28 @@ class MainWindow(QMainWindow):
             self._drc_window = None
         if self._drc_action:
             self._drc_action.setEnabled(
-                data.has_placement and data.placement_result is not None
+                bool(self._exhaustive_scenes) or
+                (data.has_placement and data.placement_result is not None)
             )
 
     # -----------------------------------------------------------------------
     def _on_tab_changed(self, idx: int) -> None:
+        if self._exhaustive_mode:
+            et_end = self._exhaustive_tab_start + len(self._exhaustive_scenes)
+            if self._exhaustive_tab_start <= idx < et_end:
+                run_idx = idx - self._exhaustive_tab_start
+                self._placement_scene = self._exhaustive_scenes[run_idx]
+                self._placement_view = self._exhaustive_views[run_idx]
+                self._placement_tab_idx = idx
+                self._right_stack.setCurrentIndex(2)
+                run_id = self._data.all_placement_results[run_idx].run_id
+                self._exhaustive_compare_panel.highlight_run(run_id)
+                # Close DRC window when switching runs (it was tied to the old scene)
+                if self._drc_window is not None:
+                    self._drc_window.close()
+                    self._drc_window = None
+                return
+
         if idx == self._placement_tab_idx:
             self._right_stack.setCurrentIndex(1)
         elif self._data and 0 <= idx < len(self._scenes):
@@ -1084,30 +1296,51 @@ class MainWindow(QMainWindow):
     def _on_grid_changed(self, small: float, main: float, visible: bool) -> None:
         for view in self._views:
             view.set_grid(small, main, visible)
-        if self._placement_view:
+        for view in self._exhaustive_views:
+            view.set_grid(small, main, visible)
+        if not self._exhaustive_mode and self._placement_view:
             self._placement_view.set_grid(small, main, visible)
 
     def _on_nets_toggled(self, visible: bool) -> None:
-        if self._placement_scene:
-            self._placement_scene.set_nets_visible(visible)
+        targets = (
+            self._exhaustive_scenes if self._exhaustive_mode
+            else ([self._placement_scene] if self._placement_scene else [])
+        )
+        for ps in targets:
+            ps.set_nets_visible(visible)
 
     def _open_drc_window(self) -> None:
-        if not self._data or not self._placement_scene:
+        if not self._placement_scene:
             return
         if self._drc_window is not None and self._drc_window.isVisible():
             self._drc_window.raise_()
             self._drc_window.activateWindow()
             return
-        self._drc_window = DRCWindow(self._data, self._placement_scene, parent=self)
+        if self._exhaustive_mode:
+            run_idx = self._tabs.currentIndex() - self._exhaustive_tab_start
+            if not (0 <= run_idx < len(self._exhaustive_data)):
+                return
+            drc_data = self._exhaustive_data[run_idx]
+        else:
+            if not self._data:
+                return
+            drc_data = self._data
+        self._drc_window = DRCWindow(drc_data, self._placement_scene, parent=self)
         self._drc_window.show()
 
     def _on_placement_block_selected(self, bid) -> None:
         if bid is None:
-            self._placement_info_panel.clear_selection()
+            if self._exhaustive_mode:
+                self._exhaustive_compare_panel.clear_selection()
+            else:
+                self._placement_info_panel.clear_selection()
         elif self._data:
             block = self._data.block_by_id(bid)
             if block:
-                self._placement_info_panel.update_selected_block(block, self._data)
+                if self._exhaustive_mode:
+                    self._exhaustive_compare_panel.update_selected_block(block, self._data)
+                else:
+                    self._placement_info_panel.update_selected_block(block, self._data)
 
     def _on_placement_right_click(self, scene_pos: QPointF) -> None:
         if not self._placement_scene or not self._data:

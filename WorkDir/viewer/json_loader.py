@@ -61,6 +61,8 @@ class PlacementResult:
     t_total_ms: float
     placed_blocks: dict[int, PlacedBlockInfo]
     all_runs: list[dict]
+    renorm_cost: float = 0.0
+    t_optimize_ms: float = 0.0
 
 
 @dataclass
@@ -73,6 +75,8 @@ class PlacementData:
     symmetry_constraints: dict
     has_placement: bool
     placement_result: PlacementResult | None = None
+    placement_mode: str = ""
+    all_placement_results: list[PlacementResult] = field(default_factory=list)
 
     def block_by_id(self, block_id: int) -> Block | None:
         for b in self.blocks:
@@ -94,6 +98,25 @@ class PlacementData:
             if v.is_used:
                 return v
         return block.variants[0]
+
+
+def _parse_placed_blocks(pb_raw: dict) -> dict[int, PlacedBlockInfo]:
+    placed_blocks: dict[int, PlacedBlockInfo] = {}
+    for bid_str, pb in pb_raw.items():
+        bid = int(bid_str)
+        b = pb["main_bbox"]
+        if isinstance(b, dict):
+            bbox = (float(b["x_min"]), float(b["y_min"]), float(b["x_max"]), float(b["y_max"]))
+        else:
+            bbox = (float(b[0]), float(b[1]), float(b[2]), float(b[3]))
+        pins: dict[str, tuple[float, float]] = {}
+        for pname, ppos in pb.get("pins", {}).items():
+            if isinstance(ppos, dict):
+                pins[pname] = (float(ppos["x"]), float(ppos["y"]))
+            else:
+                pins[pname] = (float(ppos[0]), float(ppos[1]))
+        placed_blocks[bid] = PlacedBlockInfo(block_id=bid, main_bbox=bbox, pins=pins)
+    return placed_blocks
 
 
 def _parse_variant(idx: int, raw: dict) -> Variant:
@@ -161,39 +184,53 @@ def load(path: str | Path) -> PlacementData:
             pins=list(rn.get("pins", [])),
         ))
 
-    # Parse placement.placed_blocks section (py101 format)
+    # Parse placement section (supports single-run and exhaustive modes)
     placement_result = None
+    placement_mode = ""
+    all_placement_results: list[PlacementResult] = []
     raw_placement = raw.get("placement", {})
-    if isinstance(raw_placement, dict) and "placed_blocks" in raw_placement:
-        pb_raw = raw_placement["placed_blocks"]
-        placed_blocks: dict[int, PlacedBlockInfo] = {}
-        for bid_str, pb in pb_raw.items():
-            bid = int(bid_str)
-            b = pb["main_bbox"]
-            if isinstance(b, dict):
-                bbox = (float(b["x_min"]), float(b["y_min"]), float(b["x_max"]), float(b["y_max"]))
-            else:
-                bbox = (float(b[0]), float(b[1]), float(b[2]), float(b[3]))
-            pins: dict[str, tuple[float, float]] = {}
-            for pname, ppos in pb.get("pins", {}).items():
-                if isinstance(ppos, dict):
-                    pins[pname] = (float(ppos["x"]), float(ppos["y"]))
-                else:
-                    pins[pname] = (float(ppos[0]), float(ppos[1]))
-            placed_blocks[bid] = PlacedBlockInfo(block_id=bid, main_bbox=bbox, pins=pins)
-        placement_result = PlacementResult(
-            run_id=str(raw_placement.get("run_id", "")),
-            topology=str(raw_placement.get("topology", "")),
-            optimizer=str(raw_placement.get("optimizer", "")),
-            final_cost=float(raw_placement.get("final_cost", 0.0)),
-            area_um2=float(raw_placement.get("area_um2", 0.0)),
-            hpwl_um=float(raw_placement.get("hpwl_um", 0.0)),
-            aspect_ratio=float(raw_placement.get("aspect_ratio", 1.0)),
-            n_iterations=int(raw_placement.get("n_iterations", 0)),
-            t_total_ms=float(raw_placement.get("t_total_ms", 0.0)),
-            placed_blocks=placed_blocks,
-            all_runs=list(raw_placement.get("all_runs", [])),
-        )
+    if isinstance(raw_placement, dict):
+        placement_mode = str(raw_placement.get("mode", ""))
+        if placement_mode == "exhaustive" and "runs" in raw_placement:
+            parsed_runs: list[PlacementResult] = []
+            for run_raw in raw_placement.get("runs", []):
+                if run_raw.get("status") != "success" or not run_raw.get("placed_blocks"):
+                    continue
+                parsed_runs.append(PlacementResult(
+                    run_id=str(run_raw.get("run_id", "")),
+                    topology=str(run_raw.get("topology", "")),
+                    optimizer=str(run_raw.get("optimizer", "")),
+                    final_cost=float(run_raw.get("final_cost", 0.0)),
+                    area_um2=float(run_raw.get("area_um2", 0.0)),
+                    hpwl_um=float(run_raw.get("hpwl_um", 0.0)),
+                    aspect_ratio=float(run_raw.get("aspect_ratio", 1.0)),
+                    n_iterations=int(run_raw.get("n_iterations", 0)),
+                    t_total_ms=float(run_raw.get("t_total_ms", 0.0)),
+                    placed_blocks=_parse_placed_blocks(run_raw["placed_blocks"]),
+                    all_runs=[],
+                    renorm_cost=float(run_raw.get("renorm_cost", 0.0)),
+                    t_optimize_ms=float(run_raw.get("t_optimize_ms", 0.0)),
+                ))
+            parsed_runs.sort(key=lambda r: r.renorm_cost)
+            all_placement_results = parsed_runs
+            best_id = raw_placement.get("best_run_id", "")
+            placement_result = next((r for r in parsed_runs if r.run_id == best_id), None)
+            if placement_result is None and parsed_runs:
+                placement_result = parsed_runs[0]
+        elif "placed_blocks" in raw_placement:
+            placement_result = PlacementResult(
+                run_id=str(raw_placement.get("run_id", "")),
+                topology=str(raw_placement.get("topology", "")),
+                optimizer=str(raw_placement.get("optimizer", "")),
+                final_cost=float(raw_placement.get("final_cost", 0.0)),
+                area_um2=float(raw_placement.get("area_um2", 0.0)),
+                hpwl_um=float(raw_placement.get("hpwl_um", 0.0)),
+                aspect_ratio=float(raw_placement.get("aspect_ratio", 1.0)),
+                n_iterations=int(raw_placement.get("n_iterations", 0)),
+                t_total_ms=float(raw_placement.get("t_total_ms", 0.0)),
+                placed_blocks=_parse_placed_blocks(raw_placement["placed_blocks"]),
+                all_runs=list(raw_placement.get("all_runs", [])),
+            )
 
     has_placement = bool(
         (placement_result and placement_result.placed_blocks)
@@ -209,4 +246,6 @@ def load(path: str | Path) -> PlacementData:
         symmetry_constraints=raw.get("symmetry_constraints", {}),
         has_placement=has_placement,
         placement_result=placement_result,
+        placement_mode=placement_mode,
+        all_placement_results=all_placement_results,
     )
