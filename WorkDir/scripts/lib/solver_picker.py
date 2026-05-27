@@ -103,19 +103,27 @@ class SolverPicker:
 
     def __init__(
         self,
-        registry:      CompatibilityRegistry | None = None,
-        sa_config:     SAConfig | None              = None,
-        weights:       CostWeights | None           = None,
-        result_log:    "ResultLog | None"           = None,
-        auto_calibrate: bool                        = True,
-        sym_groups:    list | None                  = None,
+        registry:              CompatibilityRegistry | None = None,
+        sa_config:             SAConfig | None              = None,
+        weights:               CostWeights | None           = None,
+        result_log:            "ResultLog | None"           = None,
+        auto_calibrate:        bool                         = True,
+        sym_groups:            list | None                  = None,
+        optimizer_kwargs:      dict | None                  = None,
+        per_optimizer_kwargs:  dict | None                  = None,
+        use_power_rails:       bool                         = False,
     ) -> None:
-        self._registry      = registry      or build_default_registry()
-        self._sa_config     = sa_config     or SAConfig()
-        self._weights       = weights       or CostWeights()
-        self._result_log    = result_log    or ResultLog()
-        self._auto_calibrate = auto_calibrate
-        self._sym_groups     = sym_groups or []
+        self._registry        = registry      or build_default_registry()
+        self._sa_config       = sa_config     or SAConfig()
+        self._weights         = weights       or CostWeights()
+        self._result_log      = result_log    or ResultLog()
+        self._auto_calibrate  = auto_calibrate
+        self._sym_groups      = sym_groups or []
+        # per_optimizer_kwargs takes priority; optimizer_kwargs is a fallback for
+        # single-combo callers that pass a flat dict.
+        self._per_optimizer_kwargs: dict = per_optimizer_kwargs or {}
+        self._optimizer_kwargs:     dict = optimizer_kwargs or {}
+        self._use_power_rails       = use_power_rails
         self._last_results: list = []
 
     def run_random(
@@ -167,14 +175,19 @@ class SolverPicker:
         nets:   list,
         seed_mode: str,
     ) -> PipelineResult:
+        # Per-optimizer kwargs take priority over the shared fallback dict.
+        kwargs = self._per_optimizer_kwargs.get(optimizer_cls.__name__,
+                                                self._optimizer_kwargs)
         pipeline = OptimizationPipeline(
-            topology_cls   = topology_cls,
-            optimizer_cls  = optimizer_cls,
-            sa_config      = self._sa_config,
-            weights        = self._weights,
-            registry       = self._registry,
-            auto_calibrate = self._auto_calibrate,
-            sym_groups     = self._sym_groups,
+            topology_cls     = topology_cls,
+            optimizer_cls    = optimizer_cls,
+            sa_config        = self._sa_config,
+            weights          = self._weights,
+            registry         = self._registry,
+            auto_calibrate   = self._auto_calibrate,
+            sym_groups       = self._sym_groups,
+            optimizer_kwargs = kwargs,
+            use_power_rails  = self._use_power_rails,
         )
         run_id = f"{topology_cls.__name__}+{optimizer_cls.__name__}"
         return pipeline.run(blocks, nets, seed_mode=seed_mode, run_id=run_id)

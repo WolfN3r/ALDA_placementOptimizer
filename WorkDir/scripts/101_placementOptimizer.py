@@ -16,7 +16,10 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent / "lib"))
-from log_setup import get_logger
+from log_setup      import get_logger
+from ilp_optimizer     import GurobiParams
+from pso_optimizer     import PSOConfig
+from sa_optimizer      import SAConfig
 
 # =============================================================================
 # 2. CONSTANTS
@@ -27,8 +30,8 @@ SEED_MODE = "random"      # "random" | "ordered" — initial topology seed strat
 # --- Combination selector ---------------------------------------------------
 # Set TOPOLOGY + OPTIMIZER to run exactly one combination.
 # Leave both empty to fall back to RUN_MODE (exhaustive or random).
-TOPOLOGY  = ""   # "" | "BStarTopology" | "SequencePairTopology" | "ILPTopology"
-OPTIMIZER = ""   # "" | "SimulatedAnnealingOptimizer" | "ILPOptimizer"
+TOPOLOGY  = ""      # "" | "BStarTopology" | "SequencePairTopology" | "ILPTopology" | "PSOTopology"
+OPTIMIZER = ""  # "" | "SimulatedAnnealingOptimizer" | "ILPOptimizer" | "PSOOptimizer" | "PSOILPOptimizer" | "BStarILPOptimizer"
 
 # Used only when TOPOLOGY/OPTIMIZER are empty:
 RUN_MODE  = "exhaustive"  # "exhaustive" → all supported pairs | "random" → one random pair
@@ -51,6 +54,58 @@ W_AREA    = 0.6
 W_WL      = 0.1
 W_AR      = 0.3
 TARGET_AR = 1.0          # target width/height ratio for the full placement
+
+# --- Power rails -------------------------------------------------------------
+USE_POWER_RAILS = True   # VDD net pulled to canvas top, VSS net pulled to canvas bottom via HPWL
+
+# --- Gurobi ML parameter injection hook -------------------------------------
+# A future ML model reads netlist features externally, predicts the best
+# parameter values, constructs a GurobiParams instance, and assigns it here
+# before calling optimize().  None → solver uses GurobiParams() defaults.
+#
+# Fields most worth ML-tuning (depend on netlist structure):
+#   mip_focus  — small/easy netlists: 2 (prove optimum); large: 1 (feasibility first)
+#   symmetry   — correlates with number of symmetry groups in the netlist
+#   cuts       — dense big-M netlists: 2–3; sparse netlists: 0–1
+#   heuristics — tightly-coupled netlists: higher → finds incumbent faster
+ILP_GUROBI_PARAMS= GurobiParams(verbose=False) #| None = None
+
+# --- PSO tuning -------------------------------------------------------------
+# Tuning signals for ~15 analog blocks with tight DRC spacing:
+#   Residual DRC overlaps in result → raise overlap_penalty_w (try 5–10)
+#   Particles cluster too early     → raise inertia_w to 0.5–0.7
+#   Slow / no improvement           → lower c1, c2 to 0.25 each
+#   Canvas too crowded              → raise canvas_factor to 2.2
+PSO_CONFIG = PSOConfig(
+    swarm_size        = 30,
+    max_iter          = 5000,
+    inertia_w         = 0.5,
+    c1                = 0.4,
+    c2                = 0.3,
+    canvas_factor     = 1.8,
+    overlap_penalty_w = 200.0,
+    use_fdgd_init     = True,
+)
+
+# --- B*-tree+ILP hybrid tuning ----------------------------------------------
+# BSTAR_ILP_SA_CONFIG:    controls the B*-tree SA warm-start inside BStarILPOptimizer.
+#   max_iterations=0 → auto-computed as epoch_size × 60 (~30 % of a full SA budget);
+#   epoch_size=0      → auto-computed as max(n_blocks × 8, 50).
+#   Pass explicit values here to override.  initial_temp is always auto-calibrated.
+# BSTAR_ILP_GUROBI_PARAMS: same fields as ILP_GUROBI_PARAMS.
+#   use_fdgd_start is False: B*-tree SA already provides a 2D warm start, so FDGD
+#   row-pack would overwrite it with a less informative 1D layout.
+BSTAR_ILP_SA_CONFIG = SAConfig(
+    max_iterations    = 0,       # 0 → epoch_size × 60 (set in BStarILPOptimizer)
+    epoch_size        = 0,       # 0 → max(n_blocks × 8, 50)
+)
+BSTAR_ILP_GUROBI_PARAMS = GurobiParams(
+    verbose           = False,
+    use_fdgd_start    = False,   # B*-tree SA provides the ordering; no FDGD needed
+    time_limit        = 120.0,
+    mip_gap           = 0.03,
+    no_rel_heur_time  = 5,
+)
 
 # --- Output ------------------------------------------------------------------
 _OUTPUT_DIR = Path(__file__).parent.parent / "json_files"
@@ -77,20 +132,28 @@ def _resolve_combination():
     """
     if not TOPOLOGY or not OPTIMIZER:
         return None
-    from bstar_topology   import BStarTopology
-    from seqpair_topology import SequencePairTopology
-    from sa_optimizer     import SimulatedAnnealingOptimizer
-    from ilp_topology     import ILPTopology
-    from ilp_optimizer    import ILPOptimizer
+    from bstar_topology    import BStarTopology
+    from seqpair_topology  import SequencePairTopology
+    from sa_optimizer      import SimulatedAnnealingOptimizer
+    from ilp_topology      import ILPTopology
+    from ilp_optimizer     import ILPOptimizer
+    from pso_topology      import PSOTopology
+    from pso_optimizer     import PSOOptimizer
+    from pso_ilp_optimizer   import PSOILPOptimizer
+    from bstar_ilp_optimizer import BStarILPOptimizer
 
     topo_map = {
         "BStarTopology":        BStarTopology,
         "SequencePairTopology": SequencePairTopology,
         "ILPTopology":          ILPTopology,
+        "PSOTopology":          PSOTopology,
     }
     opt_map = {
         "SimulatedAnnealingOptimizer": SimulatedAnnealingOptimizer,
         "ILPOptimizer":               ILPOptimizer,
+        "PSOOptimizer":               PSOOptimizer,
+        "PSOILPOptimizer":            PSOILPOptimizer,
+        "BStarILPOptimizer":          BStarILPOptimizer,
     }
     t_cls = topo_map.get(TOPOLOGY)
     o_cls = opt_map.get(OPTIMIZER)
@@ -218,16 +281,30 @@ def optimize(data: dict) -> dict:
     fixed_combo = _resolve_combination()
     all_results = []
 
+    # Per-optimizer kwargs — each optimizer only receives its own params.
+    # Used in exhaustive/random mode so ILP kwargs don't pollute SA/PSO runs.
+    per_opt_kwargs: dict = {}
+    if ILP_GUROBI_PARAMS is not None:
+        per_opt_kwargs["ILPOptimizer"] = {"gurobi_params": ILP_GUROBI_PARAMS}
+    per_opt_kwargs["PSOOptimizer"]      = {"pso_config": PSO_CONFIG}
+    per_opt_kwargs["BStarILPOptimizer"] = {
+        "bstar_sa_config": BSTAR_ILP_SA_CONFIG,
+        "gurobi_params":   BSTAR_ILP_GUROBI_PARAMS,
+    }
+
     if fixed_combo is not None:
         # Single combination selected via TOPOLOGY + OPTIMIZER constants
         t_cls, o_cls = fixed_combo
+        single_kwargs = per_opt_kwargs.get(o_cls.__name__, {})
         pipeline = OptimizationPipeline(
-            topology_cls   = t_cls,
-            optimizer_cls  = o_cls,
-            sa_config      = sa_cfg,
-            weights        = weights,
-            auto_calibrate = True,
-            sym_groups     = sym_groups,
+            topology_cls     = t_cls,
+            optimizer_cls    = o_cls,
+            sa_config        = sa_cfg,
+            weights          = weights,
+            auto_calibrate   = True,
+            sym_groups       = sym_groups,
+            optimizer_kwargs = single_kwargs,
+            use_power_rails  = USE_POWER_RAILS,
         )
         run_id = f"{t_cls.__name__}+{o_cls.__name__}"
         result = pipeline.run(blocks, nets, seed_mode=SEED_MODE, run_id=run_id)
@@ -241,18 +318,18 @@ def optimize(data: dict) -> dict:
 
     else:
         picker = SolverPicker(
-            sa_config      = sa_cfg,
-            weights        = weights,
-            auto_calibrate = True,
-            sym_groups     = sym_groups,
+            sa_config            = sa_cfg,
+            weights              = weights,
+            auto_calibrate       = True,
+            sym_groups           = sym_groups,
+            per_optimizer_kwargs = per_opt_kwargs,
+            use_power_rails      = USE_POWER_RAILS,
         )
         if RUN_MODE == "exhaustive":
             doc = picker.run_exhaustive(
                 blocks, nets, seed_mode=SEED_MODE, netlist_id=netlist_id
             )
-            # Reconstruct PipelineResult list from the doc for uniform handling below
-            # (SolverPicker already logged the exhaustive doc)
-            all_results = picker._last_results  # set in run_exhaustive below
+            all_results = picker._last_results
         else:
             all_results = picker.run_random(blocks, nets, seed_mode=SEED_MODE)
 

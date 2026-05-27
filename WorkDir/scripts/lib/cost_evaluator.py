@@ -17,6 +17,9 @@ _DEFAULT_WL_WEIGHT     = 0.1
 _DEFAULT_AR_WEIGHT     = 0.3
 _DEFAULT_TARGET_AR     = 1.0
 
+_VDD_NET_IDS: frozenset[str] = frozenset({"VDD", "AVDD", "VCC", "VDDA"})
+_VSS_NET_IDS: frozenset[str] = frozenset({"VSS", "GND", "AGND", "VSSA"})
+
 
 # =============================================================================
 # DATA CLASSES
@@ -48,17 +51,19 @@ class CostEvaluator:
 
     def __init__(
         self,
-        blocks: dict,
-        nets: list,
-        init_area: float,
-        init_wl: float,
-        weights: CostWeights | None = None,
+        blocks:          dict,
+        nets:            list,
+        init_area:       float,
+        init_wl:         float,
+        weights:         CostWeights | None = None,
+        use_power_rails: bool = True,
     ) -> None:
-        self._blocks   = blocks
-        self._nets     = nets
-        self._init_area = init_area
-        self._init_wl   = init_wl
-        self._w        = weights or CostWeights()
+        self._blocks          = blocks
+        self._nets            = nets
+        self._init_area       = init_area
+        self._init_wl         = init_wl
+        self._w               = weights or CostWeights()
+        self._use_power_rails = use_power_rails
 
     # ------------------------------------------------------------------
     def evaluate(self, positions: dict[str, tuple[float, float]]) -> float:
@@ -101,10 +106,18 @@ class CostEvaluator:
         """Half-perimeter wirelength summed over all nets."""
         total = 0.0
         pin_pos = self._build_pin_positions(positions)
+        if self._use_power_rails:
+            y_top, y_bot = self._rail_bounds(positions)
         for net in self._nets:
             pins = net.get("pins", [])
             xs = [pin_pos[p][0] for p in pins if p in pin_pos]
             ys = [pin_pos[p][1] for p in pins if p in pin_pos]
+            if self._use_power_rails and xs:
+                nid = net.get("net_id", "").upper()
+                if nid in _VDD_NET_IDS:
+                    ys.append(y_top)
+                elif nid in _VSS_NET_IDS:
+                    ys.append(y_bot)
             if len(xs) >= 2:
                 total += (max(xs) - min(xs)) + (max(ys) - min(ys))
         return total
@@ -125,6 +138,14 @@ class CostEvaluator:
         if height == 0.0:
             return float("inf")
         return width / height
+
+    def _rail_bounds(self, positions: dict[str, tuple[float, float]]) -> tuple[float, float]:
+        y_tops, y_bots = [], []
+        for bid, (_, by) in positions.items():
+            h = self._active_variant(self._blocks.get(bid, {})).get("main_bbox", {}).get("y_max", 0.0)
+            y_tops.append(by + h)
+            y_bots.append(by)
+        return max(y_tops), min(y_bots)
 
     # ------------------------------------------------------------------
     # Helpers

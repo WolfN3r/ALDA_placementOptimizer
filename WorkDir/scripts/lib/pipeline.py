@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from typing import Any, Type
 
 from topology_base import TopologyBase, SAMixin, GAMixin
-from cost_evaluator import CostEvaluator, CostWeights
+from cost_evaluator import CostEvaluator, CostWeights, _VDD_NET_IDS, _VSS_NET_IDS
 from sa_optimizer import (
     SimulatedAnnealingOptimizer, SAConfig, SAResult, NullObserver,
     calibrate_initial_temperature,
@@ -66,12 +66,20 @@ class CompatibilityRegistry:
         from seqpair_topology  import SequencePairTopology
         from ilp_topology      import ILPTopology
         from ilp_optimizer     import ILPOptimizer
+        from pso_topology      import PSOTopology
+        from pso_optimizer     import PSOOptimizer
+        from pso_ilp_optimizer   import PSOILPOptimizer
+        from bstar_ilp_optimizer import BStarILPOptimizer
         cls_map = {
             "BStarTopology":               BStarTopology,
             "SequencePairTopology":        SequencePairTopology,
             "SimulatedAnnealingOptimizer": SimulatedAnnealingOptimizer,
             "ILPTopology":                 ILPTopology,
             "ILPOptimizer":                ILPOptimizer,
+            "PSOTopology":                 PSOTopology,
+            "PSOOptimizer":                PSOOptimizer,
+            "PSOILPOptimizer":             PSOILPOptimizer,
+            "BStarILPOptimizer":           BStarILPOptimizer,
         }
         pairs = []
         for (t_name, o_name), st in self._table.items():
@@ -82,15 +90,22 @@ class CompatibilityRegistry:
 
 def build_default_registry() -> CompatibilityRegistry:
     """Build the default compatibility table as specified in the architecture."""
-    from bstar_topology   import BStarTopology
-    from seqpair_topology import SequencePairTopology
-    from ilp_topology     import ILPTopology
-    from ilp_optimizer    import ILPOptimizer
+    from bstar_topology    import BStarTopology
+    from seqpair_topology  import SequencePairTopology
+    from ilp_topology      import ILPTopology
+    from ilp_optimizer     import ILPOptimizer
+    from pso_topology      import PSOTopology
+    from pso_optimizer     import PSOOptimizer
+    from pso_ilp_optimizer   import PSOILPOptimizer
+    from bstar_ilp_optimizer import BStarILPOptimizer
 
     reg = CompatibilityRegistry()
     reg.register(BStarTopology,          SimulatedAnnealingOptimizer, _SUPPORTED)
     reg.register(SequencePairTopology,   SimulatedAnnealingOptimizer, _SUPPORTED)
     reg.register(ILPTopology,            ILPOptimizer,                _SUPPORTED)
+    reg.register(PSOTopology,            PSOOptimizer,                _SUPPORTED)
+    reg.register(ILPTopology,            PSOILPOptimizer,             _SUPPORTED)
+    reg.register(ILPTopology,            BStarILPOptimizer,           _SUPPORTED)
     # GeneticOptimizer not yet implemented — stubs only
     # reg.register(SequencePairTopology, GeneticOptimizer, _SUPPORTED)
     # reg.register(BStarTopology,        GeneticOptimizer, _EXPERIMENTAL)
@@ -114,6 +129,7 @@ class PipelineResult:
     n_iterations:     int             = 0
     positions:        dict            = field(default_factory=dict)
     placed_blocks:    dict            = field(default_factory=dict)
+    power_rails:      dict            = field(default_factory=dict)
     t_seed_ms:        float           = 0.0
     t_first_decode_ms: float          = 0.0
     t_optimize_ms:    float           = 0.0
@@ -140,6 +156,7 @@ class PipelineResult:
             "positions": {
                 bid: list(xy) for bid, xy in self.positions.items()
             },
+            "power_rails":   self.power_rails,
             "error_message": self.error_message,
         }
 
@@ -156,23 +173,27 @@ class OptimizationPipeline:
 
     def __init__(
         self,
-        topology_cls:  Type,
-        optimizer_cls: Type,
-        sa_config:     SAConfig | None      = None,
-        weights:       CostWeights | None   = None,
-        registry:      CompatibilityRegistry | None = None,
-        observer:      Any                  = None,
-        auto_calibrate: bool                = True,
-        sym_groups:    list | None          = None,
+        topology_cls:     Type,
+        optimizer_cls:    Type,
+        sa_config:        SAConfig | None             = None,
+        weights:          CostWeights | None          = None,
+        registry:         CompatibilityRegistry | None = None,
+        observer:         Any                         = None,
+        auto_calibrate:   bool                        = True,
+        sym_groups:       list | None                 = None,
+        optimizer_kwargs: dict | None                 = None,
+        use_power_rails:  bool                        = False,
     ) -> None:
-        self._topology_cls  = topology_cls
-        self._optimizer_cls = optimizer_cls
-        self._sa_config     = sa_config or SAConfig()
-        self._weights       = weights   or CostWeights()
-        self._registry      = registry  or build_default_registry()
-        self._observer      = observer  or NullObserver()
-        self._auto_calibrate = auto_calibrate
-        self._sym_groups     = sym_groups or []
+        self._topology_cls     = topology_cls
+        self._optimizer_cls    = optimizer_cls
+        self._sa_config        = sa_config or SAConfig()
+        self._weights          = weights   or CostWeights()
+        self._registry         = registry  or build_default_registry()
+        self._observer         = observer  or NullObserver()
+        self._auto_calibrate   = auto_calibrate
+        self._sym_groups       = sym_groups or []
+        self._optimizer_kwargs = optimizer_kwargs or {}
+        self._use_power_rails  = use_power_rails
 
         # Check compatibility at construction — not at run time
         st = self._registry.status(topology_cls, optimizer_cls)
@@ -216,10 +237,15 @@ class OptimizationPipeline:
             result.t_first_decode_ms = (time.perf_counter() - t_decode_start) * 1000
 
             init_area = _bbox_area(ref_positions, blocks)
-            init_wl   = _hpwl(ref_positions, blocks, nets)
+            init_wl   = _hpwl(ref_positions, blocks, nets, use_power_rails=self._use_power_rails)
 
             # Step 5: construct evaluator
-            evaluator = CostEvaluator(blocks, nets, max(init_area, 1e-9), max(init_wl, 0.0), self._weights)
+            evaluator = CostEvaluator(
+                blocks, nets,
+                max(init_area, 1e-9), max(init_wl, 0.0),
+                self._weights,
+                use_power_rails=self._use_power_rails,
+            )
 
             # Step 6: auto-calibrate SA initial temperature if needed
             cfg = SAConfig(**self._sa_config.__dict__)
@@ -233,7 +259,7 @@ class OptimizationPipeline:
                 cfg.max_iterations = cfg.epoch_size * 200
 
             # Step 7: run optimizer
-            optimizer = self._optimizer_cls(topology, evaluator, cfg, observer=self._observer)
+            optimizer = self._optimizer_cls(topology, evaluator, cfg, observer=self._observer, **self._optimizer_kwargs)
             t_opt_start = time.perf_counter()
             opt_result  = optimizer.run()
             result.t_optimize_ms = (time.perf_counter() - t_opt_start) * 1000
@@ -244,14 +270,15 @@ class OptimizationPipeline:
 
             variant_map = topology.get_variant_map()
 
-            result.status       = "success"
-            result.final_cost   = opt_result.best_cost
-            result.n_iterations = opt_result.n_iterations
-            result.positions    = final_positions
+            result.status        = "success"
+            result.final_cost    = opt_result.best_cost
+            result.n_iterations  = opt_result.n_iterations
+            result.positions     = final_positions
             result.placed_blocks = _compute_placed_blocks(final_positions, blocks, variant_map)
-            result.area_um2     = _bbox_area(final_positions, blocks)
-            result.hpwl_um      = _hpwl(final_positions, blocks, nets)
-            result.aspect_ratio = _aspect_ratio(final_positions, blocks)
+            result.area_um2      = _bbox_area(final_positions, blocks)
+            result.hpwl_um       = _hpwl(final_positions, blocks, nets, use_power_rails=self._use_power_rails)
+            result.aspect_ratio  = _aspect_ratio(final_positions, blocks)
+            result.power_rails   = _compute_power_rails(final_positions, blocks)
 
         except IncompatibleCombinationError as exc:
             result.status        = "incompatible"
@@ -289,20 +316,49 @@ def _bbox_area(positions: dict, blocks: dict) -> float:
     return max(0.0, max(xe) - min(xs)) * max(0.0, max(ye) - min(ys))
 
 
-def _hpwl(positions: dict, blocks: dict, nets: list) -> float:
+def _hpwl(positions: dict, blocks: dict, nets: list, use_power_rails: bool = False) -> float:
     pin_pos: dict[str, tuple[float, float]] = {}
     for bid, (bx, by) in positions.items():
         v = _active_variant(blocks.get(bid, {}))
         for pname, pcoord in v.get("pin_positions", {}).items():
             pin_pos[f"B{bid}_{pname}"] = (bx + pcoord["x"], by + pcoord["y"])
+    if use_power_rails and positions:
+        y_top = max(
+            by + _active_variant(blocks.get(bid, {})).get("main_bbox", {}).get("y_max", 0.0)
+            for bid, (_, by) in positions.items()
+        )
+        y_bot = min(by for _, (_, by) in positions.items())
     total = 0.0
     for net in nets:
         pins = net.get("pins", [])
         xs = [pin_pos[p][0] for p in pins if p in pin_pos]
         ys = [pin_pos[p][1] for p in pins if p in pin_pos]
+        if use_power_rails and xs:
+            nid = net.get("net_id", "").upper()
+            if nid in _VDD_NET_IDS:
+                ys.append(y_top)
+            elif nid in _VSS_NET_IDS:
+                ys.append(y_bot)
         if len(xs) >= 2:
             total += (max(xs) - min(xs)) + (max(ys) - min(ys))
     return total
+
+
+def _compute_power_rails(positions: dict, blocks: dict) -> dict:
+    if not positions:
+        return {}
+    xs_all, y_tops, y_bots = [], [], []
+    for bid, (bx, by) in positions.items():
+        v = _active_variant(blocks.get(bid, {}))
+        h = v.get("main_bbox", {}).get("y_max", 0.0)
+        w = v.get("main_bbox", {}).get("x_max", 0.0)
+        y_tops.append(by + h)
+        y_bots.append(by)
+        xs_all += [bx, bx + w]
+    return {
+        "VDD": {"y": max(y_tops), "x_min": min(xs_all), "x_max": max(xs_all)},
+        "VSS": {"y": min(y_bots), "x_min": min(xs_all), "x_max": max(xs_all)},
+    }
 
 
 def _aspect_ratio(positions: dict, blocks: dict) -> float:
