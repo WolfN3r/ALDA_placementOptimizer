@@ -24,6 +24,7 @@ from layer_manager import LayerManager, LayerDef
 from scene import BlockScene
 from placement_scene import PlacementScene
 from drc_checker import load_rules, run_drc, DRCViolation, DRC_CATEGORY_COLORS
+from simulation_window import SimulationWindow
 
 
 # -----------------------------------------------------------------------
@@ -971,6 +972,7 @@ class MainWindow(QMainWindow):
         self._detail_windows: list[BlockDetailWindow] = []
         self._drc_window: DRCWindow | None = None
         self._drc_action: QAction | None = None
+        self._sim_window: SimulationWindow | None = None
 
         # Exhaustive mode state
         self._exhaustive_mode: bool = False
@@ -1101,6 +1103,11 @@ class MainWindow(QMainWindow):
         self._drc_action.setEnabled(False)
         self._drc_action.triggered.connect(self._open_drc_window)
         tb.addAction(self._drc_action)
+
+        self._sim_action = QAction("Simulate", self)
+        self._sim_action.setToolTip("Run placement optimizer with custom settings")
+        self._sim_action.triggered.connect(self._open_sim_window)
+        tb.addAction(self._sim_action)
 
     # -----------------------------------------------------------------------
     def _current_view(self) -> CanvasView | None:
@@ -1327,6 +1334,19 @@ class MainWindow(QMainWindow):
             drc_data = self._data
         self._drc_window = DRCWindow(drc_data, self._placement_scene, parent=self)
         self._drc_window.show()
+
+    def _open_sim_window(self) -> None:
+        if self._sim_window is not None and self._sim_window.isVisible():
+            self._sim_window.raise_()
+            self._sim_window.activateWindow()
+            return
+        self._sim_window = SimulationWindow(parent=self)
+        self._sim_window.result_ready.connect(self._load_simulation_result)
+        self._sim_window.show()
+
+    def _load_simulation_result(self, path: Path) -> None:
+        data = json_loader.load(path)
+        self._load_data(data, path.name)
 
     def _on_placement_block_selected(self, bid) -> None:
         if bid is None:
