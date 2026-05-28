@@ -1,0 +1,26 @@
+* ============================================================
+* Circuit : inverter_v3
+* Source  : ALIGN analog layout examples
+* File    : inverter_v3\inverter_v3.sp
+* ============================================================
+* Stats:
+*   Subcircuits  : 1
+*   Devices (M)  : 3
+*   Device types : nmos_rvt pmos_rvt
+*   Passives     : 0 resistors, 0 capacitors
+* Note: Converted from FinFET-style to CMOS-style netlist.
+*       Device sizes are placeholders — optimizer generates new sizes.
+* ============================================================
+
+* --- DEVICE PARAMETERS ---
+.param mp1_L=20e-9 mp1_W=6 mp1_Nf=2
+.param mn1_L=20e-9 mn1_W=6 mn1_Nf=2
+.param mn2_L=20e-9 mn2_W=6 mn2_Nf=2
+
+
+* --- CIRCUIT DEFINITION ---
+.subckt inverter_v3 vin vout VDDA VSSA
+mp1 vout vin VDDA VDDA pmos_rvt L={mp1_L} W={mp1_W} Nf={mp1_Nf}
+mn1 vout vin VSSA VSSA nmos_rvt L={mn1_L} W={mn1_W} Nf={mn1_Nf}
+mn2 vout VSSA VSSA VSSA nmos_rvt L={mn2_L} W={mn2_W} Nf={mn2_Nf}
+.ends inverter_v3
