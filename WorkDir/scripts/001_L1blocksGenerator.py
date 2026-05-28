@@ -26,7 +26,7 @@ DEBUG = False
 
 _PDK_DIR = Path(__file__).parent.parent / "myPDK"
 
-DEVICE_TYPES = ["nmos1v_nat", "nmos2v_nat", "pmos1v_nat", "pmos2v_nat"]
+DEVICE_TYPES = ["nmos_rvt", "nmos_lvt", "nmos_hvt", "pmos_rvt", "pmos_lvt", "pmos_hvt"]
 
 # Minimum centre-to-centre distance between any two pins on the same bbox edge.
 # 0.5 um pin square + 0.12 um M1 min_spacing (gpdk090 DRM).

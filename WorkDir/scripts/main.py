@@ -58,7 +58,8 @@ def _save(data: dict, script_id: str, version: str = VERSION) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="ALDA placement optimizer hub")
     parser.add_argument("--seed",       type=int, default=SEED,       help="Random seed (default: %(default)s)")
-    parser.add_argument("--num-blocks", type=int, default=NUM_BLOCKS, help="Number of transistor blocks (default: %(default)s)")
+    parser.add_argument("--num-blocks", type=int, default=NUM_BLOCKS, help="Number of transistor blocks, ignored when --netlist is given (default: %(default)s)")
+    parser.add_argument("--netlist",    default="",  help="Path to a SPICE .sp netlist; activates netlist-driven block generation (011)")
     parser.add_argument("--run-mode",   default="exhaustive",         choices=["random", "exhaustive", "user"],
                         help="Solver selection mode (default: %(default)s)")
     parser.add_argument("--topology",   default="",  help="Topology class name (required when --run-mode user)")
@@ -70,12 +71,18 @@ if __name__ == "__main__":
     num_blocks = args.num_blocks
     version    = args.version
 
-    # --- Stage 1: L1 block generation ---
-    gen = _load_script("001_L1blocksGenerator.py")
-    blocks_data: dict = gen.run(num_blocks, seed)
+    # --- Stage 1: block generation ---
+    if args.netlist:
+        gen = _load_script("011_netlisBlocksGenerator.py")
+        blocks_data: dict = gen.run(args.netlist, seed)
+        script_id_gen = "011"
+    else:
+        gen = _load_script("001_L1blocksGenerator.py")
+        blocks_data: dict = gen.run(num_blocks, seed)
+        script_id_gen = "001"
 
     if SAVE_FILES:
-        _save(blocks_data, "001", version)
+        _save(blocks_data, script_id_gen, version)
 
     # --- Stage 2: Placement optimization ---
     opt = _load_script("101_placementOptimizer.py")
