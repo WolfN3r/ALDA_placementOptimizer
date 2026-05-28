@@ -12,19 +12,27 @@
     },
 
     "device_topology": {
-        "_comment": "Topology classification per device type. device_group (LV/HV) drives the voltage-class branch of the spacing decision tree. bulk identifies the well/substrate connection; devices with different bulks are separated by a well boundary and incur WPE-based spacing costs.",
-        "nmos1v_nat": {"device_group": "LV", "bulk": "VSSA"},
-        "nmos2v_nat": {"device_group": "HV", "bulk": "VSSD"},
-        "pmos1v_nat": {"device_group": "LV", "bulk": "VDDA"},
-        "pmos2v_nat": {"device_group": "HV", "bulk": "VDDD"}
+        "_comment": "Topology classification per device type. device_group (LV/HV/passive) drives the voltage-class branch of the spacing decision tree. bulk identifies the well/substrate connection; devices with different bulks are separated by a well boundary and incur WPE-based spacing costs.",
+        "nmos_rvt": {"device_group": "LV", "bulk": "VSSA"},
+        "nmos_lvt": {"device_group": "LV", "bulk": "VSSA"},
+        "nmos_hvt": {"device_group": "HV", "bulk": "VSSD"},
+        "pmos_rvt": {"device_group": "LV", "bulk": "VDDA"},
+        "pmos_lvt": {"device_group": "LV", "bulk": "VDDA"},
+        "pmos_hvt": {"device_group": "HV", "bulk": "VDDD"},
+        "res_poly": {"device_group": "passive", "bulk": null},
+        "cap_mom":  {"device_group": "passive", "bulk": null}
     },
 
     "device_constraints": {
         "_comment": "Manufacturing limits per device. Sizing only.",
-        "nmos1v_nat": {"L": {"min": 0.1, "max": 10.0, "default": 0.1}, "W": {"min": 0.12, "max": 100.0, "default": 1.0}},
-        "nmos2v_nat": {"L": {"min": 0.4, "max": 10.0, "default": 0.4}, "W": {"min": 0.4,  "max": 100.0, "default": 2.0}},
-        "pmos1v_nat": {"L": {"min": 0.1, "max": 10.0, "default": 0.1}, "W": {"min": 0.12, "max": 100.0, "default": 1.0}},
-        "pmos2v_nat": {"L": {"min": 0.4, "max": 10.0, "default": 0.4}, "W": {"min": 0.4,  "max": 100.0, "default": 2.0}}
+        "nmos_rvt": {"L": {"min": 0.1, "max": 10.0, "default": 0.1}, "W": {"min": 0.12, "max": 100.0, "default": 1.0}},
+        "nmos_lvt": {"L": {"min": 0.1, "max": 10.0, "default": 0.1}, "W": {"min": 0.12, "max": 100.0, "default": 1.0}},
+        "nmos_hvt": {"L": {"min": 0.4, "max": 10.0, "default": 0.4}, "W": {"min": 0.4,  "max": 100.0, "default": 2.0}},
+        "pmos_rvt": {"L": {"min": 0.1, "max": 10.0, "default": 0.1}, "W": {"min": 0.12, "max": 100.0, "default": 1.0}},
+        "pmos_lvt": {"L": {"min": 0.1, "max": 10.0, "default": 0.1}, "W": {"min": 0.12, "max": 100.0, "default": 1.0}},
+        "pmos_hvt": {"L": {"min": 0.4, "max": 10.0, "default": 0.4}, "W": {"min": 0.4,  "max": 100.0, "default": 2.0}},
+        "res_poly": {"L": {"min": 1.0, "max": 200.0, "default": 10.0}, "W": {"min": 0.5, "max": 20.0, "default": 1.0}},
+        "cap_mom":  {"L": {"min": 1.0, "max": 50.0,  "default": 5.0},  "W": {"min": 1.0, "max": 50.0,  "default": 5.0}}
     },
 
     "physical_design_rules": {
@@ -57,28 +65,52 @@
     "device_spacing": {
         "_comment": "Per-device rules for pairs of the SAME cell type. Negative active = envelope overlap allowed (shared diffusion). Categories follow the advisor's tree: common_bulk (shared bulk only), common_active (shared diffusion), same_cellNames (same cell, no sharing).",
 
-        "nmos1v_nat": {
+        "nmos_rvt": {
             "common_bulk":    {"active": -0.24, "poly": 1.0},
             "common_active":  {"active": -0.24, "poly": 1.0},
             "same_cellNames": {"active":  1.0,  "poly": 1.0}
         },
 
-        "nmos2v_nat": {
-            "common_bulk":    {"active": -0.24, "poly": 1.0},
-            "common_active":  {"active": -1.9,  "poly": 1.0},
-            "same_cellNames": {"active":  1.0,  "poly": 1.0}
-        },
-
-        "pmos1v_nat": {
+        "nmos_lvt": {
             "common_bulk":    {"active": -0.24, "poly": 1.0},
             "common_active":  {"active": -0.24, "poly": 1.0},
             "same_cellNames": {"active":  1.0,  "poly": 1.0}
         },
 
-        "pmos2v_nat": {
+        "nmos_hvt": {
             "common_bulk":    {"active": -0.24, "poly": 1.0},
             "common_active":  {"active": -1.9,  "poly": 1.0},
             "same_cellNames": {"active":  1.0,  "poly": 1.0}
+        },
+
+        "pmos_rvt": {
+            "common_bulk":    {"active": -0.24, "poly": 1.0},
+            "common_active":  {"active": -0.24, "poly": 1.0},
+            "same_cellNames": {"active":  1.0,  "poly": 1.0}
+        },
+
+        "pmos_lvt": {
+            "common_bulk":    {"active": -0.24, "poly": 1.0},
+            "common_active":  {"active": -0.24, "poly": 1.0},
+            "same_cellNames": {"active":  1.0,  "poly": 1.0}
+        },
+
+        "pmos_hvt": {
+            "common_bulk":    {"active": -0.24, "poly": 1.0},
+            "common_active":  {"active": -1.9,  "poly": 1.0},
+            "same_cellNames": {"active":  1.0,  "poly": 1.0}
+        },
+
+        "res_poly": {
+            "common_bulk":    {"active": 2.0, "poly": 2.0},
+            "common_active":  {"active": 2.0, "poly": 2.0},
+            "same_cellNames": {"active": 2.0, "poly": 2.0}
+        },
+
+        "cap_mom": {
+            "common_bulk":    {"active": 2.0, "poly": 2.0},
+            "common_active":  {"active": 2.0, "poly": 2.0},
+            "same_cellNames": {"active": 2.0, "poly": 2.0}
         }
     },
 

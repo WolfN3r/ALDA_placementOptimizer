@@ -7,7 +7,7 @@
       "comment": "Length will be snapped to this step (not grid)"
     },
     "width_range": {
-      "description": "Width quantization step", 
+      "description": "Width quantization step",
       "step": 0.05,
       "comment": "Width will be snapped to this step (not grid)"
     },
@@ -37,53 +37,37 @@
   },
   "design_constraints": {
     "comment": "Design-specific size constraints for each device type (designer-adjustable)",
-    "nmos1v_nat": {
-      "L": {
-        "min": 0.2,
-        "max": 1.0,
-        "comment": "Length range for 1V NMOS (low-power analog typical)"
-      },
-      "W": {
-        "min": 0.5,
-        "max": 10.0,
-        "comment": "Width range for 1V NMOS"
-      }
+    "nmos_rvt": {
+      "L": {"min": 0.2, "max": 1.0, "comment": "Length range for NMOS regular-Vt (LV)"},
+      "W": {"min": 0.5, "max": 10.0, "comment": "Width range for NMOS regular-Vt"}
     },
-    "nmos2v_nat": {
-      "L": {
-        "min": 0.3,
-        "max": 2.0,
-        "comment": "Length range for 2V NMOS (power stages typical)"
-      },
-      "W": {
-        "min": 0.5,
-        "max": 15.0,
-        "comment": "Width range for 2V NMOS"
-      }
+    "nmos_lvt": {
+      "L": {"min": 0.2, "max": 1.0, "comment": "Length range for NMOS low-Vt (LV) — shorter L allowed for speed"},
+      "W": {"min": 0.5, "max": 10.0, "comment": "Width range for NMOS low-Vt"}
     },
-    "pmos1v_nat": {
-      "L": {
-        "min": 0.2,
-        "max": 1.0,
-        "comment": "Length range for 1V PMOS (low-power analog typical)"
-      },
-      "W": {
-        "min": 0.5,
-        "max": 10.0,
-        "comment": "Width range for 1V PMOS"
-      }
+    "nmos_hvt": {
+      "L": {"min": 0.3, "max": 2.0, "comment": "Length range for NMOS high-Vt (HV, power stages)"},
+      "W": {"min": 0.5, "max": 15.0, "comment": "Width range for NMOS high-Vt"}
     },
-    "pmos2v_nat": {
-      "L": {
-        "min": 0.3,
-        "max": 2.0,
-        "comment": "Length range for 2V PMOS (power stages typical)"
-      },
-      "W": {
-        "min": 0.5,
-        "max": 15.0,
-        "comment": "Width range for 2V PMOS"
-      }
+    "pmos_rvt": {
+      "L": {"min": 0.2, "max": 1.0, "comment": "Length range for PMOS regular-Vt (LV)"},
+      "W": {"min": 0.5, "max": 10.0, "comment": "Width range for PMOS regular-Vt"}
+    },
+    "pmos_lvt": {
+      "L": {"min": 0.2, "max": 1.0, "comment": "Length range for PMOS low-Vt (LV)"},
+      "W": {"min": 0.5, "max": 10.0, "comment": "Width range for PMOS low-Vt"}
+    },
+    "pmos_hvt": {
+      "L": {"min": 0.3, "max": 2.0, "comment": "Length range for PMOS high-Vt (HV, power stages)"},
+      "W": {"min": 0.5, "max": 15.0, "comment": "Width range for PMOS high-Vt"}
+    },
+    "res_poly": {
+      "L": {"min": 1.0, "max": 10.0, "comment": "Length range for polysilicon resistor (determines R value)"},
+      "W": {"min": 0.5, "max": 5.0, "comment": "Width range for polysilicon resistor"}
+    },
+    "cap_mom": {
+      "L": {"min": 1.0, "max": 10.0, "comment": "Length range for MOM capacitor"},
+      "W": {"min": 1.0, "max": 10.0, "comment": "Width range for MOM capacitor"}
     }
   },
   "netlist": {
