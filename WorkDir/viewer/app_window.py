@@ -133,8 +133,9 @@ class CanvasView(QGraphicsView):
             pen.setCosmetic(True)
             painter.setPen(pen)
 
-            x_start = math.floor(rect.left() / step) * step
-            y_start = math.floor(rect.top() / step) * step
+            ox, oy = self._origin
+            x_start = math.floor((rect.left() - ox) / step) * step + ox
+            y_start = math.floor((rect.top()  - oy) / step) * step + oy
 
             lines: list[QLineF] = []
             x = x_start

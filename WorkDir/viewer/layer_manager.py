@@ -13,17 +13,28 @@ class LayerDef:
 
 
 # Block fill/border colors keyed by device_type
+# NMOS: green shades (rvt bright → lvt medium → hvt dark)
+# PMOS: red  shades  (rvt bright → lvt medium → hvt dark)
+# Resistor: orange family   Capacitor: cyan/teal family
 _DEVICE_FILL: dict[str, tuple[int, int, int, int]] = {
-    "nmos1v_nat": (0, 160, 70, 140),
-    "nmos2v_nat": (0, 100, 40, 140),
-    "pmos1v_nat": (180, 40, 40, 140),
-    "pmos2v_nat": (120, 0,  0,  140),
+    "nmos_rvt":  (  0, 180,  70, 140),
+    "nmos_lvt":  (  0, 130,  50, 140),
+    "nmos_hvt":  (  0,  80,  30, 140),
+    "pmos_rvt":  (180,  40,  40, 140),
+    "pmos_lvt":  (140,  20,  20, 140),
+    "pmos_hvt":  (100,   0,   0, 140),
+    "res_poly":  (200, 120,   0, 140),
+    "cap_mom":   (  0, 130, 160, 140),
 }
 _DEVICE_BORDER: dict[str, tuple[int, int, int]] = {
-    "nmos1v_nat": (0, 230, 100),
-    "nmos2v_nat": (0, 180,  60),
-    "pmos1v_nat": (230,  80,  80),
-    "pmos2v_nat": (200,   0,   0),
+    "nmos_rvt":  (  0, 230, 100),
+    "nmos_lvt":  (  0, 175,  70),
+    "nmos_hvt":  (  0, 120,  50),
+    "pmos_rvt":  (230,  80,  80),
+    "pmos_lvt":  (190,  50,  50),
+    "pmos_hvt":  (150,  20,  20),
+    "res_poly":  (255, 165,   0),
+    "cap_mom":   (  0, 180, 220),
 }
 
 

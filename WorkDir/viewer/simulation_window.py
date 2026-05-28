@@ -14,11 +14,12 @@ from PyQt6.QtWidgets import (
 )
 
 # Paths
-_VIEWER_DIR  = Path(__file__).parent
-_SCRIPTS_DIR = _VIEWER_DIR.parent / "scripts"
-_MAIN_PY     = _SCRIPTS_DIR / "main.py"
-_PIPELINE_PY = _SCRIPTS_DIR / "lib" / "pipeline.py"
-_OUTPUT_DIR  = _VIEWER_DIR.parent / "json_files"
+_VIEWER_DIR   = Path(__file__).parent
+_SCRIPTS_DIR  = _VIEWER_DIR.parent / "scripts"
+_MAIN_PY      = _SCRIPTS_DIR / "main.py"
+_PIPELINE_PY  = _SCRIPTS_DIR / "lib" / "pipeline.py"
+_OUTPUT_DIR   = _VIEWER_DIR.parent / "json_files"
+_NETLISTS_DIR = _VIEWER_DIR.parent / "#Netlists"
 
 _PAIR_RE = re.compile(
     r'reg\.register\(\s*(\w+)\s*,\s*(\w+)\s*,\s*_SUPPORTED'
@@ -32,6 +33,13 @@ def _load_supported_pairs() -> list[tuple[str, str]]:
         return _PAIR_RE.findall(text)  # list of ("TopoName", "OptName")
     except OSError:
         return []
+
+
+def _load_netlist_files() -> list[str]:
+    """Return sorted list of .sp filenames from the #Netlists folder."""
+    if not _NETLISTS_DIR.exists():
+        return []
+    return sorted(p.name for p in _NETLISTS_DIR.glob("*.sp"))
 
 
 def _pair_label(topo: str, opt: str) -> str:
@@ -48,9 +56,11 @@ class SimulationWindow(QMainWindow):
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Run Simulation")
-        self.resize(560, 580)
+        self.resize(560, 620)
         self._process: QProcess | None = None
         self._pairs: list[tuple[str, str]] = _load_supported_pairs()
+        self._netlist_mode: bool = False
+        self._run_seed: int = 42
         self._build_ui()
 
     # ------------------------------------------------------------------
@@ -64,6 +74,7 @@ class SimulationWindow(QMainWindow):
         root.setContentsMargins(10, 10, 10, 10)
         root.setSpacing(8)
 
+        root.addWidget(self._build_source_group())
         root.addWidget(self._build_config_group())
         root.addWidget(self._build_mode_group())
 
@@ -93,6 +104,37 @@ class SimulationWindow(QMainWindow):
         mono.setStyleHint(QFont.StyleHint.Monospace)
         self._log.setFont(mono)
         root.addWidget(self._log, stretch=1)
+
+    def _build_source_group(self) -> QGroupBox:
+        box = QGroupBox("Block Source")
+        vbox = QVBoxLayout(box)
+        vbox.setSpacing(4)
+
+        self._src_btn_group = QButtonGroup(self)
+        self._rb_src_random  = QRadioButton("Generate randomly")
+        self._rb_src_netlist = QRadioButton("From SPICE netlist")
+        self._rb_src_random.setChecked(True)
+
+        self._src_btn_group.addButton(self._rb_src_random,  0)
+        self._src_btn_group.addButton(self._rb_src_netlist, 1)
+
+        vbox.addWidget(self._rb_src_random)
+        vbox.addWidget(self._rb_src_netlist)
+
+        netlist_row = QHBoxLayout()
+        netlist_row.addSpacing(20)
+        self._netlist_combo = QComboBox()
+        self._netlist_combo.setEnabled(False)
+        for name in _load_netlist_files():
+            self._netlist_combo.addItem(name)
+        if self._netlist_combo.count() == 0:
+            self._netlist_combo.addItem("(no .sp files found)")
+        netlist_row.addWidget(self._netlist_combo, stretch=1)
+        vbox.addLayout(netlist_row)
+
+        self._rb_src_netlist.toggled.connect(self._on_source_toggled)
+
+        return box
 
     def _build_config_group(self) -> QGroupBox:
         box = QGroupBox("Configuration")
@@ -152,6 +194,10 @@ class SimulationWindow(QMainWindow):
     # Slots
     # ------------------------------------------------------------------
 
+    def _on_source_toggled(self, netlist_active: bool) -> None:
+        self._netlist_combo.setEnabled(netlist_active)
+        self._blocks_spin.setEnabled(not netlist_active)
+
     def _on_run(self) -> None:
         self._log.clear()
         self._status_label.setText("Running…")
@@ -170,10 +216,20 @@ class SimulationWindow(QMainWindow):
 
         args = [
             str(_MAIN_PY),
-            "--seed",       str(seed),
-            "--num-blocks", str(num_blocks),
-            "--run-mode",   mode,
+            "--seed",     str(seed),
+            "--run-mode", mode,
         ]
+
+        if self._rb_src_netlist.isChecked():
+            netlist_name = self._netlist_combo.currentText()
+            args += ["--netlist", str(_NETLISTS_DIR / netlist_name)]
+            self._netlist_mode = True
+        else:
+            args += ["--num-blocks", str(num_blocks)]
+            self._netlist_mode = False
+            self._expected_output = _OUTPUT_DIR / f"s{seed}_n{num_blocks}_py101_v01.json"
+
+        self._run_seed = seed
 
         if mode == "user":
             data = self._pair_combo.currentData()
@@ -184,8 +240,6 @@ class SimulationWindow(QMainWindow):
                 return
             topo, opt = data
             args += ["--topology", topo, "--optimizer", opt]
-
-        self._expected_output = _OUTPUT_DIR / f"s{seed}_n{num_blocks}_py101_v01.json"
 
         self._process = QProcess(self)
         self._process.setProgram(sys.executable)
@@ -222,8 +276,16 @@ class SimulationWindow(QMainWindow):
             self._status_label.setText(f"Failed (exit {exit_code})")
             return
 
-        out = self._expected_output
-        if not out.exists():
+        if self._netlist_mode:
+            matches = sorted(
+                _OUTPUT_DIR.glob(f"s{self._run_seed}_n*_py101_v01.json"),
+                key=lambda p: p.stat().st_mtime,
+            )
+            out = matches[-1] if matches else None
+        else:
+            out = self._expected_output
+
+        if out is None or not out.exists():
             self._status_label.setText("Done — output file not found")
             self._log.append(f"\n[viewer] Expected output not found: {out}")
             return
