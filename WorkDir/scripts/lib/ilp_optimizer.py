@@ -31,7 +31,7 @@ from log_setup import get_logger
 # =============================================================================
 # 2. CONSTANTS
 # =============================================================================
-DEBUG            = False
+DEBUG            = True
 ILP_LARGE_N_WARN = 20   # log warning when n_blocks exceeds this
 
 
@@ -56,7 +56,7 @@ class GurobiParams:
     # Stop when gap between best incumbent and LP bound ≤ this fraction.
     # Tighter → longer solve; 1% is negligible for layout quality.
 
-    mip_focus: int = 1
+    mip_focus: int = 2
     # 0=balanced, 1=feasibility first, 2=optimality, 3=best-bound.
     # Small/easy netlists: use 2 (prove optimum fast).
     # Large/hard netlists: use 1 (find any feasible solution first).
@@ -77,18 +77,18 @@ class GurobiParams:
     # Symmetry detection aggressiveness: 0=none, 1=conservative, 2=aggressive.
     # Strongly correlated with number of symmetry groups in the netlist.
 
-    heuristics: float = 0.2
+    heuristics: float = 0.05
     # Fraction of B&B time spent on MIP heuristics (0.0–1.0).
     # Tightly-coupled netlists: higher value finds a good incumbent earlier.
 
-    no_rel_heur_time: int = 30
+    no_rel_heur_time: int = 0
     # Seconds of NoRel heuristic run before B&B starts.
     # Useful when problem is highly integer-feasible (tight netlists with warm start).
 
-    improve_start_gap: float = 0.5
+    improve_start_gap: float = 0.05
     # Switch from heuristic improvement to B&B when gap falls below this fraction.
 
-    verbose: bool = False
+    verbose: bool = True
     # True → print Gurobi B&B log to console. Use for diagnostics.
     # Key lines to read: "Root relaxation" (LP gap), "MIP gap" at time limit,
     # "Explored N nodes" (large N = loose LP relaxation, not a thread problem).
@@ -98,6 +98,13 @@ class GurobiParams:
     # Non-empty value also sets verbose=True automatically inside Gurobi.
     # Use m.write("model.lp") (add temporarily in _solve_mip_gurobi) to export
     # the LP for inspection in Gurobi's interactive shell.
+
+    debug: bool = False
+    # True → write full Gurobi B&B log to WorkDir/logs/gurobi_ilp_<timestamp>.log
+    # and force verbose output. Use to diagnose slow solves:
+    #   "Root relaxation" line shows LP gap at root node.
+    #   "Explored N nodes" line shows B&B effort (large N = loose LP relaxation).
+    #   "Found heuristic solution" at t=0 confirms MIP warm start was accepted.
 
     use_fdgd_start: bool = True
     # True → run FDGD before solving, sort blocks by FDGD x-centroid, row-pack to
@@ -239,9 +246,17 @@ def _solve_mip_gurobi(
     M_x, M_y = _big_m(bids, blocks)
 
     m = gp.Model("analog_placement")
-    m.Params.OutputFlag       = 1 if (params.verbose or params.log_file) else 0
-    if params.log_file:
-        m.Params.LogFile      = params.log_file
+    if params.debug:
+        from datetime import datetime
+        log_dir = Path(__file__).parent.parent.parent / "logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        m.Params.LogFile    = str(log_dir / f"gurobi_ilp_{ts}.log")
+        m.Params.OutputFlag = 1
+    else:
+        m.Params.OutputFlag = 1 if (params.verbose or params.log_file) else 0
+        if params.log_file:
+            m.Params.LogFile = params.log_file
     m.Params.Threads          = params.threads
     m.Params.TimeLimit        = params.time_limit
     m.Params.MIPGap           = params.mip_gap
@@ -253,17 +268,33 @@ def _solve_mip_gurobi(
     m.Params.Heuristics       = params.heuristics
     m.Params.NoRelHeurTime    = params.no_rel_heur_time
     m.Params.ImproveStartGap  = params.improve_start_gap
+    m.Params.Presolve         = 2
 
     # Canvas bounding-box variables
     W = m.addVar(lb=0.0, ub=M_x, name="W")
     H = m.addVar(lb=0.0, ub=M_y, name="H")
 
-    # Block position variables
-    x: dict[str, Any] = {bid: m.addVar(lb=0.0, ub=M_x, name=f"x_{bid}") for bid in bids}
-    y: dict[str, Any] = {bid: m.addVar(lb=0.0, ub=M_y, name=f"y_{bid}") for bid in bids}
+    # Variant dimensions — computed early so position variable bounds can use them
+    all_dims: dict[str, list[tuple[float, float]]] = {bid: _variant_dims(blocks[bid]) for bid in bids}
+
+    # Block position variables — upper bound tightened to M - min_block_dim.
+    # Provably valid: boundary constraint x[bid]+w[bid] ≤ W ≤ M_x implies
+    # x[bid] ≤ M_x - w[bid] ≤ M_x - min_width. Tighter bounds help Gurobi's
+    # presolver propagate through the non-overlap constraints.
+    x: dict[str, Any] = {
+        bid: m.addVar(lb=0.0,
+                      ub=max(0.0, M_x - min(d[0] for d in all_dims[bid])),
+                      name=f"x_{bid}")
+        for bid in bids
+    }
+    y: dict[str, Any] = {
+        bid: m.addVar(lb=0.0,
+                      ub=max(0.0, M_y - min(d[1] for d in all_dims[bid])),
+                      name=f"y_{bid}")
+        for bid in bids
+    }
 
     # Variant selection
-    all_dims: dict[str, list[tuple[float, float]]] = {bid: _variant_dims(blocks[bid]) for bid in bids}
     w: dict[str, Any] = {}
     h: dict[str, Any] = {}
     s: dict[str, list] = {}
@@ -292,11 +323,32 @@ def _solve_mip_gurobi(
     if total_area_lb > 0.0:
         m.addConstr(W + H >= 2.0 * math.sqrt(total_area_lb), name="bbox_area_lb")
 
+    # Build set of symmetric pairs whose non-overlap is provably implied by symmetry.
+    # For pair (a, b) with a as designated left partner: y[a]==y[b] and
+    # x[b] >= x[a]+w[a]+ax (from tightened sym_left below), so only k=0 is ever
+    # feasible — the r-variable is redundant and can be skipped entirely.
+    sym_pair_skip: set[tuple[str, str]] = set()
+    for group in sym_groups:
+        for pair in group.get("pairs", []):
+            if not isinstance(pair, (list, tuple)) or len(pair) < 2:
+                continue
+            a, b = str(pair[0]), str(pair[1])
+            if a not in bid_set or b not in bid_set:
+                continue
+            ai_idx = bids.index(a) if a in bids else -1
+            aj_idx = bids.index(b) if b in bids else -1
+            if ai_idx < 0 or aj_idx < 0:
+                continue
+            key = (bids[min(ai_idx, aj_idx)], bids[max(ai_idx, aj_idx)])
+            sym_pair_skip.add(key)
+
     # Non-overlap — 4 big-M inequalities per ordered pair, sum >= 1
     r_vars: dict[tuple[str, str], list] = {}
     for ai in range(n):
         for aj in range(ai + 1, n):
             bi, bj = bids[ai], bids[aj]
+            if (bi, bj) in sym_pair_skip:
+                continue   # non-overlap implied by tightened sym_left constraint
             sr = compute_block_spacing(blocks[bi], blocks[bj])
             ax, ay = sr.x_spacing, sr.y_spacing
             rv = [m.addVar(vtype=GRB.BINARY, name=f"r_{bi}_{bj}_{k}") for k in range(4)]
@@ -327,9 +379,13 @@ def _solve_mip_gurobi(
                 continue
             m.addConstr(x[a] + x[b] + w[a] == 2 * x_sym, name=f"sym_x_{gi}_{a}_{b}")
             m.addConstr(y[a] == y[b],                      name=f"sym_y_{gi}_{a}_{b}")
-            # pair[0] is designated left partner — prevents ABAB interleaving and
-            # eliminates the symmetric ABBA solution family, halving the search space.
-            m.addConstr(x[a] + w[a] <= x_sym,             name=f"sym_left_{gi}_{a}")
+            # Tightened: include half the x-spacing so non-overlap of (a,b) is
+            # implied by symmetry alone — the r-variable for this pair is skipped.
+            sr_ab = compute_block_spacing(blocks[a], blocks[b])
+            m.addConstr(
+                x[a] + w[a] + sr_ab.x_spacing / 2.0 <= x_sym,
+                name=f"sym_left_{gi}_{a}",
+            )
             if s[a] and s[b] and len(s[a]) == len(s[b]):
                 for k in range(len(s[a])):
                     m.addConstr(s[a][k] == s[b][k], name=f"sym_var_{gi}_{a}_{b}_{k}")
@@ -528,14 +584,21 @@ class ILPOptimizer:
 
         params = self._gurobi_params or GurobiParams()
         warm_positions = row_pack_positions
+        fdgd_hints: dict[str, tuple[float, float]] | None = None
         if params.use_fdgd_start:
             try:
                 fdgd_centroids = run_fdgd(blocks, nets, seed=0)
                 if len(fdgd_centroids) == len(bids):
                     # Sort blocks by FDGD x-centroid → row-pack → DRC-clean positions.
-                    # DRC-clean positions let Gurobi accept the start as a complete
-                    # feasible incumbent rather than just positional hints.
                     warm_positions = _fdgd_row_pack(bids, blocks, fdgd_centroids)
+                    # Convert FDGD centroids to bottom-left corners for r-hint computation.
+                    # FDGD returns (cx, cy); _r_hints() expects bottom-left (x, y).
+                    # Off-by-w/2 would occasionally flip the direction hint.
+                    fdgd_hints = {
+                        b: (cx - _variant_dims(blocks[b])[0][0] / 2.0,
+                            cy - _variant_dims(blocks[b])[0][1] / 2.0)
+                        for b, (cx, cy) in fdgd_centroids.items()
+                    }
                     logger.debug("FDGD row-pack warm start applied (%d blocks)", len(bids))
             except Exception as exc:
                 logger.warning("FDGD failed (%s) — using plain row-pack for warm start", exc)
@@ -543,6 +606,7 @@ class ILPOptimizer:
         positions, variant_map, termination = _solve_mip(
             bids, blocks, nets, sym_groups, c_area, c_wl, warm_positions,
             params,
+            hint_positions=fdgd_hints,
         )
 
         self._topo.set_solution(positions, variant_map)
