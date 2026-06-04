@@ -115,9 +115,18 @@ class CostEvaluator:
             if self._use_power_rails and xs:
                 nid = net.get("net_id", "").upper()
                 if nid in _VDD_NET_IDS:
-                    ys.append(y_top)
+                    # Rail is a horizontal line at y_top — x routing is only between
+                    # actual pins (any point on the line matches the pin's x).
+                    # Single-pin blocks still contribute their y-distance to the rail.
+                    x_span = (max(xs) - min(xs)) if len(xs) >= 2 else 0.0
+                    y_span = y_top - min(ys)
+                    total += x_span + y_span
+                    continue
                 elif nid in _VSS_NET_IDS:
-                    ys.append(y_bot)
+                    x_span = (max(xs) - min(xs)) if len(xs) >= 2 else 0.0
+                    y_span = max(ys) - y_bot
+                    total += x_span + y_span
+                    continue
             if len(xs) >= 2:
                 total += (max(xs) - min(xs)) + (max(ys) - min(ys))
         return total

@@ -160,54 +160,342 @@ class BStarTopology(TopologyBase, SAMixin, GAMixin):
     """
 
     def __init__(self, blocks: dict, nets: list, sym_groups: list | None = None) -> None:
-        # block_id → block definition dict (read-only after construction)
         self._blocks: dict = blocks
         self._nets:   list = nets
         self._root:  _Node | None = None
-        self._nodes: list[_Node]  = []   # all nodes, positionally stable
-        # sym_groups forwarded by pipeline but not used by B*-tree
+        self._nodes: list[_Node]  = []
+        self._sym_groups: list    = sym_groups or []
+        # Symmetry lookups — populated by _build_sym_lookups()
+        #   _partner[bid]     : partner block_id, or None for non-symmetric blocks
+        #   _is_rep[bid]      : True → block has a tree node; False → mirror derived in decode()
+        #   _is_self_sym[bid] : True → self-symmetric (block maps to itself across the axis)
+        self._partner:     dict[str, str | None] = {}
+        self._is_rep:      dict[str, bool]        = {}
+        self._is_self_sym: dict[str, bool]        = {}
+        self._build_sym_lookups()
+
+    # ------------------------------------------------------------------
+    # Symmetry helpers
+    # ------------------------------------------------------------------
+
+    def _build_sym_lookups(self) -> None:
+        """Populate _partner / _is_rep / _is_self_sym from self._sym_groups.
+
+        Convention: for each pair (a, b), the *first* listed index (a) is the
+        representative that gets a tree node; b is the mirror and has no node.
+        _op_change_rep() can swap this assignment at SA-perturbation time.
+        """
+        for bid in self._blocks:
+            self._partner.setdefault(bid, None)
+            self._is_rep.setdefault(bid, True)
+            self._is_self_sym.setdefault(bid, False)
+        for group in self._sym_groups:
+            for pair in group.get("pairs", []):
+                id_a = str(pair[0])
+                id_b = str(pair[1])
+                if id_a in self._blocks and id_b in self._blocks:
+                    self._partner[id_a] = id_b
+                    self._partner[id_b] = id_a
+                    self._is_rep[id_a]  = True   # default representative
+                    self._is_rep[id_b]  = False  # mirror — no tree node
+            for ss_idx in group.get("self_symmetric", []):
+                bid = str(ss_idx)
+                if bid in self._blocks:
+                    self._partner[bid]     = bid   # maps to itself
+                    self._is_self_sym[bid] = True
+                    self._is_rep[bid]      = True  # self-sym IS in the tree
+
+    def _apply_symmetry(
+        self,
+        positions: dict[str, tuple[float, float]],
+    ) -> dict[str, tuple[float, float]]:
+        """Mirror each symmetric pair and shift the island so all x (or y) ≥ 0.
+
+        Vertical axis — axis at x=0 (left boundary of rep placement):
+          mirror left edge = −(x_rep + w_rep)   [negative pre-shift]
+          axis_x = max(x_rep + w_rep) over paired reps
+          gap_x  = max same-type x_spacing over all pairs (PDK DRC rule)
+
+        Shift logic (ensures gap_x between every mirror and its rep):
+          mirrors shift by axis_x         → mirrors in [0, axis_x]
+          paired reps shift by axis_x+gap_x → reps in [axis_x+gap_x, ...]
+          closest pair gap = 2*x_rep + gap_x ≥ gap_x = required spacing ✓
+
+        Self-symmetric modules are centered on the physical axis midpoint
+          x_axis_mid = axis_x + gap_x/2
+          x_ss_final = x_axis_mid − w_ss/2
+
+        Horizontal axis — analogous, using y_spacing.
+        """
+        all_positions = dict(positions)
+        node_map = {n.block_id: n for n in self._nodes}
+
+        def _wh(bid: str, node: "_Node") -> tuple[float, float]:
+            block   = self._blocks[bid]
+            variant = block["variants"][node.variant_idx]
+            bb      = variant["main_bbox"]
+            return bb["x_max"], bb["y_max"]
+
+        # Two-pass algorithm:
+        # PASS 1 — compute per-group geometry (axis_x, gap_x) without writing positions.
+        #           Derive global_x_shift = max(axis_x_g) so all groups share one origin.
+        # PASS 2 — assign final positions using global_x_shift for a unified coordinate
+        #           system.  This preserves DFS-computed inter-block spacings across groups.
+
+        group_bids_all: set[str] = set()
+        group_info: list[dict]   = []   # one entry per group, vertical or horizontal
+        global_x_shift = 0.0
+        global_gap_x   = 0.0
+
+        # --- PASS 1 ---
+        for group in self._sym_groups:
+            axis      = group.get("axis", "vertical")
+            pairs     = group.get("pairs", [])
+            self_syms = [str(s) for s in group.get("self_symmetric", [])]
+            for pair in pairs:
+                group_bids_all.add(str(pair[0]))
+                group_bids_all.add(str(pair[1]))
+            for ss in self_syms:
+                group_bids_all.add(ss)
+
+            if axis == "vertical":
+                axis_x = 0.0
+                for pair in pairs:
+                    id_first  = str(pair[0])
+                    id_second = str(pair[1])
+                    id_rep = id_first if self._is_rep.get(id_first, True) else id_second
+                    node = node_map.get(id_rep)
+                    if node is None or id_rep not in positions:
+                        continue
+                    w_rep, _ = _wh(id_rep, node)
+                    x_rep, _ = positions[id_rep]
+                    axis_x = max(axis_x, x_rep + w_rep)
+                for ss_bid in self_syms:
+                    node = node_map.get(ss_bid)
+                    if node is None or ss_bid not in positions:
+                        continue
+                    w_ss, _ = _wh(ss_bid, node)
+                    x_ss, _ = positions[ss_bid]
+                    axis_x = max(axis_x, x_ss + w_ss)
+
+                gap_x = 0.0
+                for pair in pairs:
+                    id_first  = str(pair[0])
+                    id_second = str(pair[1])
+                    id_rep = id_first if self._is_rep.get(id_first, True) else id_second
+                    if id_rep in self._blocks:
+                        sp = compute_block_spacing(self._blocks[id_rep],
+                                                   self._blocks[id_rep])
+                        gap_x = max(gap_x, sp.x_spacing)
+
+                global_x_shift = max(global_x_shift, axis_x)
+                global_gap_x   = max(global_gap_x,   gap_x)
+                group_info.append({"axis": "vertical", "pairs": pairs,
+                                   "self_syms": self_syms, "gap_x": gap_x})
+
+            elif axis == "horizontal":
+                axis_y = 0.0
+                for pair in pairs:
+                    id_first  = str(pair[0])
+                    id_second = str(pair[1])
+                    id_rep = id_first if self._is_rep.get(id_first, True) else id_second
+                    node = node_map.get(id_rep)
+                    if node is None or id_rep not in positions:
+                        continue
+                    _, h_rep = _wh(id_rep, node)
+                    _, y_rep = positions[id_rep]
+                    axis_y = max(axis_y, y_rep + h_rep)
+
+                gap_y = 0.0
+                for pair in pairs:
+                    id_first  = str(pair[0])
+                    id_second = str(pair[1])
+                    id_rep = id_first if self._is_rep.get(id_first, True) else id_second
+                    if id_rep in self._blocks:
+                        sp = compute_block_spacing(self._blocks[id_rep],
+                                                   self._blocks[id_rep])
+                        gap_y = max(gap_y, sp.y_spacing)
+
+                group_info.append({"axis": "horizontal", "pairs": pairs,
+                                   "self_syms": self_syms,
+                                   "axis_y": axis_y, "gap_y": gap_y})
+
+        # --- PASS 2 ---
+        for gi in group_info:
+            axis      = gi["axis"]
+            pairs     = gi["pairs"]
+            self_syms = gi["self_syms"]
+
+            if axis == "vertical":
+                gap_x    = gi["gap_x"]
+                axis_mid = global_x_shift + gap_x / 2.0
+
+                for pair in pairs:
+                    id_first  = str(pair[0])
+                    id_second = str(pair[1])
+                    if self._is_rep.get(id_first, True):
+                        id_rep, id_mir = id_first, id_second
+                    else:
+                        id_rep, id_mir = id_second, id_first
+                    node = node_map.get(id_rep)
+                    if node is None or id_rep not in positions:
+                        continue
+                    w_rep, _     = _wh(id_rep, node)
+                    x_rep, y_rep = positions[id_rep]
+                    # Pre-shift mirror (axis at x=0): mirror left = -(x_rep + w_rep)
+                    all_positions[id_mir] = (-(x_rep + w_rep), y_rep)
+
+                for pair in pairs:
+                    for bid in (str(pair[0]), str(pair[1])):
+                        if bid not in all_positions:
+                            continue
+                        x, y = all_positions[bid]
+                        if self._is_rep.get(bid, True) and self._partner.get(bid) != bid:
+                            # Rep: global_x_shift + gap_x  (gap at axis guaranteed)
+                            all_positions[bid] = (x + global_x_shift + gap_x, y)
+                        else:
+                            # Mirror: global_x_shift (mirror zone [0, global_x_shift])
+                            all_positions[bid] = (x + global_x_shift, y)
+
+                for ss_bid in self_syms:
+                    if ss_bid not in all_positions or ss_bid not in node_map:
+                        continue
+                    w_ss, _ = _wh(ss_bid, node_map[ss_bid])
+                    _, y_ss = all_positions[ss_bid]
+                    all_positions[ss_bid] = (axis_mid - w_ss / 2.0, y_ss)
+
+            elif axis == "horizontal":
+                axis_y   = gi["axis_y"]
+                gap_y    = gi["gap_y"]
+                axis_mid = axis_y + gap_y / 2.0
+
+                for pair in pairs:
+                    id_first  = str(pair[0])
+                    id_second = str(pair[1])
+                    if self._is_rep.get(id_first, True):
+                        id_rep, id_mir = id_first, id_second
+                    else:
+                        id_rep, id_mir = id_second, id_first
+                    node = node_map.get(id_rep)
+                    if node is None or id_rep not in positions:
+                        continue
+                    _, h_rep     = _wh(id_rep, node)
+                    x_rep, y_rep = positions[id_rep]
+                    all_positions[id_mir] = (x_rep, -(y_rep + h_rep))
+
+                for pair in pairs:
+                    for bid in (str(pair[0]), str(pair[1])):
+                        if bid not in all_positions:
+                            continue
+                        x, y = all_positions[bid]
+                        if self._is_rep.get(bid, True) and self._partner.get(bid) != bid:
+                            all_positions[bid] = (x, y + axis_y + gap_y)
+                        else:
+                            all_positions[bid] = (x, y + axis_y)
+
+                for ss_bid in self_syms:
+                    if ss_bid not in all_positions or ss_bid not in node_map:
+                        continue
+                    _, h_ss = _wh(ss_bid, node_map[ss_bid])
+                    x_ss, _ = all_positions[ss_bid]
+                    all_positions[ss_bid] = (x_ss, axis_mid - h_ss / 2.0)
+
+        # Non-group (asymmetric) blocks: use global_x_shift + global_gap_x so they
+        # receive exactly the same shift as paired reps, preserving all DFS-computed
+        # inter-block spacings.  This moves them fully into the rep zone and away
+        # from the mirror zone [0, global_x_shift].
+        if global_x_shift > 0.0 or global_gap_x > 0.0:
+            x_shift_ng = global_x_shift + global_gap_x
+            for bid in list(all_positions.keys()):
+                if bid not in group_bids_all:
+                    x, y = all_positions[bid]
+                    all_positions[bid] = (x + x_shift_ng, y)
+
+        return all_positions
 
     # ------------------------------------------------------------------
     # TopologyBase
     # ------------------------------------------------------------------
 
     def seed(self, blocks: dict, mode: str = "random") -> None:
-        """Build a valid binary tree from the block list."""
+        """Build a valid binary tree from the block list.
+
+        Property 1 (ASF-B*-tree, vertical axis): the representative of every
+        self-symmetric module must be on the rightmost branch of the tree so
+        that it abuts the symmetry axis (x = 0 in DFS space).  We enforce this
+        in the initial seed by splitting nodes into two groups:
+
+          group A — self-symmetric representatives  → placed first (root + right-spine)
+          group B — all other representatives       → placed as left subtrees
+
+        With group-A nodes on the right-spine (y-children), their x-coordinate
+        in DFS equals the root's x = 0, which is exactly the axis boundary.
+        Pair-rep nodes placed as x-children land at x ≥ w_ss + DRC-spacing, so
+        they never overlap with the self-sym block after _apply_symmetry centres
+        the self-sym on the axis midpoint.
+
+        The same invariant must be maintained during SA perturbations:
+          _op_swap and _op_move skip self-symmetric nodes to avoid displacing
+          them off the rightmost branch.
+        """
         self._blocks = blocks
-        ids = [bid for bid, b in blocks.items() if "error" not in b]
+        self._build_sym_lookups()   # rebuild after blocks update
+        ids = [
+            bid for bid, b in blocks.items()
+            if "error" not in b and self._is_rep.get(bid, True)
+        ]
         if not ids:
             self._root  = None
             self._nodes = []
             return
 
-        # Each block gets one node; pick default (first valid) variant
-        nodes = [_Node(bid, self._default_variant_idx(bid)) for bid in ids]
-
+        # Separate self-sym and regular nodes; randomise only the regular group
+        ss_ids   = [bid for bid in ids if self._is_self_sym.get(bid)]
+        reg_ids  = [bid for bid in ids if not self._is_self_sym.get(bid)]
         if mode == "random":
-            random.shuffle(nodes)
+            random.shuffle(reg_ids)
+        # Self-sym nodes FIRST so they form the root / rightmost-branch spine
+        ordered_ids = ss_ids + reg_ids
+
+        # Each block gets one node; pick default (first valid) variant
+        nodes = [_Node(bid, self._default_variant_idx(bid)) for bid in ordered_ids]
 
         self._root = nodes[0]
         self._root.parent = None
 
+        # Track the rightmost branch tail so we can extend it for self-sym nodes
+        rightmost_tail = self._root
+
         for node in nodes[1:]:
-            # Find a node with at least one free slot
-            candidates = [
-                n for n in nodes[:nodes.index(node)]
-                if n.left is None or n.right is None
-            ]
-            parent = random.choice(candidates) if mode == "random" else candidates[0]
+            is_ss = self._is_self_sym.get(node.block_id, False)
 
-            free_left  = parent.left  is None
-            free_right = parent.right is None
-            if free_left and free_right:
-                go_left = random.random() < 0.5 if mode == "random" else True
+            if is_ss:
+                # Property 1: self-sym must go on the rightmost branch (y-child chain).
+                # Walk to the end of the rightmost branch and attach as right-child.
+                while rightmost_tail.right is not None:
+                    rightmost_tail = rightmost_tail.right
+                rightmost_tail.right = node
+                node.parent = rightmost_tail
+                rightmost_tail = node
             else:
-                go_left = free_left
+                # Regular rep: find any node with a free slot.
+                candidates = [
+                    n for n in nodes[:nodes.index(node)]
+                    if n.left is None or n.right is None
+                ]
+                parent = random.choice(candidates) if mode == "random" else candidates[0]
 
-            if go_left:
-                parent.left = node
-            else:
-                parent.right = node
+                free_left  = parent.left  is None
+                free_right = parent.right is None
+                if free_left and free_right:
+                    go_left = random.random() < 0.5 if mode == "random" else True
+                else:
+                    go_left = free_left
+
+                if go_left:
+                    parent.left = node
+                else:
+                    parent.right = node
             node.parent = parent
 
         self._nodes = nodes
@@ -279,12 +567,12 @@ class BStarTopology(TopologyBase, SAMixin, GAMixin):
             if node.left:
                 dfs_stack.append(node.left)
 
-        return positions
+        return self._apply_symmetry(positions) if self._sym_groups else positions
 
     def copy_state(self) -> Any:
         """Return a deep-copyable representation of the tree structure."""
         if not self._nodes:
-            return ([], -1)
+            return ([], -1, {})
         idx = {id(n): i for i, n in enumerate(self._nodes)}
         rows = []
         for n in self._nodes:
@@ -293,10 +581,11 @@ class BStarTopology(TopologyBase, SAMixin, GAMixin):
             p = idx[id(n.parent)] if n.parent else -1
             rows.append((n.block_id, n.variant_idx, l, r, p))
         root_idx = idx[id(self._root)]
-        return (rows, root_idx)
+        return (rows, root_idx, dict(self._is_rep))
 
     def restore_state(self, saved: Any) -> None:
-        rows, root_idx = saved
+        rows, root_idx = saved[0], saved[1]
+        is_rep_snap    = saved[2] if len(saved) > 2 else None
         if not rows:
             self._nodes = []
             self._root  = None
@@ -308,6 +597,8 @@ class BStarTopology(TopologyBase, SAMixin, GAMixin):
             nodes[i].parent = nodes[p] if p >= 0 else None
         self._nodes = nodes
         self._root  = nodes[root_idx]
+        if is_rep_snap is not None:
+            self._is_rep = is_rep_snap
 
     def capabilities(self) -> set[str]:
         return {"SA", "GA"}
@@ -329,15 +620,18 @@ class BStarTopology(TopologyBase, SAMixin, GAMixin):
             return lambda: None
 
         t = min(1.0, max(0.0, temperature))
+        has_pairs = any(self._partner.get(n.block_id) is not None for n in self._nodes)
         weights = [
-            0.15 + 0.10 * (1 - t),   # _op_rotate:  more at low T
-            0.35 - 0.10 * (1 - t),   # _op_swap
-            0.35 - 0.05 * (1 - t),   # _op_move
-            0.15 + 0.05 * (1 - t),   # _op_variant
+            0.13 + 0.09 * (1 - t),            # _op_rotate:  more at low T
+            0.30 - 0.09 * (1 - t),            # _op_swap
+            0.30 - 0.05 * (1 - t),            # _op_move
+            0.13 + 0.05 * (1 - t),            # _op_variant
+            0.14 if has_pairs else 0.0,        # _op_change_rep: only with sym pairs
         ]
         r = random.random() * sum(weights)
         cumulative = 0.0
-        ops = [self._op_rotate, self._op_swap, self._op_move, self._op_variant]
+        ops = [self._op_rotate, self._op_swap, self._op_move, self._op_variant,
+               self._op_change_rep]
         chosen = ops[-1]
         for op, w in zip(ops, weights):
             cumulative += w
@@ -360,8 +654,14 @@ class BStarTopology(TopologyBase, SAMixin, GAMixin):
         Exchange block assignment (block_id, variant_idx) of two random nodes.
         Clamps variant_idx to the destination block's variant count to prevent
         out-of-range access when blocks have different numbers of variants.
+        Self-symmetric nodes are excluded: swapping them off the rightmost
+        branch would violate Property 1 (ASF-B*-tree axis constraint).
         """
-        a, b = random.sample(self._nodes, 2)
+        swappable = [n for n in self._nodes
+                     if not self._is_self_sym.get(n.block_id, False)]
+        if len(swappable) < 2:
+            return lambda: None
+        a, b = random.sample(swappable, 2)
         old_a_bid,  old_a_vidx = a.block_id, a.variant_idx
         old_b_bid,  old_b_vidx = b.block_id, b.variant_idx
 
@@ -404,6 +704,7 @@ class BStarTopology(TopologyBase, SAMixin, GAMixin):
             nd for nd in self._nodes
             if nd.parent is not None
             and (nd.parent.left is nd or nd.parent.right is nd)
+            and not self._is_self_sym.get(nd.block_id, False)  # Property 1
         ]
         if not non_root:
             return lambda: None
@@ -538,6 +839,8 @@ class BStarTopology(TopologyBase, SAMixin, GAMixin):
         Change the active variant of a random block.
         Rotation is represented as a separate variant entry — no special
         rotate operator is needed.
+        Partner blocks (mirrors) derive their variant from their representative's
+        node in _apply_symmetry, so no extra propagation is needed here.
         """
         node = random.choice(self._nodes)
         block    = self._blocks.get(node.block_id, {})
@@ -551,6 +854,37 @@ class BStarTopology(TopologyBase, SAMixin, GAMixin):
         node.variant_idx = new_vidx
         def undo() -> None:
             node.variant_idx = old_vidx
+        return undo
+
+    def _op_change_rep(self) -> Callable[[], None]:
+        """Op4 from the ASF-B*-tree paper: swap which side of a symmetric pair
+        is the representative (the block stored in the tree node).
+
+        The tree structure is unchanged; only the block_id in one randomly
+        chosen pair-node flips from one side of the pair to the other.
+        This can improve wire length without affecting island area.
+        Has no effect when there are no symmetric pairs (returns no-op).
+        """
+        pair_nodes = [
+            n for n in self._nodes
+            if self._partner.get(n.block_id) is not None
+            and not self._is_self_sym.get(n.block_id, False)
+        ]
+        if not pair_nodes:
+            return lambda: None
+
+        node    = random.choice(pair_nodes)
+        old_bid = node.block_id
+        new_bid = self._partner[old_bid]   # the current mirror becomes the rep
+
+        node.block_id         = new_bid
+        self._is_rep[old_bid] = False
+        self._is_rep[new_bid] = True
+
+        def undo() -> None:
+            node.block_id         = old_bid
+            self._is_rep[old_bid] = True
+            self._is_rep[new_bid] = False
         return undo
 
     # ------------------------------------------------------------------
@@ -574,7 +908,7 @@ class BStarTopology(TopologyBase, SAMixin, GAMixin):
         cut = random.randint(1, max(1, len(dirs_a) - 1))
         offspring_dirs = dirs_a[:cut] + dirs_b[cut:]
 
-        child = BStarTopology(self._blocks, self._nets)
+        child = BStarTopology(self._blocks, self._nets, self._sym_groups)
         child._nodes = [_Node(bid, self._default_variant_idx(bid)) for bid in offspring_perm]
         child._root  = child._nodes[0]
         child._root.parent = None
@@ -675,7 +1009,14 @@ class BStarTopology(TopologyBase, SAMixin, GAMixin):
                         queue.append(curr.right)
 
     def get_variant_map(self) -> dict[str, int]:
-        return {node.block_id: node.variant_idx for node in self._nodes}
+        result = {node.block_id: node.variant_idx for node in self._nodes}
+        # Mirror blocks have no tree node; they inherit their rep's variant so that
+        # _compute_placed_blocks renders them with the correct (matching) dimensions.
+        for node in self._nodes:
+            partner = self._partner.get(node.block_id)
+            if partner and partner != node.block_id and partner not in result:
+                result[partner] = node.variant_idx
+        return result
 
     # ------------------------------------------------------------------
     # Utility

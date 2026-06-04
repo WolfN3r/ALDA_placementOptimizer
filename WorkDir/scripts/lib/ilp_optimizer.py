@@ -24,14 +24,15 @@ from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).parent))
-from spacing import compute_block_spacing
-from fdgd    import run_fdgd
-from log_setup import get_logger
+from spacing       import compute_block_spacing
+from fdgd          import run_fdgd
+from log_setup     import get_logger
+from cost_evaluator import _VDD_NET_IDS, _VSS_NET_IDS
 
 # =============================================================================
 # 2. CONSTANTS
 # =============================================================================
-DEBUG            = True
+DEBUG            = False
 ILP_LARGE_N_WARN = 20   # log warning when n_blocks exceeds this
 
 
@@ -52,7 +53,7 @@ class GurobiParams:
     time_limit: float = 500.0
     # Hard wall-clock limit in seconds. Solver returns best incumbent found so far.
 
-    mip_gap: float = 0.03
+    mip_gap: float = 0.1
     # Stop when gap between best incumbent and LP bound ≤ this fraction.
     # Tighter → longer solve; 1% is negligible for layout quality.
 
@@ -88,7 +89,7 @@ class GurobiParams:
     improve_start_gap: float = 0.05
     # Switch from heuristic improvement to B&B when gap falls below this fraction.
 
-    verbose: bool = True
+    verbose: bool = False
     # True → print Gurobi B&B log to console. Use for diagnostics.
     # Key lines to read: "Root relaxation" (LP gap), "MIP gap" at time limit,
     # "Explored N nodes" (large N = loose LP relaxation, not a thread problem).
@@ -215,15 +216,16 @@ def _fdgd_row_pack(
 
 
 def _solve_mip_gurobi(
-    bids:           list[str],
-    blocks:         dict,
-    nets:           list,
-    sym_groups:     list,
-    area_weight:    float,
-    wl_weight:      float,
-    warm_positions: dict[str, tuple[float, float]],
-    params:         GurobiParams,
-    hint_positions: dict[str, tuple[float, float]] | None = None,
+    bids:             list[str],
+    blocks:           dict,
+    nets:             list,
+    sym_groups:       list,
+    area_weight:      float,
+    wl_weight:        float,
+    warm_positions:   dict[str, tuple[float, float]],
+    params:           GurobiParams,
+    hint_positions:   dict[str, tuple[float, float]] | None = None,
+    use_power_rails:  bool = True,
 ) -> tuple[dict[str, tuple[float, float]], dict[str, int], str]:
     """
     Build and solve the analog placement MILP with gurobipy.
@@ -440,13 +442,45 @@ def _solve_mip_gurobi(
             m.addConstr(y_lo[ei] <= yc, name=f"hpwl_ylo_{ei}_{nbid}")
             m.addConstr(y_hi[ei] >= yc, name=f"hpwl_yhi_{ei}_{nbid}")
 
+    # Power rail proximity — per-block linear y-penalty.
+    # A bounding-box formulation would cause LP relaxation issues (all VDD/VSS
+    # blocks pulled to one fractional point). Per-block linear terms avoid this.
+    # VDD blocks: -y[bid] in objective → solver maximises y → pushes blocks to top.
+    # VSS blocks: +y[bid] → solver minimises y → pushes blocks to bottom.
+    vdd_bids_set: set[str] = set()
+    vss_bids_set: set[str] = set()
+    if use_power_rails:
+        for net in nets:
+            nid = net.get("net_id", "").upper()
+            for pin in net.get("pins", []):
+                if pin.startswith("B"):
+                    bid = pin[1:].split("_", 1)[0]
+                    if bid in bid_set:
+                        if nid in _VDD_NET_IDS:
+                            vdd_bids_set.add(bid)
+                        elif nid in _VSS_NET_IDS:
+                            vss_bids_set.add(bid)
+
+    power_proximity_expr = gp.LinExpr()
+    n_power_bids = 0
+    for bid in bids:
+        if bid in vdd_bids_set:
+            power_proximity_expr -= y[bid]
+            n_power_bids += 1
+        elif bid in vss_bids_set:
+            power_proximity_expr += y[bid]
+            n_power_bids += 1
+
     # Objective
     n_nets_used = max(len(x_lo), 1)
     hpwl_expr = gp.quicksum(
         (x_hi[ei] - x_lo[ei]) + (y_hi[ei] - y_lo[ei]) for ei in x_lo
     ) if x_lo else 0.0
+    power_scale = (wl_weight / n_power_bids) / M_y if n_power_bids else 0.0
     m.setObjective(
-        area_weight * (W + H) + (wl_weight / n_nets_used) * hpwl_expr,
+        area_weight * (W + H)
+        + (wl_weight / n_nets_used) * hpwl_expr
+        + power_scale * power_proximity_expr,
         GRB.MINIMIZE,
     )
 
@@ -517,15 +551,16 @@ def _solve_mip_gurobi(
 
 
 def _solve_mip(
-    bids:           list[str],
-    blocks:         dict,
-    nets:           list,
-    sym_groups:     list,
-    area_weight:    float,
-    wl_weight:      float,
-    warm_positions: dict[str, tuple[float, float]],
-    gurobi_params:  GurobiParams | None = None,
-    hint_positions: dict[str, tuple[float, float]] | None = None,
+    bids:             list[str],
+    blocks:           dict,
+    nets:             list,
+    sym_groups:       list,
+    area_weight:      float,
+    wl_weight:        float,
+    warm_positions:   dict[str, tuple[float, float]],
+    gurobi_params:    GurobiParams | None = None,
+    hint_positions:   dict[str, tuple[float, float]] | None = None,
+    use_power_rails:  bool = True,
 ) -> tuple[dict[str, tuple[float, float]], dict[str, int], str]:
     """Dispatch to _solve_mip_gurobi with the given (or default) parameters."""
     return _solve_mip_gurobi(
@@ -533,6 +568,7 @@ def _solve_mip(
         area_weight, wl_weight, warm_positions,
         gurobi_params or GurobiParams(),
         hint_positions=hint_positions,
+        use_power_rails=use_power_rails,
     )
 
 
@@ -607,6 +643,7 @@ class ILPOptimizer:
             bids, blocks, nets, sym_groups, c_area, c_wl, warm_positions,
             params,
             hint_positions=fdgd_hints,
+            use_power_rails=getattr(self._evaluator, "_use_power_rails", True),
         )
 
         self._topo.set_solution(positions, variant_map)

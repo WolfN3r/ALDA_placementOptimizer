@@ -361,54 +361,97 @@ class SequencePairTopology(TopologyBase, SAMixin, GAMixin):
         return random.choices([self._op_m1, self._op_m2, self._op_m3], weights=w)[0]()
 
     def _op_m1(self) -> Callable[[], None]:
-        """Relocate one unit in r_plus: an asymmetric block or an entire group block."""
+        """
+        For asymmetric blocks: relocate one block in r_plus.
+        For symmetric group members (paper §IV): swap two group cells in r_plus
+        and simultaneously swap their symmetric partners in r_minus, preserving
+        condition (S) (Balasa & Lampaert 2000).
+        """
         if len(self._r_plus) < 2:
             return lambda: None
         bid   = random.choice(self._r_plus)
         g_idx = self._sym_group_idx.get(bid, -1)
-        old_rp = list(self._r_plus)
 
         if g_idx == -1:
+            # Asymmetric cell: relocate in r_plus only.
+            old_rp = list(self._r_plus)
             rp = [x for x in self._r_plus if x != bid]
             rp.insert(random.randint(0, len(rp)), bid)
-        else:
-            group_cells = {x for x in self._r_plus
-                           if self._sym_group_idx.get(x, -1) == g_idx}
-            block = [x for x in self._r_plus if x in group_cells]
-            rp    = [x for x in self._r_plus if x not in group_cells]
-            k     = random.randint(0, len(rp))
-            for cell in reversed(block): rp.insert(k, cell)
+            self._r_plus = rp
+            def _undo_asym(old_rp=old_rp) -> None:
+                self._r_plus = list(old_rp)
+            return _undo_asym
 
-        self._r_plus = rp
+        # Symmetric cell: pick a second group member and swap the pair in r_plus,
+        # then swap their sym-partners in r_minus to maintain condition (S).
+        group_members = [x for x in self._r_plus
+                         if self._sym_group_idx.get(x, -1) == g_idx]
+        if len(group_members) < 2:
+            return lambda: None
+        other = random.choice([x for x in group_members if x != bid])
+        old_rp = list(self._r_plus)
+        old_rm = list(self._r_minus)
 
-        def _undo(old_rp=old_rp) -> None:
-            self._r_plus = list(old_rp)
-        return _undo
+        i, j = self._r_plus.index(bid), self._r_plus.index(other)
+        self._r_plus[i], self._r_plus[j] = self._r_plus[j], self._r_plus[i]
+
+        pa = self._sym_partner.get(bid,   bid)
+        pb = self._sym_partner.get(other, other)
+        if pa != pb and pa in self._r_minus and pb in self._r_minus:
+            ki = self._r_minus.index(pa)
+            kj = self._r_minus.index(pb)
+            self._r_minus[ki], self._r_minus[kj] = self._r_minus[kj], self._r_minus[ki]
+
+        def _undo_sym(old_rp=old_rp, old_rm=old_rm) -> None:
+            self._r_plus  = list(old_rp)
+            self._r_minus = list(old_rm)
+        return _undo_sym
 
     def _op_m2(self) -> Callable[[], None]:
-        """Relocate one unit in r_minus: an asymmetric block or an entire group block."""
+        """
+        For asymmetric blocks: relocate one block in r_minus.
+        For symmetric group members: swap two group cells in r_minus and
+        simultaneously swap their symmetric partners in r_plus (condition S).
+        """
         if len(self._r_minus) < 2:
             return lambda: None
         bid   = random.choice(self._r_minus)
         g_idx = self._sym_group_idx.get(bid, -1)
-        old_rm = list(self._r_minus)
 
         if g_idx == -1:
+            # Asymmetric cell: relocate in r_minus only.
+            old_rm = list(self._r_minus)
             rm = [x for x in self._r_minus if x != bid]
             rm.insert(random.randint(0, len(rm)), bid)
-        else:
-            group_cells = {x for x in self._r_minus
-                           if self._sym_group_idx.get(x, -1) == g_idx}
-            block = [x for x in self._r_minus if x in group_cells]
-            rm    = [x for x in self._r_minus if x not in group_cells]
-            k     = random.randint(0, len(rm))
-            for cell in reversed(block): rm.insert(k, cell)
+            self._r_minus = rm
+            def _undo_asym(old_rm=old_rm) -> None:
+                self._r_minus = list(old_rm)
+            return _undo_asym
 
-        self._r_minus = rm
+        # Symmetric cell: pick a second group member and swap the pair in r_minus,
+        # then swap their sym-partners in r_plus to maintain condition (S).
+        group_members = [x for x in self._r_minus
+                         if self._sym_group_idx.get(x, -1) == g_idx]
+        if len(group_members) < 2:
+            return lambda: None
+        other = random.choice([x for x in group_members if x != bid])
+        old_rp = list(self._r_plus)
+        old_rm = list(self._r_minus)
 
-        def _undo(old_rm=old_rm) -> None:
+        i, j = self._r_minus.index(bid), self._r_minus.index(other)
+        self._r_minus[i], self._r_minus[j] = self._r_minus[j], self._r_minus[i]
+
+        pa = self._sym_partner.get(bid,   bid)
+        pb = self._sym_partner.get(other, other)
+        if pa != pb and pa in self._r_plus and pb in self._r_plus:
+            ki = self._r_plus.index(pa)
+            kj = self._r_plus.index(pb)
+            self._r_plus[ki], self._r_plus[kj] = self._r_plus[kj], self._r_plus[ki]
+
+        def _undo_sym(old_rp=old_rp, old_rm=old_rm) -> None:
+            self._r_plus  = list(old_rp)
             self._r_minus = list(old_rm)
-        return _undo
+        return _undo_sym
 
     def _op_m3(self) -> Callable[[], None]:
         """Change the active size variant; match partner's variant for symmetric pairs."""
