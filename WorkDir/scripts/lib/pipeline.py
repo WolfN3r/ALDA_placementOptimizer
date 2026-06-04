@@ -274,7 +274,16 @@ class OptimizationPipeline:
             result.final_cost    = opt_result.best_cost
             result.n_iterations  = opt_result.n_iterations
             result.positions     = final_positions
-            result.placed_blocks = _compute_placed_blocks(final_positions, blocks, variant_map)
+            placed = _compute_placed_blocks(final_positions, blocks, variant_map)
+            try:
+                from pin_optimizer import optimize_pin_positions
+                placed = optimize_pin_positions(
+                    placed, nets, blocks,
+                    sym_groups=self._sym_groups if self._sym_groups else None,
+                )
+            except Exception as _pin_exc:
+                warnings.warn(f"pin_optimizer skipped: {_pin_exc}")
+            result.placed_blocks = placed
             result.area_um2      = _bbox_area(final_positions, blocks)
             result.hpwl_um       = _hpwl(final_positions, blocks, nets, use_power_rails=self._use_power_rails)
             result.aspect_ratio  = _aspect_ratio(final_positions, blocks)
