@@ -42,49 +42,18 @@
         "MRDMY":    {"layer": 150, "datatype": 0, "purpose": "Metal resistor dummy",      "category": "passive"},
         "TSV_PPI":  {"layer": 155, "datatype": 0, "purpose": "Through-silicon via pad",   "category": "special"},
         "STDPIN":   {"layer": 171, "datatype": 0, "purpose": "Standard cell pin marker",  "category": "marker"},
-        "LVS_DUMMY":{"layer": 208, "datatype": 0, "purpose": "LVS dummy marker",         "category": "marker"}
+        "LVS_DUMMY":{"layer": 208, "datatype": 0, "purpose": "LVS dummy marker",         "category": "marker"},
+        "ANN":       {"layer": 100, "datatype": 0, "purpose": "Annotation and placement overlay", "category": "annotation"}
     },
     "device_layer_stacks": {
-        "_comment": "Layer stacks for each device type. Defines which GDS layers are needed to construct each device. Useful for GDS export and device recognition.",
-        "nmos1v_nat": {
-            "active": "OD",
-            "gate": "PO",
-            "implant": "NP",
-            "well": null,
-            "threshold": "VTL_N",
-            "contact": "CO",
-            "metal1": "M1",
-            "comment": "1V native NMOS in P-substrate (no N-well)"
-        },
-        "nmos2v_nat": {
-            "active": "OD_25",
-            "gate": "PO",
-            "implant": "NP",
-            "well": null,
-            "threshold": "VTH_N",
-            "contact": "CO",
-            "metal1": "M1",
-            "comment": "2.5V NMOS in P-substrate, thick oxide"
-        },
-        "pmos1v_nat": {
-            "active": "OD",
-            "gate": "PO",
-            "implant": "PP",
-            "well": "NW",
-            "threshold": "VTL_P",
-            "contact": "CO",
-            "metal1": "M1",
-            "comment": "1V native PMOS in N-well"
-        },
-        "pmos2v_nat": {
-            "active": "OD_25",
-            "gate": "PO",
-            "implant": "PP",
-            "well": "NW",
-            "threshold": "VTH_P",
-            "contact": "CO",
-            "metal1": "M1",
-            "comment": "2.5V PMOS in N-well, thick oxide"
-        }
+        "_comment": "Layer stacks per device type. Covers all 8 devices currently in use (6 transistors + 2 passives). Active layers are used for main_bbox GDS geometry.",
+        "nmos_rvt": {"active": "OD",    "gate": "PO", "implant": "NP", "well": null, "threshold": null,    "contact": "CO", "metal1": "M1", "comment": "1V regular-Vt NMOS"},
+        "nmos_lvt": {"active": "OD",    "gate": "PO", "implant": "NP", "well": null, "threshold": "VTL_N", "contact": "CO", "metal1": "M1", "comment": "1V low-Vt NMOS"},
+        "nmos_hvt": {"active": "OD_25", "gate": "PO", "implant": "NP", "well": null, "threshold": "VTH_N", "contact": "CO", "metal1": "M1", "comment": "HV thick-oxide NMOS"},
+        "pmos_rvt": {"active": "OD",    "gate": "PO", "implant": "PP", "well": "NW", "threshold": null,    "contact": "CO", "metal1": "M1", "comment": "1V regular-Vt PMOS in N-well"},
+        "pmos_lvt": {"active": "OD",    "gate": "PO", "implant": "PP", "well": "NW", "threshold": "VTL_P", "contact": "CO", "metal1": "M1", "comment": "1V low-Vt PMOS in N-well"},
+        "pmos_hvt": {"active": "OD_25", "gate": "PO", "implant": "PP", "well": "NW", "threshold": "VTH_P", "contact": "CO", "metal1": "M1", "comment": "HV thick-oxide PMOS in N-well"},
+        "res_poly":  {"active": "RPO",  "gate": "PO", "implant": null, "well": null, "threshold": null,    "contact": "CO", "metal1": "M1", "comment": "Poly resistor (RPO + PO body)"},
+        "cap_mom":   {"active": "M1",   "gate": "PO", "implant": null, "well": null, "threshold": null,    "contact": null, "metal1": "M1", "comment": "MOM capacitor — M1 + PO bboxes"}
     }
 }

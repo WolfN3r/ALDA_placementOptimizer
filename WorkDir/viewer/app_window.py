@@ -1,8 +1,11 @@
 """Main application window: tab-per-block layout + placement tab, with right info panel."""
 from __future__ import annotations
 import dataclasses
+import json
 import math
+import subprocess
 from pathlib import Path
+from xml.etree.ElementTree import Element, SubElement, ElementTree, indent as _xml_indent
 
 from PyQt6.QtWidgets import (
     QMainWindow, QFileDialog, QSplitter, QWidget, QVBoxLayout,
@@ -11,7 +14,8 @@ from PyQt6.QtWidgets import (
     QComboBox, QDoubleSpinBox, QCheckBox, QScrollArea, QGroupBox,
     QGridLayout, QStackedWidget, QTableWidget, QTableWidgetItem,
     QToolButton, QMenu, QWidgetAction, QPushButton, QListWidget,
-    QListWidgetItem, QLineEdit, QMessageBox,
+    QListWidgetItem, QLineEdit, QMessageBox, QHeaderView,
+    QDialog, QColorDialog,
 )
 from PyQt6.QtGui import (
     QAction, QKeySequence, QWheelEvent, QMouseEvent, QPainter,
@@ -43,8 +47,17 @@ def _swatch(color: QColor, size: int = 14) -> QIcon:
     return QIcon(pix)
 
 
+_RUN_ID_OVERRIDES: dict[str, str] = {
+    "BStarTopology+SimulatedAnnealingOptimizer": "B* SA",
+    "ILPTopology+PSOILPOptimizer":              "PSO+ILP",
+    "ILPTopology+BStarILPOptimizer":            "B*+ILP",
+}
+
+
 def _abbrev_run_id(run_id: str) -> str:
-    """Shorten a run_id like 'BStarTopology+SimulatedAnnealingOptimizer' → 'BStar+SA'."""
+    """Shorten a run_id like 'SequencePairTopology+SimulatedAnnealingOptimizer' → 'SP+SA'."""
+    if run_id in _RUN_ID_OVERRIDES:
+        return _RUN_ID_OVERRIDES[run_id]
     subs = [
         ("SimulatedAnnealing", "SA"),
         ("SequencePair", "SP"),
@@ -55,7 +68,6 @@ def _abbrev_run_id(run_id: str) -> str:
     for old, new in subs:
         result = result.replace(old, new)
     parts = [p for p in result.split("+") if p]
-    # Deduplicate consecutive identical parts (e.g. ILP+ILP → ILP)
     dedup: list[str] = []
     for p in parts:
         if not dedup or p != dedup[-1]:
@@ -264,7 +276,7 @@ class LayersPanel(QWidget):
 
 
 # -----------------------------------------------------------------------
-# Grid settings widget (lives in toolbar popup)
+# Grid settings widget (kept as utility class; used inside dialogs)
 # -----------------------------------------------------------------------
 class GridSettingsWidget(QWidget):
     grid_changed = pyqtSignal(float, float, bool)  # small, main, visible
@@ -312,6 +324,588 @@ class GridSettingsWidget(QWidget):
             self._main_step.value(),
             self._grid_check.isChecked(),
         )
+
+
+# -----------------------------------------------------------------------
+# Grid settings dialog  (Options > Grid Settings…)
+# -----------------------------------------------------------------------
+class GridSettingsDialog(QDialog):
+    """Standalone dialog for major/minor grid with Cancel / Apply / OK."""
+
+    applied = pyqtSignal(float, float, bool)   # small, main, visible
+
+    def __init__(self, small: float, main: float, visible: bool, parent=None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("Grid Settings")
+        self.setFixedWidth(310)
+        self.setWindowFlags(
+            self.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint
+        )
+        self._saved = (small, main, visible)
+        self._build_ui(small, main, visible)
+
+    def _build_ui(self, small: float, main: float, visible: bool) -> None:
+        layout = QVBoxLayout(self)
+        layout.setSpacing(8)
+
+        form = QGridLayout()
+        form.setContentsMargins(0, 0, 0, 0)
+        form.setSpacing(6)
+
+        form.addWidget(QLabel("Major grid step (µm):"), 0, 0)
+        self._main = QDoubleSpinBox()
+        self._main.setRange(0.1, 10000.0)
+        self._main.setValue(main)
+        self._main.setSingleStep(0.5)
+        self._main.setDecimals(2)
+        form.addWidget(self._main, 0, 1)
+
+        form.addWidget(QLabel("Minor grid step (µm):"), 1, 0)
+        self._small = QDoubleSpinBox()
+        self._small.setRange(0.05, 1000.0)
+        self._small.setValue(small)
+        self._small.setSingleStep(0.1)
+        self._small.setDecimals(2)
+        form.addWidget(self._small, 1, 1)
+
+        self._vis = QCheckBox("Show grid")
+        self._vis.setChecked(visible)
+        form.addWidget(self._vis, 2, 0, 1, 2)
+
+        layout.addLayout(form)
+        layout.addWidget(_separator())
+
+        btns = QHBoxLayout()
+        btns.addStretch()
+        apply_btn = QPushButton("Apply")
+        apply_btn.clicked.connect(self._apply)
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.clicked.connect(self._cancel)
+        ok_btn = QPushButton("OK")
+        ok_btn.setDefault(True)
+        ok_btn.clicked.connect(self._ok)
+        btns.addWidget(apply_btn)
+        btns.addWidget(cancel_btn)
+        btns.addWidget(ok_btn)
+        layout.addLayout(btns)
+
+    def _values(self) -> tuple[float, float, bool]:
+        return self._small.value(), self._main.value(), self._vis.isChecked()
+
+    def _apply(self) -> None:
+        v = self._values()
+        self._saved = v
+        self.applied.emit(*v)
+
+    def _ok(self) -> None:
+        self._apply()
+        self.accept()
+
+    def _cancel(self) -> None:
+        self.applied.emit(*self._saved)   # restore original
+        self.reject()
+
+
+# -----------------------------------------------------------------------
+# Block rendering settings dialog  (Options > Block Rendering…)
+# -----------------------------------------------------------------------
+class BlockRenderingDialog(QDialog):
+    """Dialog for block border width and per-device-type fill/border colors."""
+
+    def __init__(self, lm: LayerManager, parent=None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("Block Rendering Settings")
+        self.setWindowFlags(
+            self.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint
+        )
+        self._lm = lm
+        self._saved_fill   = {dt: lm.get_device_fill_rgba(dt)  for dt in lm.device_types()}
+        self._saved_border = {dt: lm.get_device_border_rgb(dt) for dt in lm.device_types()}
+        self._saved_width  = lm.border_width
+        self._fill_btns:   dict[str, QPushButton] = {}
+        self._border_btns: dict[str, QPushButton] = {}
+        self._build_ui()
+
+    # ---- color button helpers -----------------------------------------------
+
+    def _make_color_btn(self, color: QColor, alpha: bool) -> QPushButton:
+        btn = QPushButton()
+        btn.setFixedSize(80, 22)
+        btn._color = color    # type: ignore[attr-defined]
+        btn._alpha = alpha    # type: ignore[attr-defined]
+        self._refresh_btn_style(btn, color)
+        btn.clicked.connect(lambda _checked, b=btn: self._pick_color(b))
+        return btn
+
+    @staticmethod
+    def _refresh_btn_style(btn: QPushButton, color: QColor) -> None:
+        r, g, b, a = color.red(), color.green(), color.blue(), color.alpha()
+        lum = r * 0.299 + g * 0.587 + b * 0.114
+        txt = "#fff" if lum < 128 else "#000"
+        btn.setStyleSheet(
+            f"QPushButton {{ background-color: rgba({r},{g},{b},{a}); "
+            f"border: 1px solid #888; color: {txt}; }}"
+        )
+        btn.setText(f"#{r:02X}{g:02X}{b:02X}")
+
+    def _pick_color(self, btn: QPushButton) -> None:
+        opts = (
+            QColorDialog.ColorDialogOption.ShowAlphaChannel
+            if btn._alpha  # type: ignore[attr-defined]
+            else QColorDialog.ColorDialogOption(0)
+        )
+        c = QColorDialog.getColor(
+            btn._color, self, options=opts   # type: ignore[attr-defined]
+        )
+        if c.isValid():
+            btn._color = c   # type: ignore[attr-defined]
+            self._refresh_btn_style(btn, c)
+
+    # ---- UI -----------------------------------------------------------------
+
+    def _build_ui(self) -> None:
+        layout = QVBoxLayout(self)
+        layout.setSpacing(8)
+
+        # Border width
+        w_row = QHBoxLayout()
+        w_row.addWidget(QLabel("Border line width (µm):"))
+        self._width_spin = QDoubleSpinBox()
+        self._width_spin.setRange(0.001, 2.0)
+        self._width_spin.setValue(self._lm.border_width)
+        self._width_spin.setSingleStep(0.01)
+        self._width_spin.setDecimals(3)
+        w_row.addWidget(self._width_spin)
+        w_row.addStretch()
+        layout.addLayout(w_row)
+
+        layout.addWidget(_separator())
+        layout.addWidget(QLabel("<b>Device block colors:</b>"))
+
+        tbl = QGridLayout()
+        tbl.setSpacing(4)
+        tbl.addWidget(QLabel("Device Type"),  0, 0)
+        tbl.addWidget(QLabel("Fill"),         0, 1)
+        tbl.addWidget(QLabel("Border"),       0, 2)
+
+        for row_idx, dt in enumerate(self._lm.device_types(), start=1):
+            r, g, b, a = self._lm.get_device_fill_rgba(dt)
+            br, bg, bb = self._lm.get_device_border_rgb(dt)
+            fill_btn   = self._make_color_btn(QColor(r, g, b, a), alpha=True)
+            border_btn = self._make_color_btn(QColor(br, bg, bb),  alpha=False)
+            self._fill_btns[dt]   = fill_btn
+            self._border_btns[dt] = border_btn
+            tbl.addWidget(QLabel(dt),   row_idx, 0)
+            tbl.addWidget(fill_btn,     row_idx, 1)
+            tbl.addWidget(border_btn,   row_idx, 2)
+
+        layout.addLayout(tbl)
+        layout.addWidget(_separator())
+
+        btns = QHBoxLayout()
+        btns.addStretch()
+        apply_btn = QPushButton("Apply")
+        apply_btn.clicked.connect(self._apply)
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.clicked.connect(self._cancel)
+        ok_btn = QPushButton("OK")
+        ok_btn.setDefault(True)
+        ok_btn.clicked.connect(self._ok)
+        btns.addWidget(apply_btn)
+        btns.addWidget(cancel_btn)
+        btns.addWidget(ok_btn)
+        layout.addLayout(btns)
+
+    # ---- slots --------------------------------------------------------------
+
+    def _apply(self) -> None:
+        self._lm.set_border_width(self._width_spin.value())
+        for dt, btn in self._fill_btns.items():
+            c: QColor = btn._color  # type: ignore[attr-defined]
+            self._lm.set_device_fill(dt, c.red(), c.green(), c.blue(), c.alpha())
+        for dt, btn in self._border_btns.items():
+            c = btn._color  # type: ignore[attr-defined]
+            self._lm.set_device_border(dt, c.red(), c.green(), c.blue())
+        # Update saved baseline
+        self._saved_fill   = {dt: self._lm.get_device_fill_rgba(dt)  for dt in self._lm.device_types()}
+        self._saved_border = {dt: self._lm.get_device_border_rgb(dt) for dt in self._lm.device_types()}
+        self._saved_width  = self._lm.border_width
+        self._lm.apply_render_settings()
+
+    def _ok(self) -> None:
+        self._apply()
+        self.accept()
+
+    def _cancel(self) -> None:
+        self._lm.set_border_width(self._saved_width)
+        for dt, rgba in self._saved_fill.items():
+            self._lm.set_device_fill(dt, *rgba)
+        for dt, rgb in self._saved_border.items():
+            self._lm.set_device_border(dt, *rgb)
+        self._lm.apply_render_settings()
+        self.reject()
+
+
+# -----------------------------------------------------------------------
+# GDS Export window  (Tools > Export GDS…)
+# -----------------------------------------------------------------------
+class GDSExportWindow(QMainWindow):
+    """Export placement to GDS-II with configurable layer assignments and KLayout (WSL) integration."""
+
+    _PDK_LAYERS_PATH = Path(__file__).parent.parent / "myPDK" / "gpdk090_gds_layers.json"
+
+    _DEFAULT_ACTIVE: dict[str, str] = {
+        "nmos_hvt": "OD_25", "pmos_hvt": "OD_25",
+        "nmos_rvt": "OD",    "nmos_lvt": "OD",
+        "pmos_rvt": "OD",    "pmos_lvt": "OD",
+        "res_poly": "RPO",   "cap_mom":  "M1",
+    }
+    _DEFAULT_GATE = "PO"
+
+    # Layer → color used in generated .lyp files
+    _LYP_COLORS: dict[str, str] = {
+        "NW": "#aa44aa", "OD": "#44cc44", "OD_25": "#88dd44",
+        "PO": "#dddd00", "PP": "#cc4488", "NP": "#4488cc",
+        "RPO": "#cc8844", "CO": "#aaaaaa", "M1": "#4488ff",
+        "M2": "#ff8844", "M3": "#44ffff", "M4": "#ff44ff",
+        "M5": "#ffcc44", "M6": "#44ccff", "ANN": "#666666",
+    }
+
+    def __init__(self, data: json_loader.PlacementData, parent=None) -> None:
+        super().__init__(parent)
+        self._data = data
+        self._pdk_layers: dict[str, int] = {}
+        self._layer_names: list[str] = []
+        self._active_combos: dict[str, QComboBox] = {}
+        self._gate_combos:   dict[str, QComboBox] = {}
+        self._pin_combo: QComboBox | None = None
+
+        self.setWindowTitle("Export GDS")
+        self.resize(720, 580)
+        self._load_pdk()
+        self._build_ui()
+
+    # ---- PDK loading --------------------------------------------------------
+
+    def _load_pdk(self) -> None:
+        try:
+            raw = json.loads(self._PDK_LAYERS_PATH.read_text(encoding="utf-8"))
+            self._pdk_layers = {name: info["layer"] for name, info in raw["layers"].items()}
+            self._layer_names = sorted(self._pdk_layers.keys(), key=lambda n: self._pdk_layers[n])
+        except Exception:
+            self._pdk_layers = {"OD": 6, "PO": 17, "OD_25": 18, "RPO": 29, "M1": 31, "ANN": 100}
+            self._layer_names = list(self._pdk_layers.keys())
+
+    def _layer_items(self) -> list[str]:
+        return [f"{n}  ({self._pdk_layers[n]})" for n in self._layer_names]
+
+    def _layer_idx(self, name: str) -> int:
+        try:
+            return self._layer_names.index(name)
+        except ValueError:
+            return 0
+
+    # ---- UI -----------------------------------------------------------------
+
+    def _build_ui(self) -> None:
+        central = QWidget()
+        self.setCentralWidget(central)
+        layout = QVBoxLayout(central)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(8)
+
+        # Layer assignments
+        la_group = QGroupBox("Layer Assignments")
+        la_layout = QVBoxLayout(la_group)
+
+        layer_items = self._layer_items()
+        tbl = QGridLayout()
+        tbl.setSpacing(4)
+        tbl.addWidget(QLabel("<b>Device Type</b>"),  0, 0)
+        tbl.addWidget(QLabel("<b>Active Layer</b>"), 0, 1)
+        tbl.addWidget(QLabel("<b>Gate Layer</b>"),   0, 2)
+
+        dt_present = sorted({b.device_type for b in self._data.blocks})
+        for row, dt in enumerate(dt_present, start=1):
+            tbl.addWidget(QLabel(dt), row, 0)
+
+            active_cb = QComboBox()
+            active_cb.addItems(layer_items)
+            active_cb.setCurrentIndex(self._layer_idx(self._DEFAULT_ACTIVE.get(dt, "OD")))
+            tbl.addWidget(active_cb, row, 1)
+            self._active_combos[dt] = active_cb
+
+            gate_cb = QComboBox()
+            gate_cb.addItems(layer_items)
+            gate_cb.setCurrentIndex(self._layer_idx(self._DEFAULT_GATE))
+            tbl.addWidget(gate_cb, row, 2)
+            self._gate_combos[dt] = gate_cb
+
+        pin_row = len(dt_present) + 1
+        tbl.addWidget(QLabel("Pins / Power Rails"), pin_row, 0)
+        self._pin_combo = QComboBox()
+        self._pin_combo.addItems(layer_items)
+        self._pin_combo.setCurrentIndex(self._layer_idx("M1"))
+        tbl.addWidget(self._pin_combo, pin_row, 1)
+        tbl.addWidget(QLabel("—"), pin_row, 2)
+
+        la_layout.addLayout(tbl)
+        layout.addWidget(la_group)
+
+        # Output file
+        out_group = QGroupBox("Output File")
+        out_layout = QHBoxLayout(out_group)
+        out_layout.addWidget(QLabel("Path:"))
+        self._out_path = QLineEdit()
+        default_out = str(Path(__file__).parent.parent / "output.gds")
+        self._out_path.setText(default_out)
+        out_layout.addWidget(self._out_path, stretch=1)
+        browse_btn = QPushButton("Browse…")
+        browse_btn.clicked.connect(self._browse_output)
+        out_layout.addWidget(browse_btn)
+        layout.addWidget(out_group)
+
+        # Export button + status
+        exp_row = QHBoxLayout()
+        export_btn = QPushButton("Export GDS")
+        export_btn.setMinimumWidth(130)
+        export_btn.clicked.connect(self._export)
+        exp_row.addWidget(export_btn)
+        self._status_label = QLabel("Ready")
+        self._status_label.setAlignment(
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+        )
+        exp_row.addWidget(self._status_label, stretch=1)
+        layout.addLayout(exp_row)
+
+        layout.addWidget(_separator())
+
+        # KLayout options
+        kl_group = QGroupBox("KLayout (WSL) Options")
+        kl_layout = QVBoxLayout(kl_group)
+
+        self._kl_open_check = QCheckBox("Open in KLayout (WSL) after export")
+        kl_layout.addWidget(self._kl_open_check)
+
+        # Layer design source
+        src_row = QHBoxLayout()
+        src_row.addWidget(QLabel("Layer design:"))
+        self._kl_lyp_source = QComboBox()
+        _builtin = Path(__file__).parent.parent / "lib" / "alda_layers.lyp"
+        _items = []
+        if _builtin.exists():
+            _items.append("Built-in ALDA design")
+        _items += ["Auto-generate from assignments", "Custom file…", "None (no .lyp)"]
+        self._kl_lyp_source.addItems(_items)
+        self._kl_lyp_source.currentIndexChanged.connect(self._on_lyp_source_changed)
+        src_row.addWidget(self._kl_lyp_source)
+        src_row.addStretch()
+        kl_layout.addLayout(src_row)
+
+        # Custom file path row (shown only when "Custom file…" selected)
+        self._kl_custom_row = QWidget()
+        cr = QHBoxLayout(self._kl_custom_row)
+        cr.setContentsMargins(0, 0, 0, 0)
+        cr.addWidget(QLabel("Custom .lyp:"))
+        self._kl_custom_path = QLineEdit()
+        self._kl_custom_path.setPlaceholderText("Path to .lyp file…")
+        cr.addWidget(self._kl_custom_path, stretch=1)
+        kl_browse = QPushButton("Browse…")
+        kl_browse.clicked.connect(self._browse_lyp)
+        cr.addWidget(kl_browse)
+        kl_layout.addWidget(self._kl_custom_row)
+        self._kl_custom_row.setVisible(False)
+
+        # Auto-generate options (shown only when "Auto-generate" selected)
+        self._kl_autogen_row = QWidget()
+        ar = QHBoxLayout(self._kl_autogen_row)
+        ar.setContentsMargins(0, 0, 0, 0)
+        ar.addWidget(QLabel("Include layers:"))
+        self._kl_display_combo = QComboBox()
+        self._kl_display_combo.addItems(["All PDK layers", "Active device layers only"])
+        ar.addWidget(self._kl_display_combo)
+        ar.addStretch()
+        kl_layout.addWidget(self._kl_autogen_row)
+        self._kl_autogen_row.setVisible(False)
+
+        wsl_row = QHBoxLayout()
+        wsl_row.addWidget(QLabel("WSL KLayout command:"))
+        self._kl_cmd = QLineEdit("wsl klayout")
+        self._kl_cmd.setToolTip(
+            "Command used to launch KLayout via WSL, e.g. 'wsl klayout' or 'wsl /usr/bin/klayout'"
+        )
+        wsl_row.addWidget(self._kl_cmd, stretch=1)
+        kl_layout.addLayout(wsl_row)
+
+        layout.addWidget(kl_group)
+        layout.addStretch()
+
+        # Trigger initial visibility
+        self._on_lyp_source_changed(0)
+
+    # ---- slots --------------------------------------------------------------
+
+    def _on_lyp_source_changed(self, _idx: int) -> None:
+        label = self._kl_lyp_source.currentText()
+        self._kl_custom_row.setVisible(label == "Custom file…")
+        self._kl_autogen_row.setVisible(label == "Auto-generate from assignments")
+
+    def _browse_output(self) -> None:
+        start_dir = str(Path(__file__).parent.parent)
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Save GDS file", start_dir, "GDS files (*.gds);;All files (*)"
+        )
+        if path:
+            self._out_path.setText(path)
+
+    def _browse_lyp(self) -> None:
+        start_dir = str(Path(__file__).parent.parent / "lib")
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Select KLayout layer properties", start_dir,
+            "KLayout layer properties (*.lyp);;All files (*)"
+        )
+        if path:
+            self._kl_custom_path.setText(path)
+
+    def _get_layer_overrides(self) -> dict[str, list[int]]:
+        overrides: dict[str, list[int]] = {}
+        for dt, active_cb in self._active_combos.items():
+            active_num = self._pdk_layers[self._layer_names[active_cb.currentIndex()]]
+            gate_num   = self._pdk_layers[self._layer_names[self._gate_combos[dt].currentIndex()]]
+            overrides[dt] = [active_num, gate_num]
+        return overrides
+
+    def _export(self) -> None:
+        out_path = self._out_path.text().strip()
+        if not out_path:
+            self._status_label.setText("Error: no output path specified")
+            return
+
+        assert self._pin_combo is not None
+        pin_layer_num = self._pdk_layers[self._layer_names[self._pin_combo.currentIndex()]]
+        layer_overrides = self._get_layer_overrides()
+
+        try:
+            from gds_exporter import export as gds_export
+            gds_export(
+                self._data, out_path,
+                layer_overrides=layer_overrides,
+                pin_layer=pin_layer_num,
+            )
+            self._status_label.setText(f"Exported: {Path(out_path).name}")
+        except Exception as exc:
+            self._status_label.setText(f"Error: {exc}")
+            QMessageBox.critical(self, "GDS Export Error", str(exc))
+            return
+
+        if self._kl_open_check.isChecked():
+            self._open_in_klayout(out_path)
+
+    @staticmethod
+    def _to_wsl(p: str) -> str:
+        import re
+        m = re.match(r'^([A-Za-z]):[/\\](.*)', p)
+        if m:
+            drive = m.group(1).lower()
+            rest  = m.group(2).replace("\\", "/")
+            return f"/mnt/{drive}/{rest}"
+        return p.replace("\\", "/")
+
+    def _resolve_lyp(self, gds_path: str) -> str | None:
+        """Return the .lyp path to pass to KLayout, or None to skip."""
+        label = self._kl_lyp_source.currentText()
+
+        if label == "None (no .lyp)":
+            return None
+
+        if label == "Built-in ALDA design":
+            builtin = Path(__file__).parent.parent / "lib" / "alda_layers.lyp"
+            if builtin.exists():
+                return str(builtin)
+            QMessageBox.warning(self, "Layer Design Missing",
+                                f"Built-in file not found:\n{builtin}")
+            return None
+
+        if label == "Custom file…":
+            custom = self._kl_custom_path.text().strip()
+            if not custom:
+                QMessageBox.warning(self, "No Custom File",
+                                    "Enter a path to a .lyp file or pick a different source.")
+                return None
+            if not Path(custom).exists():
+                QMessageBox.warning(self, "File Not Found",
+                                    f"Custom .lyp file not found:\n{custom}")
+                return None
+            return custom
+
+        # "Auto-generate from assignments"
+        lyp_path = str(Path(gds_path).with_suffix(".lyp"))
+        try:
+            self._generate_lyp(lyp_path)
+            return lyp_path
+        except Exception as exc:
+            QMessageBox.warning(self, "LYP Generation Error",
+                                f"Could not generate .lyp file:\n{exc}")
+            return None
+
+    def _open_in_klayout(self, gds_path: str) -> None:
+        wsl_gds  = self._to_wsl(gds_path)
+        cmd_base = self._kl_cmd.text().strip().split()
+        cmd      = cmd_base + [wsl_gds]
+
+        lyp_path = self._resolve_lyp(gds_path)
+        if lyp_path:
+            cmd += ["-l", self._to_wsl(lyp_path)]
+
+        try:
+            subprocess.Popen(cmd)
+            self._status_label.setText(f"KLayout launched — {Path(gds_path).name}")
+        except Exception as exc:
+            QMessageBox.warning(
+                self, "KLayout Launch Error",
+                f"Could not launch KLayout:\n{exc}\n\nCommand: {' '.join(cmd)}"
+            )
+
+    def _generate_lyp(self, lyp_path: str) -> None:
+        """Auto-generate a KLayout .lyp file from the current layer assignments."""
+        active_only = self._kl_display_combo.currentIndex() == 1
+
+        if active_only:
+            assert self._pin_combo is not None
+            used: set[str] = set()
+            for cb in self._active_combos.values():
+                used.add(self._layer_names[cb.currentIndex()])
+            for cb in self._gate_combos.values():
+                used.add(self._layer_names[cb.currentIndex()])
+            used.add(self._layer_names[self._pin_combo.currentIndex()])
+            used.add("ANN")
+            layers_to_write = {n: self._pdk_layers[n] for n in used if n in self._pdk_layers}
+        else:
+            layers_to_write = self._pdk_layers
+
+        root = Element("layer-properties")
+        for name, lnum in sorted(layers_to_write.items(), key=lambda x: x[1]):
+            prop = SubElement(root, "properties")
+            color = self._LYP_COLORS.get(name, "#888888")
+            SubElement(prop, "frame-color").text = color
+            SubElement(prop, "fill-color").text = color
+            SubElement(prop, "frame-brightness").text = "0"
+            SubElement(prop, "fill-brightness").text = "0"
+            SubElement(prop, "dither-pattern").text = "I5"
+            SubElement(prop, "line-style").text = "I0"
+            SubElement(prop, "valid").text = "true"
+            SubElement(prop, "visible").text = "true"
+            SubElement(prop, "transparent").text = "false"
+            SubElement(prop, "width").text = "1"
+            SubElement(prop, "marked").text = "false"
+            SubElement(prop, "xfill").text = "false"
+            SubElement(prop, "animation").text = "0"
+            SubElement(prop, "n").text = f"{name} ({lnum}/0)"
+            SubElement(prop, "source").text = f"{lnum}/0@1"
+
+        tree = ElementTree(root)
+        _xml_indent(tree, space=" ")
+        tree.write(lyp_path, xml_declaration=True, encoding="utf-8")
 
 
 # -----------------------------------------------------------------------
@@ -873,7 +1467,11 @@ class ExhaustiveComparePanel(QWidget):
         self._table.setHorizontalHeaderLabels(
             ["Run", "N.Cost", "Area", "HPWL", "AR", "ms"]
         )
-        self._table.horizontalHeader().setStretchLastSection(True)
+        hdr = self._table.horizontalHeader()
+        hdr.setStretchLastSection(False)
+        hdr.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        for col in range(1, 6):
+            hdr.setSectionResizeMode(col, QHeaderView.ResizeMode.ResizeToContents)
         self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self._table.setAlternatingRowColors(True)
@@ -897,8 +1495,7 @@ class ExhaustiveComparePanel(QWidget):
         layout.addWidget(sel_gb)
 
         layout.addStretch()
-        self.setMinimumWidth(210)
-        self.setMaximumWidth(280)
+        self.setMinimumWidth(300)
 
     # ---- public API ---------------------------------------------------------
 
@@ -918,7 +1515,6 @@ class ExhaustiveComparePanel(QWidget):
                 item = QTableWidgetItem(val)
                 item.setToolTip(pr.run_id)
                 self._table.setItem(row, col, item)
-        self._table.resizeColumnsToContents()
 
     def highlight_run(self, run_id: str) -> None:
         for row, pr in enumerate(self._results):
@@ -971,9 +1567,17 @@ class MainWindow(QMainWindow):
         self._placement_view:  CanvasView | None = None
         self._placement_tab_idx: int = -1
         self._detail_windows: list[BlockDetailWindow] = []
-        self._drc_window: DRCWindow | None = None
-        self._drc_action: QAction | None = None
-        self._sim_window: SimulationWindow | None = None
+        self._drc_window:  DRCWindow | None = None
+        self._drc_action:  QAction  | None = None
+        self._sim_action:  QAction  | None = None
+        self._gds_action:  QAction  | None = None
+        self._sim_window:  SimulationWindow | None = None
+        self._gds_window:  GDSExportWindow  | None = None
+
+        # Grid settings (backing values — updated by GridSettingsDialog)
+        self._grid_small:   float = 1.0
+        self._grid_main:    float = 5.0
+        self._grid_visible: bool  = True
 
         # Exhaustive mode state
         self._exhaustive_mode: bool = False
@@ -984,7 +1588,6 @@ class MainWindow(QMainWindow):
 
         self._build_ui()
         self._build_menus()
-        self._build_toolbar()
 
     # -----------------------------------------------------------------------
     def _build_ui(self) -> None:
@@ -1025,7 +1628,7 @@ class MainWindow(QMainWindow):
         splitter.setStretchFactor(0, 0)
         splitter.setStretchFactor(1, 1)
         splitter.setStretchFactor(2, 0)
-        splitter.setSizes([215, 1100, 230])
+        splitter.setSizes([215, 1000, 360])
 
         hbox.addWidget(splitter)
 
@@ -1040,6 +1643,7 @@ class MainWindow(QMainWindow):
     def _build_menus(self) -> None:
         mb = self.menuBar()
 
+        # ---- File -----------------------------------------------------------
         fm = mb.addMenu("&File")
         oa = QAction("&Open JSON…", self)
         oa.setShortcut(QKeySequence.StandardKey.Open)
@@ -1051,6 +1655,7 @@ class MainWindow(QMainWindow):
         qa.triggered.connect(QApplication.quit)
         fm.addAction(qa)
 
+        # ---- View -----------------------------------------------------------
         vm = mb.addMenu("&View")
         fa = QAction("&Fit  [F]", self)
         fa.setShortcut(QKeySequence("F"))
@@ -1061,54 +1666,50 @@ class MainWindow(QMainWindow):
         faa.triggered.connect(self._fit_all)
         vm.addAction(faa)
 
+        vm.addSeparator()
         zi = QAction("Zoom &In", self)
         zi.setShortcut(QKeySequence.StandardKey.ZoomIn)
-        zi.triggered.connect(lambda: self._current_view() and self._current_view().scale(1.2, 1.2))
+        zi.triggered.connect(
+            lambda: self._current_view() and self._current_view().scale(1.2, 1.2)
+        )
         vm.addAction(zi)
 
         zo = QAction("Zoom &Out", self)
         zo.setShortcut(QKeySequence.StandardKey.ZoomOut)
-        zo.triggered.connect(lambda: self._current_view() and self._current_view().scale(1/1.2, 1/1.2))
+        zo.triggered.connect(
+            lambda: self._current_view() and self._current_view().scale(1 / 1.2, 1 / 1.2)
+        )
         vm.addAction(zo)
 
-    def _build_toolbar(self) -> None:
-        tb = QToolBar("Main")
-        tb.setMovable(False)
-        self.addToolBar(tb)
+        # ---- Options --------------------------------------------------------
+        om = mb.addMenu("&Options")
+        grid_act = QAction("&Grid Settings…", self)
+        grid_act.triggered.connect(self._open_grid_dialog)
+        om.addAction(grid_act)
 
-        ob = QAction("Open", self)
-        ob.triggered.connect(self._open_file)
-        tb.addAction(ob)
+        render_act = QAction("&Block Rendering…", self)
+        render_act.triggered.connect(self._open_block_rendering)
+        om.addAction(render_act)
 
-        fb = QAction("Fit [F]", self)
-        fb.triggered.connect(self._fit_current)
-        tb.addAction(fb)
-
-        tb.addSeparator()
-
-        grid_btn = QToolButton()
-        grid_btn.setText("Grid…")
-        grid_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
-        grid_menu = QMenu(grid_btn)
-        grid_action = QWidgetAction(grid_menu)
-        self._grid_widget = GridSettingsWidget()
-        self._grid_widget.grid_changed.connect(self._on_grid_changed)
-        grid_action.setDefaultWidget(self._grid_widget)
-        grid_menu.addAction(grid_action)
-        grid_btn.setMenu(grid_menu)
-        tb.addWidget(grid_btn)
-
-        tb.addSeparator()
-        self._drc_action = QAction("DRC", self)
+        # ---- Tools ----------------------------------------------------------
+        tm = mb.addMenu("&Tools")
+        self._drc_action = QAction("&DRC Check", self)
         self._drc_action.setToolTip("Run Design Rule Check (requires loaded placement)")
         self._drc_action.setEnabled(False)
         self._drc_action.triggered.connect(self._open_drc_window)
-        tb.addAction(self._drc_action)
+        tm.addAction(self._drc_action)
 
-        self._sim_action = QAction("Simulate", self)
+        self._sim_action = QAction("&Simulate Circuit…", self)
         self._sim_action.setToolTip("Run placement optimizer with custom settings")
         self._sim_action.triggered.connect(self._open_sim_window)
-        tb.addAction(self._sim_action)
+        tm.addAction(self._sim_action)
+
+        tm.addSeparator()
+        self._gds_action = QAction("&Export GDS…", self)
+        self._gds_action.setToolTip("Export placement to GDS-II file")
+        self._gds_action.setEnabled(False)
+        self._gds_action.triggered.connect(self._open_gds_window)
+        tm.addAction(self._gds_action)
 
     # -----------------------------------------------------------------------
     def _current_view(self) -> CanvasView | None:
@@ -1154,15 +1755,23 @@ class MainWindow(QMainWindow):
         self._load_data(data, Path(path).name)
 
     def _load_data(self, data: json_loader.PlacementData, title: str = "") -> None:
-        # Close any open detail windows from a previous file
+        # Close any open detail / tool windows from a previous file
         for w in self._detail_windows:
             w.close()
         self._detail_windows.clear()
+
+        if self._drc_window is not None:
+            self._drc_window.close()
+            self._drc_window = None
+        if self._gds_window is not None:
+            self._gds_window.close()
+            self._gds_window = None
 
         self._data = data
         self._scenes.clear()
         self._views.clear()
         self.lm._callbacks.clear()
+        self.lm._render_callbacks.clear()
         self._placement_scene = None
         self._placement_view = None
         self._placement_tab_idx = -1
@@ -1175,7 +1784,7 @@ class MainWindow(QMainWindow):
         while self._tabs.count():
             self._tabs.removeTab(0)
 
-        small, main, vis = self._grid_widget.current_grid()
+        small, main, vis = self._grid_small, self._grid_main, self._grid_visible
 
         if data.placement_mode == "exhaustive" and data.all_placement_results:
             # Exhaustive mode: one tab per run, sorted by renorm_cost (best → worst)
@@ -1256,14 +1865,15 @@ class MainWindow(QMainWindow):
         self._mode_label.setText(f"Mode: {mode}  |  Blocks: {len(data.blocks)}")
         self._status.showMessage(f"Loaded {title}  ({len(data.blocks)} blocks)", 3000)
 
-        if self._drc_window is not None:
-            self._drc_window.close()
-            self._drc_window = None
+        # Update action enable/disable states
+        has_placement = (
+            bool(self._exhaustive_scenes) or
+            (data.has_placement and data.placement_result is not None)
+        )
         if self._drc_action:
-            self._drc_action.setEnabled(
-                bool(self._exhaustive_scenes) or
-                (data.has_placement and data.placement_result is not None)
-            )
+            self._drc_action.setEnabled(has_placement)
+        if self._gds_action:
+            self._gds_action.setEnabled(True)  # available for any loaded data
 
     # -----------------------------------------------------------------------
     def _on_tab_changed(self, idx: int) -> None:
@@ -1302,6 +1912,9 @@ class MainWindow(QMainWindow):
                 v.fit()
 
     def _on_grid_changed(self, small: float, main: float, visible: bool) -> None:
+        self._grid_small   = small
+        self._grid_main    = main
+        self._grid_visible = visible
         for view in self._views:
             view.set_grid(small, main, visible)
         for view in self._exhaustive_views:
@@ -1390,7 +2003,8 @@ class MainWindow(QMainWindow):
         if not block:
             return
         w = BlockDetailWindow(
-            block, self._data, self.lm, self._grid_widget.current_grid()
+            block, self._data, self.lm,
+            (self._grid_small, self._grid_main, self._grid_visible),
         )
         w.show()
         self._detail_windows.append(w)
@@ -1398,6 +2012,30 @@ class MainWindow(QMainWindow):
     def _on_mouse_moved(self, x: float, y: float) -> None:
         self._coord_label.setText(f"({x:.3f} µm,  {y:.3f} µm)")
 
+    # ---- new tool methods ---------------------------------------------------
+
+    def _open_grid_dialog(self) -> None:
+        dlg = GridSettingsDialog(
+            self._grid_small, self._grid_main, self._grid_visible, parent=self
+        )
+        dlg.applied.connect(self._on_grid_changed)
+        dlg.exec()
+
+    def _open_block_rendering(self) -> None:
+        dlg = BlockRenderingDialog(self.lm, parent=self)
+        dlg.exec()
+
+    def _open_gds_window(self) -> None:
+        if self._gds_window is not None and self._gds_window.isVisible():
+            self._gds_window.raise_()
+            self._gds_window.activateWindow()
+            return
+        if not self._data:
+            return
+        self._gds_window = GDSExportWindow(self._data, parent=self)
+        self._gds_window.show()
+
+    # -----------------------------------------------------------------------
     def keyPressEvent(self, event) -> None:
         if event.key() == Qt.Key.Key_F:
             self._fit_current()

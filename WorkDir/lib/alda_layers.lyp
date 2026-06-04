@@ -1,0 +1,471 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-properties>
+
+ <!--
+   ALDA Placement Viewer — KLayout Layer Design
+   =============================================
+   Covers all GDS layers produced by the ALDA GDS exporter for gpdk090.
+
+   COLOR SCHEME
+   ============
+   ACTIVE / FRONT-END layers (diffusion, poly, implants):
+     OD   = Green             (active diffusion)
+     OD_25= Light green       (thick-oxide active)
+     PO   = Yellow-orange     (poly gate)
+     NW   = Transparent mauve (N-well background)
+     PP   = Magenta hatched   (P+ implant)
+     NP   = Steel-blue hatched(N+ implant)
+     RPO  = Brown             (resistor poly)
+     CO   = Gray sparse dots  (contact)
+
+   METAL / BACK-END layers (follow M1-M7 / VIA1-7 color scheme):
+     M1 / VIA1 = Blue
+     M2 / VIA2 = Red
+     M3 / VIA3 = Green
+     M4 / VIA4 = Orange
+     M5 / VIA5 = Purple
+     M6 / VIA6 = Cyan / Teal
+     M7 / VIA7 = Yellow / Gold
+
+   ANNOTATION:
+     ANN  = Gray dashed outline only  (ALDA block bboxes + labels)
+ -->
+
+ <!-- ==================== N-WELL — Transparent mauve ==================== -->
+ <properties>
+  <frame-color>#AB47BC</frame-color>
+  <fill-color>#AB47BC</fill-color>
+  <frame-brightness>0</frame-brightness>
+  <fill-brightness>0</fill-brightness>
+  <dither-pattern>I1</dither-pattern>
+  <line-style>I0</line-style>
+  <valid>true</valid>
+  <visible>true</visible>
+  <transparent>true</transparent>
+  <width>1</width>
+  <marked>false</marked>
+  <xfill>false</xfill>
+  <animation>0</animation>
+  <n>NW (3/0)</n>
+  <source>3/0@1</source>
+ </properties>
+
+ <!-- ==================== ACTIVE (OD) — Green ==================== -->
+ <properties>
+  <frame-color>#2E7D32</frame-color>
+  <fill-color>#43A047</fill-color>
+  <frame-brightness>0</frame-brightness>
+  <fill-brightness>0</fill-brightness>
+  <dither-pattern>I5</dither-pattern>
+  <line-style>I0</line-style>
+  <valid>true</valid>
+  <visible>true</visible>
+  <transparent>false</transparent>
+  <width>1</width>
+  <marked>false</marked>
+  <xfill>false</xfill>
+  <animation>0</animation>
+  <n>OD (6/0)</n>
+  <source>6/0@1</source>
+ </properties>
+
+ <!-- ==================== POLY (PO) — Yellow-Orange ==================== -->
+ <properties>
+  <frame-color>#E65100</frame-color>
+  <fill-color>#FB8C00</fill-color>
+  <frame-brightness>0</frame-brightness>
+  <fill-brightness>0</fill-brightness>
+  <dither-pattern>I9</dither-pattern>
+  <line-style>I0</line-style>
+  <valid>true</valid>
+  <visible>true</visible>
+  <transparent>false</transparent>
+  <width>1</width>
+  <marked>false</marked>
+  <xfill>false</xfill>
+  <animation>0</animation>
+  <n>PO (17/0)</n>
+  <source>17/0@1</source>
+ </properties>
+
+ <!-- ==================== THICK-OXIDE ACTIVE (OD_25) — Light Green ==================== -->
+ <properties>
+  <frame-color>#1B5E20</frame-color>
+  <fill-color>#66BB6A</fill-color>
+  <frame-brightness>0</frame-brightness>
+  <fill-brightness>0</fill-brightness>
+  <dither-pattern>I5</dither-pattern>
+  <line-style>I0</line-style>
+  <valid>true</valid>
+  <visible>true</visible>
+  <transparent>false</transparent>
+  <width>1</width>
+  <marked>false</marked>
+  <xfill>false</xfill>
+  <animation>0</animation>
+  <n>OD_25 (18/0)</n>
+  <source>18/0@1</source>
+ </properties>
+
+ <!-- ==================== P+ IMPLANT (PP) — Magenta ==================== -->
+ <properties>
+  <frame-color>#AD1457</frame-color>
+  <fill-color>#E91E63</fill-color>
+  <frame-brightness>0</frame-brightness>
+  <fill-brightness>0</fill-brightness>
+  <dither-pattern>I3</dither-pattern>
+  <line-style>I0</line-style>
+  <valid>true</valid>
+  <visible>true</visible>
+  <transparent>false</transparent>
+  <width>1</width>
+  <marked>false</marked>
+  <xfill>false</xfill>
+  <animation>0</animation>
+  <n>PP (25/0)</n>
+  <source>25/0@1</source>
+ </properties>
+
+ <!-- ==================== N+ IMPLANT (NP) — Steel Blue ==================== -->
+ <properties>
+  <frame-color>#1565C0</frame-color>
+  <fill-color>#5C9BD4</fill-color>
+  <frame-brightness>0</frame-brightness>
+  <fill-brightness>0</fill-brightness>
+  <dither-pattern>I3</dither-pattern>
+  <line-style>I0</line-style>
+  <valid>true</valid>
+  <visible>true</visible>
+  <transparent>false</transparent>
+  <width>1</width>
+  <marked>false</marked>
+  <xfill>false</xfill>
+  <animation>0</animation>
+  <n>NP (26/0)</n>
+  <source>26/0@1</source>
+ </properties>
+
+ <!-- ==================== RESISTOR POLY (RPO) — Brown ==================== -->
+ <properties>
+  <frame-color>#4E342E</frame-color>
+  <fill-color>#8D6E63</fill-color>
+  <frame-brightness>0</frame-brightness>
+  <fill-brightness>0</fill-brightness>
+  <dither-pattern>I5</dither-pattern>
+  <line-style>I0</line-style>
+  <valid>true</valid>
+  <visible>true</visible>
+  <transparent>false</transparent>
+  <width>1</width>
+  <marked>false</marked>
+  <xfill>false</xfill>
+  <animation>0</animation>
+  <n>RPO (29/0)</n>
+  <source>29/0@1</source>
+ </properties>
+
+ <!-- ==================== CONTACT (CO) — Gray Sparse Dots ==================== -->
+ <properties>
+  <frame-color>#757575</frame-color>
+  <fill-color>#BDBDBD</fill-color>
+  <frame-brightness>0</frame-brightness>
+  <fill-brightness>0</fill-brightness>
+  <dither-pattern>I3</dither-pattern>
+  <line-style>I0</line-style>
+  <valid>true</valid>
+  <visible>true</visible>
+  <transparent>false</transparent>
+  <width>1</width>
+  <marked>false</marked>
+  <xfill>false</xfill>
+  <animation>0</animation>
+  <n>CO (30/0)</n>
+  <source>30/0@1</source>
+ </properties>
+
+ <!-- ==================== METAL 1 (M1) — Blue ==================== -->
+ <properties>
+  <frame-color>#1565C0</frame-color>
+  <fill-color>#1565C0</fill-color>
+  <frame-brightness>0</frame-brightness>
+  <fill-brightness>0</fill-brightness>
+  <dither-pattern>I5</dither-pattern>
+  <line-style>I0</line-style>
+  <valid>true</valid>
+  <visible>true</visible>
+  <transparent>false</transparent>
+  <width>1</width>
+  <marked>false</marked>
+  <xfill>false</xfill>
+  <animation>0</animation>
+  <n>M1 (31/0)</n>
+  <source>31/0@1</source>
+ </properties>
+
+ <!-- ==================== METAL 2 (M2) — Red ==================== -->
+ <properties>
+  <frame-color>#C62828</frame-color>
+  <fill-color>#C62828</fill-color>
+  <frame-brightness>0</frame-brightness>
+  <fill-brightness>0</fill-brightness>
+  <dither-pattern>I9</dither-pattern>
+  <line-style>I0</line-style>
+  <valid>true</valid>
+  <visible>true</visible>
+  <transparent>false</transparent>
+  <width>1</width>
+  <marked>false</marked>
+  <xfill>false</xfill>
+  <animation>0</animation>
+  <n>M2 (32/0)</n>
+  <source>32/0@1</source>
+ </properties>
+
+ <!-- ==================== METAL 3 (M3) — Green ==================== -->
+ <properties>
+  <frame-color>#2E7D32</frame-color>
+  <fill-color>#2E7D32</fill-color>
+  <frame-brightness>0</frame-brightness>
+  <fill-brightness>0</fill-brightness>
+  <dither-pattern>I7</dither-pattern>
+  <line-style>I0</line-style>
+  <valid>true</valid>
+  <visible>true</visible>
+  <transparent>false</transparent>
+  <width>1</width>
+  <marked>false</marked>
+  <xfill>false</xfill>
+  <animation>0</animation>
+  <n>M3 (33/0)</n>
+  <source>33/0@1</source>
+ </properties>
+
+ <!-- ==================== METAL 4 (M4) — Orange ==================== -->
+ <properties>
+  <frame-color>#E65100</frame-color>
+  <fill-color>#E65100</fill-color>
+  <frame-brightness>0</frame-brightness>
+  <fill-brightness>0</fill-brightness>
+  <dither-pattern>I11</dither-pattern>
+  <line-style>I0</line-style>
+  <valid>true</valid>
+  <visible>true</visible>
+  <transparent>false</transparent>
+  <width>1</width>
+  <marked>false</marked>
+  <xfill>false</xfill>
+  <animation>0</animation>
+  <n>M4 (34/0)</n>
+  <source>34/0@1</source>
+ </properties>
+
+ <!-- ==================== METAL 5 (M5) — Purple ==================== -->
+ <properties>
+  <frame-color>#6A1B9A</frame-color>
+  <fill-color>#6A1B9A</fill-color>
+  <frame-brightness>0</frame-brightness>
+  <fill-brightness>0</fill-brightness>
+  <dither-pattern>I13</dither-pattern>
+  <line-style>I0</line-style>
+  <valid>true</valid>
+  <visible>true</visible>
+  <transparent>false</transparent>
+  <width>1</width>
+  <marked>false</marked>
+  <xfill>false</xfill>
+  <animation>0</animation>
+  <n>M5 (35/0)</n>
+  <source>35/0@1</source>
+ </properties>
+
+ <!-- ==================== METAL 6 (M6) — Cyan / Teal ==================== -->
+ <properties>
+  <frame-color>#00838F</frame-color>
+  <fill-color>#00838F</fill-color>
+  <frame-brightness>0</frame-brightness>
+  <fill-brightness>0</fill-brightness>
+  <dither-pattern>I4</dither-pattern>
+  <line-style>I0</line-style>
+  <valid>true</valid>
+  <visible>true</visible>
+  <transparent>false</transparent>
+  <width>1</width>
+  <marked>false</marked>
+  <xfill>false</xfill>
+  <animation>0</animation>
+  <n>M6 (36/0)</n>
+  <source>36/0@1</source>
+ </properties>
+
+ <!-- ==================== METAL 7 (M7) — Yellow / Gold ==================== -->
+ <properties>
+  <frame-color>#F9A825</frame-color>
+  <fill-color>#F9A825</fill-color>
+  <frame-brightness>0</frame-brightness>
+  <fill-brightness>0</fill-brightness>
+  <dither-pattern>I6</dither-pattern>
+  <line-style>I0</line-style>
+  <valid>true</valid>
+  <visible>true</visible>
+  <transparent>false</transparent>
+  <width>1</width>
+  <marked>false</marked>
+  <xfill>false</xfill>
+  <animation>0</animation>
+  <n>M7 (37/0)</n>
+  <source>37/0@1</source>
+ </properties>
+
+ <!-- ==================== VIA 1 — Light Blue ==================== -->
+ <properties>
+  <frame-color>#64B5F6</frame-color>
+  <fill-color>#64B5F6</fill-color>
+  <frame-brightness>0</frame-brightness>
+  <fill-brightness>0</fill-brightness>
+  <dither-pattern>I3</dither-pattern>
+  <line-style>I0</line-style>
+  <valid>true</valid>
+  <visible>true</visible>
+  <transparent>false</transparent>
+  <width>1</width>
+  <marked>false</marked>
+  <xfill>false</xfill>
+  <animation>0</animation>
+  <n>VIA1 (51/0)</n>
+  <source>51/0@1</source>
+ </properties>
+
+ <!-- ==================== VIA 2 — Light Red / Pink ==================== -->
+ <properties>
+  <frame-color>#EF9A9A</frame-color>
+  <fill-color>#EF9A9A</fill-color>
+  <frame-brightness>0</frame-brightness>
+  <fill-brightness>0</fill-brightness>
+  <dither-pattern>I3</dither-pattern>
+  <line-style>I0</line-style>
+  <valid>true</valid>
+  <visible>true</visible>
+  <transparent>false</transparent>
+  <width>1</width>
+  <marked>false</marked>
+  <xfill>false</xfill>
+  <animation>0</animation>
+  <n>VIA2 (52/0)</n>
+  <source>52/0@1</source>
+ </properties>
+
+ <!-- ==================== VIA 3 — Light Green ==================== -->
+ <properties>
+  <frame-color>#81C784</frame-color>
+  <fill-color>#81C784</fill-color>
+  <frame-brightness>0</frame-brightness>
+  <fill-brightness>0</fill-brightness>
+  <dither-pattern>I3</dither-pattern>
+  <line-style>I0</line-style>
+  <valid>true</valid>
+  <visible>true</visible>
+  <transparent>false</transparent>
+  <width>1</width>
+  <marked>false</marked>
+  <xfill>false</xfill>
+  <animation>0</animation>
+  <n>VIA3 (53/0)</n>
+  <source>53/0@1</source>
+ </properties>
+
+ <!-- ==================== VIA 4 — Light Orange ==================== -->
+ <properties>
+  <frame-color>#FFB74D</frame-color>
+  <fill-color>#FFB74D</fill-color>
+  <frame-brightness>0</frame-brightness>
+  <fill-brightness>0</fill-brightness>
+  <dither-pattern>I3</dither-pattern>
+  <line-style>I0</line-style>
+  <valid>true</valid>
+  <visible>true</visible>
+  <transparent>false</transparent>
+  <width>1</width>
+  <marked>false</marked>
+  <xfill>false</xfill>
+  <animation>0</animation>
+  <n>VIA4 (54/0)</n>
+  <source>54/0@1</source>
+ </properties>
+
+ <!-- ==================== VIA 5 — Light Purple ==================== -->
+ <properties>
+  <frame-color>#CE93D8</frame-color>
+  <fill-color>#CE93D8</fill-color>
+  <frame-brightness>0</frame-brightness>
+  <fill-brightness>0</fill-brightness>
+  <dither-pattern>I3</dither-pattern>
+  <line-style>I0</line-style>
+  <valid>true</valid>
+  <visible>true</visible>
+  <transparent>false</transparent>
+  <width>1</width>
+  <marked>false</marked>
+  <xfill>false</xfill>
+  <animation>0</animation>
+  <n>VIA5 (55/0)</n>
+  <source>55/0@1</source>
+ </properties>
+
+ <!-- ==================== VIA 6 — Light Cyan ==================== -->
+ <properties>
+  <frame-color>#80DEEA</frame-color>
+  <fill-color>#80DEEA</fill-color>
+  <frame-brightness>0</frame-brightness>
+  <fill-brightness>0</fill-brightness>
+  <dither-pattern>I3</dither-pattern>
+  <line-style>I0</line-style>
+  <valid>true</valid>
+  <visible>true</visible>
+  <transparent>false</transparent>
+  <width>1</width>
+  <marked>false</marked>
+  <xfill>false</xfill>
+  <animation>0</animation>
+  <n>VIA6 (56/0)</n>
+  <source>56/0@1</source>
+ </properties>
+
+ <!-- ==================== VIA 7 — Light Yellow ==================== -->
+ <properties>
+  <frame-color>#FFF176</frame-color>
+  <fill-color>#FFF176</fill-color>
+  <frame-brightness>0</frame-brightness>
+  <fill-brightness>0</fill-brightness>
+  <dither-pattern>I3</dither-pattern>
+  <line-style>I0</line-style>
+  <valid>true</valid>
+  <visible>true</visible>
+  <transparent>false</transparent>
+  <width>1</width>
+  <marked>false</marked>
+  <xfill>false</xfill>
+  <animation>0</animation>
+  <n>VIA7 (57/0)</n>
+  <source>57/0@1</source>
+ </properties>
+
+ <!-- ==================== ANNOTATION / BBOX — Grey dashed outline ==================== -->
+ <properties>
+  <frame-color>#9E9E9E</frame-color>
+  <fill-color>#9E9E9E</fill-color>
+  <frame-brightness>0</frame-brightness>
+  <fill-brightness>0</fill-brightness>
+  <dither-pattern>I6</dither-pattern>
+  <line-style>I5</line-style>
+  <valid>true</valid>
+  <visible>true</visible>
+  <transparent>false</transparent>
+  <width>1</width>
+  <marked>false</marked>
+  <xfill>false</xfill>
+  <animation>0</animation>
+  <n>ANN (100/0)</n>
+  <source>100/0@1</source>
+ </properties>
+
+</layer-properties>

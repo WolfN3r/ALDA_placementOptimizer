@@ -12,6 +12,7 @@ logs/*
 *.log
 *.pyc
 WorkDir/json_files/*.json
+WorkDir/testFiles/*
 
 # Images
 *.png

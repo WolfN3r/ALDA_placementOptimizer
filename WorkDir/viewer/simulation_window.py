@@ -42,9 +42,20 @@ def _load_netlist_files() -> list[str]:
     return sorted(p.name for p in _NETLISTS_DIR.glob("*.sp"))
 
 
+_PAIR_LABEL_OVERRIDES: dict[tuple[str, str], str] = {
+    ("ILP", "ILP"):       "ILP",
+    ("PSO", "PSO"):       "PSO",
+    ("ILP", "PSOILP"):   "PSO + ILP",
+    ("ILP", "BStarILP"): "B* tree + ILP",
+}
+
+
 def _pair_label(topo: str, opt: str) -> str:
     short_topo = topo.replace("Topology", "")
     short_opt  = opt.replace("Optimizer", "")
+    override = _PAIR_LABEL_OVERRIDES.get((short_topo, short_opt))
+    if override is not None:
+        return override
     return f"{short_topo}  +  {short_opt}"
 
 

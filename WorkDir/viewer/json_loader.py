@@ -45,7 +45,7 @@ class Net:
 class PlacedBlockInfo:
     block_id: int
     main_bbox: tuple[float, float, float, float]   # x_min, y_min, x_max, y_max (absolute)
-    pins: dict[str, tuple[float, float]]           # pin_name -> (abs_x, abs_y)
+    pins: dict[str, dict]   # pin_name -> {x,y} (old) or {layer,side,x_min,y_min,x_max,y_max} (new)
 
 
 @dataclass
@@ -63,6 +63,7 @@ class PlacementResult:
     all_runs: list[dict]
     renorm_cost: float = 0.0
     t_optimize_ms: float = 0.0
+    chip_power_rails: list[dict] = field(default_factory=list)  # VDD/VSS M1 chip rails
 
 
 @dataclass
@@ -100,21 +101,43 @@ class PlacementData:
         return block.variants[0]
 
 
+def _extract_chip_rails(pb_raw: dict) -> list[dict]:
+    """Return chip power rail dicts stored under '__chip_*' keys."""
+    return [
+        v for k, v in pb_raw.items()
+        if k.startswith("__chip_") and isinstance(v, dict) and "layer" in v
+    ]
+
+
 def _parse_placed_blocks(pb_raw: dict) -> dict[int, PlacedBlockInfo]:
     placed_blocks: dict[int, PlacedBlockInfo] = {}
     for bid_str, pb in pb_raw.items():
-        bid = int(bid_str)
+        if bid_str.startswith("__"):
+            continue  # skip special entries (chip power rails, etc.)
+        try:
+            bid = int(bid_str)
+        except ValueError:
+            continue
         b = pb["main_bbox"]
         if isinstance(b, dict):
             bbox = (float(b["x_min"]), float(b["y_min"]), float(b["x_max"]), float(b["y_max"]))
         else:
             bbox = (float(b[0]), float(b[1]), float(b[2]), float(b[3]))
-        pins: dict[str, tuple[float, float]] = {}
+        pins: dict[str, dict] = {}
         for pname, ppos in pb.get("pins", {}).items():
             if isinstance(ppos, dict):
-                pins[pname] = (float(ppos["x"]), float(ppos["y"]))
+                if "x_min" in ppos:
+                    # New rectangle format — store as-is, coerce numeric values
+                    pins[pname] = {
+                        k: (float(v) if isinstance(v, (int, float)) else v)
+                        for k, v in ppos.items()
+                    }
+                else:
+                    # Old center-point format
+                    pins[pname] = {"x": float(ppos["x"]), "y": float(ppos["y"])}
             else:
-                pins[pname] = (float(ppos[0]), float(ppos[1]))
+                # List / tuple format
+                pins[pname] = {"x": float(ppos[0]), "y": float(ppos[1])}
         placed_blocks[bid] = PlacedBlockInfo(block_id=bid, main_bbox=bbox, pins=pins)
     return placed_blocks
 
@@ -196,6 +219,7 @@ def load(path: str | Path) -> PlacementData:
             for run_raw in raw_placement.get("runs", []):
                 if run_raw.get("status") != "success" or not run_raw.get("placed_blocks"):
                     continue
+                _pb_raw = run_raw["placed_blocks"]
                 parsed_runs.append(PlacementResult(
                     run_id=str(run_raw.get("run_id", "")),
                     topology=str(run_raw.get("topology", "")),
@@ -206,10 +230,11 @@ def load(path: str | Path) -> PlacementData:
                     aspect_ratio=float(run_raw.get("aspect_ratio", 1.0)),
                     n_iterations=int(run_raw.get("n_iterations", 0)),
                     t_total_ms=float(run_raw.get("t_total_ms", 0.0)),
-                    placed_blocks=_parse_placed_blocks(run_raw["placed_blocks"]),
+                    placed_blocks=_parse_placed_blocks(_pb_raw),
                     all_runs=[],
                     renorm_cost=float(run_raw.get("renorm_cost", 0.0)),
                     t_optimize_ms=float(run_raw.get("t_optimize_ms", 0.0)),
+                    chip_power_rails=_extract_chip_rails(_pb_raw),
                 ))
             parsed_runs.sort(key=lambda r: r.renorm_cost)
             all_placement_results = parsed_runs
@@ -218,6 +243,7 @@ def load(path: str | Path) -> PlacementData:
             if placement_result is None and parsed_runs:
                 placement_result = parsed_runs[0]
         elif "placed_blocks" in raw_placement:
+            _pb_raw2 = raw_placement["placed_blocks"]
             placement_result = PlacementResult(
                 run_id=str(raw_placement.get("run_id", "")),
                 topology=str(raw_placement.get("topology", "")),
@@ -228,8 +254,9 @@ def load(path: str | Path) -> PlacementData:
                 aspect_ratio=float(raw_placement.get("aspect_ratio", 1.0)),
                 n_iterations=int(raw_placement.get("n_iterations", 0)),
                 t_total_ms=float(raw_placement.get("t_total_ms", 0.0)),
-                placed_blocks=_parse_placed_blocks(raw_placement["placed_blocks"]),
+                placed_blocks=_parse_placed_blocks(_pb_raw2),
                 all_runs=list(raw_placement.get("all_runs", [])),
+                chip_power_rails=_extract_chip_rails(_pb_raw2),
             )
 
     has_placement = bool(
