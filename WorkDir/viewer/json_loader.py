@@ -39,6 +39,8 @@ class Net:
     net_id: str
     net_type: str   # power | signal
     pins: list[str]  # ["B0_P1", "B3_P0", ...]
+    route_segments: list[dict] = field(default_factory=list)  # [{layer,x_min,y_min,x_max,y_max}]
+    route_status: str = ""  # "routed" | "unrouted" | ""
 
 
 @dataclass
@@ -205,6 +207,8 @@ def load(path: str | Path) -> PlacementData:
             net_id=str(rn["net_id"]),
             net_type=str(rn["net_type"]),
             pins=list(rn.get("pins", [])),
+            route_segments=list(rn.get("route_segments", [])),
+            route_status=str(rn.get("route_status", "")),
         ))
 
     # Parse placement section (supports single-run and exhaustive modes)

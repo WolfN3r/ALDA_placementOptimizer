@@ -29,6 +29,7 @@ from scene import BlockScene
 from placement_scene import PlacementScene
 from drc_checker import load_rules, run_drc, DRCViolation, DRC_CATEGORY_COLORS
 from simulation_window import SimulationWindow
+from routing_window import RoutingWindow
 
 
 # -----------------------------------------------------------------------
@@ -1569,10 +1570,13 @@ class MainWindow(QMainWindow):
         self._detail_windows: list[BlockDetailWindow] = []
         self._drc_window:  DRCWindow | None = None
         self._drc_action:  QAction  | None = None
-        self._sim_action:  QAction  | None = None
-        self._gds_action:  QAction  | None = None
-        self._sim_window:  SimulationWindow | None = None
-        self._gds_window:  GDSExportWindow  | None = None
+        self._sim_action:   QAction  | None = None
+        self._gds_action:   QAction  | None = None
+        self._route_action: QAction  | None = None
+        self._sim_window:   SimulationWindow | None = None
+        self._gds_window:   GDSExportWindow  | None = None
+        self._route_window: RoutingWindow    | None = None
+        self._current_path: Path | None = None
 
         # Grid settings (backing values — updated by GridSettingsDialog)
         self._grid_small:   float = 1.0
@@ -1704,6 +1708,12 @@ class MainWindow(QMainWindow):
         self._sim_action.triggered.connect(self._open_sim_window)
         tm.addAction(self._sim_action)
 
+        self._route_action = QAction("&Route Placement…", self)
+        self._route_action.setToolTip("Run router on a placed py101 JSON file")
+        self._route_action.setEnabled(False)
+        self._route_action.triggered.connect(self._open_routing_window)
+        tm.addAction(self._route_action)
+
         tm.addSeparator()
         self._gds_action = QAction("&Export GDS…", self)
         self._gds_action.setToolTip("Export placement to GDS-II file")
@@ -1752,6 +1762,7 @@ class MainWindow(QMainWindow):
         except Exception as exc:
             self._status.showMessage(f"Error: {exc}", 5000)
             return
+        self._current_path = Path(path)
         self._load_data(data, Path(path).name)
 
     def _load_data(self, data: json_loader.PlacementData, title: str = "") -> None:
@@ -1861,8 +1872,10 @@ class MainWindow(QMainWindow):
             mode = f"Exhaustive ({len(data.all_placement_results)} runs)"
         else:
             mode = "Placed" if data.has_placement else "Browser"
+        has_routing = any(n.route_segments for n in data.nets)
+        routed_tag = "  |  Routed" if has_routing else ""
         self.setWindowTitle(f"ALDA Placement Viewer — {title}")
-        self._mode_label.setText(f"Mode: {mode}  |  Blocks: {len(data.blocks)}")
+        self._mode_label.setText(f"Mode: {mode}  |  Blocks: {len(data.blocks)}{routed_tag}")
         self._status.showMessage(f"Loaded {title}  ({len(data.blocks)} blocks)", 3000)
 
         # Update action enable/disable states
@@ -1872,6 +1885,8 @@ class MainWindow(QMainWindow):
         )
         if self._drc_action:
             self._drc_action.setEnabled(has_placement)
+        if self._route_action:
+            self._route_action.setEnabled(has_placement)
         if self._gds_action:
             self._gds_action.setEnabled(True)  # available for any loaded data
 
@@ -1959,6 +1974,21 @@ class MainWindow(QMainWindow):
         self._sim_window.show()
 
     def _load_simulation_result(self, path: Path) -> None:
+        self._current_path = path
+        data = json_loader.load(path)
+        self._load_data(data, path.name)
+
+    def _open_routing_window(self) -> None:
+        if self._route_window is not None and self._route_window.isVisible():
+            self._route_window.raise_()
+            self._route_window.activateWindow()
+            return
+        self._route_window = RoutingWindow(prefill_path=self._current_path, parent=self)
+        self._route_window.result_ready.connect(self._load_routing_result)
+        self._route_window.show()
+
+    def _load_routing_result(self, path: Path) -> None:
+        self._current_path = path
         data = json_loader.load(path)
         self._load_data(data, path.name)
 

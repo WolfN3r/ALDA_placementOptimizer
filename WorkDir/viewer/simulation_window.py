@@ -8,18 +8,21 @@ from pathlib import Path
 from PyQt6.QtCore import QProcess, Qt, pyqtSignal
 from PyQt6.QtGui import QFont, QTextCursor
 from PyQt6.QtWidgets import (
-    QButtonGroup, QComboBox, QFormLayout, QGroupBox, QHBoxLayout,
+    QButtonGroup, QCheckBox, QComboBox, QFormLayout, QGroupBox, QHBoxLayout,
     QLabel, QMainWindow, QPushButton, QRadioButton, QSpinBox,
     QTextEdit, QVBoxLayout, QWidget,
 )
 
+from routing_window import RoutingSettingsDialog, find_routing_output
+
 # Paths
-_VIEWER_DIR   = Path(__file__).parent
-_SCRIPTS_DIR  = _VIEWER_DIR.parent / "scripts"
-_MAIN_PY      = _SCRIPTS_DIR / "main.py"
-_PIPELINE_PY  = _SCRIPTS_DIR / "lib" / "pipeline.py"
-_OUTPUT_DIR   = _VIEWER_DIR.parent / "json_files"
-_NETLISTS_DIR = _VIEWER_DIR.parent / "#Netlists"
+_VIEWER_DIR    = Path(__file__).parent
+_SCRIPTS_DIR   = _VIEWER_DIR.parent / "scripts"
+_MAIN_PY       = _SCRIPTS_DIR / "main.py"
+_PIPELINE_PY   = _SCRIPTS_DIR / "lib" / "pipeline.py"
+_OUTPUT_DIR    = _VIEWER_DIR.parent / "json_files"
+_NETLISTS_DIR  = _VIEWER_DIR.parent / "#Netlists"
+_ROUTER_SCRIPT = _SCRIPTS_DIR / "201_routingOptimizer.py"
 
 _PAIR_RE = re.compile(
     r'reg\.register\(\s*(\w+)\s*,\s*(\w+)\s*,\s*_SUPPORTED'
@@ -69,9 +72,18 @@ class SimulationWindow(QMainWindow):
         self.setWindowTitle("Run Simulation")
         self.resize(560, 620)
         self._process: QProcess | None = None
+        self._router_process: QProcess | None = None
+        self._placement_out: Path | None = None
         self._pairs: list[tuple[str, str]] = _load_supported_pairs()
         self._netlist_mode: bool = False
         self._run_seed: int = 42
+        self._routing_settings: dict = {
+            "routing_mode":    "combined",
+            "signal_width_nm": 120,
+            "power_width_nm":  200,
+            "fallback_isolated": False,
+            "output_format":   "json",
+        }
         self._build_ui()
 
     # ------------------------------------------------------------------
@@ -88,6 +100,7 @@ class SimulationWindow(QMainWindow):
         root.addWidget(self._build_source_group())
         root.addWidget(self._build_config_group())
         root.addWidget(self._build_mode_group())
+        root.addWidget(self._build_routing_group())
 
         # Run button + status
         run_row = QHBoxLayout()
@@ -201,9 +214,32 @@ class SimulationWindow(QMainWindow):
 
         return box
 
+    def _build_routing_group(self) -> QGroupBox:
+        box = QGroupBox("Router")
+        row = QHBoxLayout(box)
+        row.setSpacing(8)
+
+        self._cb_routing = QCheckBox("Run router after placement")
+        self._btn_routing_opts = QPushButton("Options…")
+        self._btn_routing_opts.setFixedWidth(90)
+        self._btn_routing_opts.setEnabled(False)
+        self._cb_routing.toggled.connect(self._btn_routing_opts.setEnabled)
+        self._btn_routing_opts.clicked.connect(self._open_routing_options)
+
+        row.addWidget(self._cb_routing)
+        row.addWidget(self._btn_routing_opts)
+        row.addStretch()
+
+        return box
+
     # ------------------------------------------------------------------
     # Slots
     # ------------------------------------------------------------------
+
+    def _open_routing_options(self) -> None:
+        dlg = RoutingSettingsDialog(self._routing_settings, parent=self)
+        if dlg.exec():
+            self._routing_settings = dlg.get_settings()
 
     def _on_source_toggled(self, netlist_active: bool) -> None:
         self._netlist_combo.setEnabled(netlist_active)
@@ -227,8 +263,9 @@ class SimulationWindow(QMainWindow):
 
         args = [
             str(_MAIN_PY),
-            "--seed",     str(seed),
-            "--run-mode", mode,
+            "--seed",       str(seed),
+            "--run-mode",   mode,
+            "--no-routing",          # routing is owned by the Router checkbox below
         ]
 
         if self._rb_src_netlist.isChecked():
@@ -263,6 +300,8 @@ class SimulationWindow(QMainWindow):
     def _on_stop(self) -> None:
         if self._process and self._process.state() != QProcess.ProcessState.NotRunning:
             self._process.kill()
+        if self._router_process and self._router_process.state() != QProcess.ProcessState.NotRunning:
+            self._router_process.kill()
         self._status_label.setText("Stopped")
         self._run_btn.setEnabled(True)
         self._stop_btn.setEnabled(False)
@@ -301,13 +340,76 @@ class SimulationWindow(QMainWindow):
             self._log.append(f"\n[viewer] Expected output not found: {out}")
             return
 
+        if self._cb_routing.isChecked():
+            self._placement_out = out
+            self._log.append(f"\n[viewer] Placement done: {out.name}  — starting router…")
+            self._status_label.setText("Routing…")
+            self._run_btn.setEnabled(False)
+            self._stop_btn.setEnabled(True)
+            self._start_router(out)
+            return
+
         self._status_label.setText("Done")
         self._log.append(f"\n[viewer] Loading: {out.name}")
         self.result_ready.emit(out)
+
+    def _start_router(self, py101_path: Path) -> None:
+        s = self._routing_settings
+        args = [
+            str(_ROUTER_SCRIPT),
+            str(py101_path),
+            "--routing-mode",    s["routing_mode"],
+            "--signal-width-nm", str(s["signal_width_nm"]),
+            "--power-width-nm",  str(s["power_width_nm"]),
+            "--output-format",   s["output_format"],
+        ]
+        if s["fallback_isolated"]:
+            args.append("--fallback-isolated")
+
+        self._log.append("\n--- Router ---\n")
+        self._router_process = QProcess(self)
+        self._router_process.setProgram(sys.executable)
+        self._router_process.setArguments(args)
+        self._router_process.readyReadStandardOutput.connect(self._on_router_stdout)
+        self._router_process.readyReadStandardError.connect(self._on_router_stderr)
+        self._router_process.finished.connect(self._on_router_finished)
+        self._router_process.start()
+
+    def _on_router_stdout(self) -> None:
+        if self._router_process:
+            text = bytes(self._router_process.readAllStandardOutput()).decode(errors="replace")
+            self._log.moveCursor(QTextCursor.MoveOperation.End)
+            self._log.insertPlainText(text)
+
+    def _on_router_stderr(self) -> None:
+        if self._router_process:
+            text = bytes(self._router_process.readAllStandardError()).decode(errors="replace")
+            self._log.moveCursor(QTextCursor.MoveOperation.End)
+            self._log.insertPlainText(text)
+
+    def _on_router_finished(self, exit_code: int, exit_status) -> None:
+        self._run_btn.setEnabled(True)
+        self._stop_btn.setEnabled(False)
+
+        if self._placement_out is None:
+            self._status_label.setText("Done — placement path lost")
+            return
+
+        out = find_routing_output(self._placement_out) if exit_code == 0 else None
+        if out is not None:
+            self._status_label.setText("Done (routed)")
+            self._log.append(f"\n[viewer] Loading: {out.name}")
+            self.result_ready.emit(out)
+        else:
+            self._status_label.setText("Done (routing failed — loading placement)")
+            self._log.append(f"\n[viewer] Router exit {exit_code}. Loading placement: {self._placement_out.name}")
+            self.result_ready.emit(self._placement_out)
 
     # ------------------------------------------------------------------
 
     def closeEvent(self, event) -> None:
         if self._process and self._process.state() != QProcess.ProcessState.NotRunning:
             self._process.kill()
+        if self._router_process and self._router_process.state() != QProcess.ProcessState.NotRunning:
+            self._router_process.kill()
         super().closeEvent(event)

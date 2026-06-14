@@ -49,6 +49,8 @@ class PlacementScene(QGraphicsScene):
         self._nets_enabled = True
         self._H = 0.0
         self._block_rects: dict[int, QGraphicsRectItem] = {}
+        self._route_items_by_net: dict[str, list] = {}
+        self._highlighted_net: str | None = None
 
         pr = data.placement_result
         if pr and pr.placed_blocks:
@@ -148,6 +150,7 @@ class PlacementScene(QGraphicsScene):
                     self._add(dot, "annotation")
 
         self._build_nets(pr)
+        self._build_routes(pr)
         self._build_symmetry(pr, x_max)
 
     def _build_symmetry(self, pr: PlacementResult, x_max: float) -> None:
@@ -260,6 +263,80 @@ class PlacementScene(QGraphicsScene):
             item.setToolTip(f"Chip rail: {rail_dict.get('net', '')}")
             self._add(item, "annotation")
 
+    def _build_routes(self, pr: PlacementResult) -> None:
+        """Draw route_segments from py201 JSON as filled rectangles, one per segment."""
+        for net in self._data.nets:
+            if not net.route_segments:
+                continue
+            col = (
+                _POWER_COLORS.get(net.net_id, QColor(200, 100, 100))
+                if net.net_type == "power"
+                else _SIGNAL_COLOR
+            )
+            fill = QColor(col.red(), col.green(), col.blue(), 60)
+            pen  = _pen(QColor(col.red(), col.green(), col.blue(), 200), 0.015)
+            items: list = []
+            for seg in net.route_segments:
+                rx0 = float(seg.get("x_min", 0))
+                rx1 = float(seg.get("x_max", 0))
+                ry0 = float(seg.get("y_min", 0))
+                ry1 = float(seg.get("y_max", 0))
+                lyr = str(seg.get("layer", ""))
+                scene_top = self._sy(ry1)
+                item = QGraphicsRectItem(rx0, scene_top, rx1 - rx0, ry1 - ry0)
+                item.setBrush(QBrush(fill))
+                item.setPen(pen)
+                item.setZValue(10)
+                item.setData(1, net.net_id)  # tag for click detection
+                tip = f"Net: {net.net_id}"
+                if lyr:
+                    tip += f"  |  {lyr}"
+                if net.route_status:
+                    tip += f"  |  {net.route_status}"
+                item.setToolTip(tip)
+                items.append(item)
+                self._add(item, "net_routes")
+            self._route_items_by_net[net.net_id] = items
+
+    def _net_color(self, net_id: str) -> QColor:
+        for net in self._data.nets:
+            if net.net_id == net_id:
+                return (
+                    _POWER_COLORS.get(net_id, QColor(200, 100, 100))
+                    if net.net_type == "power"
+                    else _SIGNAL_COLOR
+                )
+        return _SIGNAL_COLOR
+
+    def _highlight_net(self, net_id: str | None) -> None:
+        """Highlight all route segments of one net; dim the rest. Pass None to reset."""
+        self._highlighted_net = net_id
+        for nid, items in self._route_items_by_net.items():
+            col = self._net_color(nid)
+            if net_id is None:
+                fill = QColor(col.red(), col.green(), col.blue(), 60)
+                pen  = _pen(QColor(col.red(), col.green(), col.blue(), 200), 0.015)
+            elif nid == net_id:
+                fill = QColor(255, 230, 50, 200)
+                pen  = _pen(QColor(255, 210, 0), 0.06)
+            else:
+                fill = QColor(col.red(), col.green(), col.blue(), 15)
+                pen  = _pen(QColor(col.red(), col.green(), col.blue(), 60), 0.015)
+            for item in items:
+                item.setBrush(QBrush(fill))
+                item.setPen(pen)
+
+    def mousePressEvent(self, event) -> None:
+        for item in self.items(event.scenePos()):
+            if isinstance(item.data(1), str):   # route rectangle tagged with net_id
+                self._highlight_net(item.data(1))
+                event.accept()
+                return
+        # Clicked on something other than a route rect: clear highlight
+        if self._highlighted_net is not None:
+            self._highlight_net(None)
+        super().mousePressEvent(event)
+
     def _build_nets(self, pr: PlacementResult) -> None:
         """Draw net ratsnest.  Power nets show vertical lines to chip rails."""
         # Build chip-rail lookup: net_name (lower) → rail centre (JSON coords)
@@ -271,6 +348,8 @@ class PlacementScene(QGraphicsScene):
             rail_by_net[nid] = (rx, ry)
 
         for net in self._data.nets:
+            if net.route_segments:
+                continue  # routes drawn as rectangles in _build_routes()
             pts: list[tuple[float, float]] = []
             for pin_ref in net.pins:
                 parts = pin_ref.split("_", 1)
@@ -325,9 +404,9 @@ class PlacementScene(QGraphicsScene):
     # ---- public API ---------------------------------------------------------
 
     def set_nets_visible(self, visible: bool) -> None:
-        """Toggle all net lines; also respects per-layer visibility."""
+        """Toggle all net lines and route segments; also respects per-layer visibility."""
         self._nets_enabled = visible
-        for layer in ("net_power", "net_signal"):
+        for layer in ("net_power", "net_signal", "net_routes"):
             layer_vis = self._lm.is_visible(layer)
             for item in self._by_layer.get(layer, []):
                 item.setVisible(visible and layer_vis)
@@ -343,8 +422,8 @@ class PlacementScene(QGraphicsScene):
 
     def _on_layer_toggle(self, layer: str, visible: bool) -> None:
         for item in self._by_layer.get(layer, []):
-            # Net layers are also gated by the nets checkbox
-            if layer in ("net_power", "net_signal"):
+            # Net layers (including routes) are also gated by the nets checkbox
+            if layer in ("net_power", "net_signal", "net_routes"):
                 item.setVisible(visible and self._nets_enabled)
             else:
                 item.setVisible(visible)

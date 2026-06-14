@@ -40,6 +40,7 @@ class LayerManager:
         ("annotation",  "Block outline (Annotation)", 200, 200, 200),
         ("net_power",   "Power nets (VDD/VSS)",       255,  80,  80),
         ("net_signal",  "Signal nets",                 80, 220,  80),
+        ("net_routes",  "Route segments (py201)",     100, 200, 255),
         ("labels",      "Labels",                     255, 255, 100),
         ("symmetry",    "Symmetry pairs",             255, 150, 255),
         ("drc_overlay", "DRC violations",             255, 100, 100),
