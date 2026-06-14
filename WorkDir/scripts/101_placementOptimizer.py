@@ -30,11 +30,11 @@ SEED_MODE = "random"      # "random" | "ordered" — initial topology seed strat
 # --- Combination selector ---------------------------------------------------
 # Set TOPOLOGY + OPTIMIZER to run exactly one combination.
 # Leave both empty to fall back to RUN_MODE (exhaustive or random).
-TOPOLOGY  = ""      # "" | "BStarTopology" | "SequencePairTopology" | "ILPTopology" | "PSOTopology"
-OPTIMIZER = ""  # "" | "SimulatedAnnealingOptimizer" | "ILPOptimizer" | "PSOOptimizer" | "PSOILPOptimizer" | "BStarILPOptimizer"
+TOPOLOGY  = "ILPTopology"      # "" | "BStarTopology" | "SequencePairTopology" | "ILPTopology" | "PSOTopology"
+OPTIMIZER = "ILPOptimizer"  # "" | "SimulatedAnnealingOptimizer" | "ILPOptimizer" | "PSOOptimizer" | "PSOILPOptimizer" | "BStarILPOptimizer"
 
 # Used only when TOPOLOGY/OPTIMIZER are empty:
-RUN_MODE  = "exhaustive"  # "exhaustive" → all supported pairs | "random" → one random pair
+RUN_MODE  = ""  # "exhaustive" → all supported pairs | "random" → one random pair
 
 # --- Exhaustive mode output options -----------------------------------------
 # RENORMALIZE: recalculates cost for all exhaustive runs using the best run's

@@ -12,6 +12,7 @@ logs/*
 *.log
 WorkDir/json_files/*.json
 WorkDir/testFiles/*
+WorkDir/route_output/*
 
 # Images
 *.png

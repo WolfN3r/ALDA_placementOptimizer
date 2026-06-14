@@ -26,6 +26,8 @@ NUM_BLOCKS = 15    # number of transistor blocks to generate
 SAVE_FILES = True  # False → run without writing any files to disk
 VERSION    = "v01" # json structure version tag (see testFiles_naming.md)
 
+RUN_ROUTING = True  # Set True to run stage 201 (requires MAGICAL Docker)
+
 _OUTPUT_DIR = Path(__file__).parent.parent / "json_files"
 
 # =============================================================================
@@ -65,6 +67,8 @@ if __name__ == "__main__":
     parser.add_argument("--topology",   default="",  help="Topology class name (required when --run-mode user)")
     parser.add_argument("--optimizer",  default="",  help="Optimizer class name (required when --run-mode user)")
     parser.add_argument("--version",    default=VERSION, help="Output version tag (default: %(default)s)")
+    parser.add_argument("--no-routing", dest="no_routing", action="store_true", default=False,
+                        help="Skip routing stage (stage 201) even when RUN_ROUTING=True in config")
     args = parser.parse_args()
 
     seed       = args.seed
@@ -96,3 +100,10 @@ if __name__ == "__main__":
 
     if SAVE_FILES:
         _save(placement_data, "101", version)
+
+    # --- Stage 3: Routing (requires MAGICAL Docker, magical_szaboga1_dev_wmi:latest) ---
+    if RUN_ROUTING and not args.no_routing:
+        router = _load_script("201_routingOptimizer.py")
+        routing_data: dict = router.run(placement_data)
+        if SAVE_FILES:
+            _save(routing_data, "201", version)

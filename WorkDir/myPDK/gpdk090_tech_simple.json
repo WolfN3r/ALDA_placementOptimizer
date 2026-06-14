@@ -22,7 +22,7 @@
             "eol_within": 0.05,
             "minstep": 0.12,
             "minstep_maxedges": 1,
-            "preferred_direction": "any",
+            "preferred_direction": "both",
             "gds_layer": 31,
             "gds_datatype": 0,
             "spacing_table": {
