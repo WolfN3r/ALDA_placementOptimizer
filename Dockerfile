@@ -18,7 +18,6 @@ RUN sed -i 's|http://deb.debian.org/debian|http://archive.debian.org/debian|g' /
 ENV PYENV_ROOT="/root/.pyenv"
 ENV PATH="$PYENV_ROOT/shims:$PYENV_ROOT/bin:$PATH"
 RUN curl https://pyenv.run | bash
-
 # Default Python version (can override with build ARG)
 ARG PYTHON_VERSION=3.12.3
 RUN pyenv install $PYTHON_VERSION && pyenv global $PYTHON_VERSION
@@ -27,8 +26,8 @@ RUN pyenv install $PYTHON_VERSION && pyenv global $PYTHON_VERSION
 WORKDIR /home/node
 
 # Copy and install Python requirements
-COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+COPY docker_requirements.txt ./
+RUN pip install --no-cache-dir -r docker_requirements.txt
 
 # Global install of Python node for n8n
 RUN npm install -g n8n-nodes-python

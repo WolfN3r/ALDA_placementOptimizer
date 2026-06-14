@@ -10,7 +10,6 @@ logs/*
 
 # WorkDir logs and temp files
 *.log
-*.pyc
 WorkDir/json_files/*.json
 WorkDir/testFiles/*
 
@@ -27,6 +26,9 @@ WorkDir/testFiles/*
 #IDE
 .vscode/
 .idea/
+.venv/
+__pycache__/
+*.pyc
 
 # Claude Code local config
 .claude/
