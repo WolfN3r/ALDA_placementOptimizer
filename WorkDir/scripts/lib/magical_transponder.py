@@ -108,11 +108,20 @@ def convert_py101_to_magical(data: dict) -> dict:
     # --- power rail virtual terminals ---
     # Each __chip_*_rail__ entry is an M1 stripe at the design boundary.
     # Turn it into a virtual single-pin block so Anaroute includes it in the
-    # power net's connectivity (the pin covers the full rail rectangle).
+    # power net's connectivity.
     max_real_bid   = max(real_bids, default=-1)
     virtual_bid    = max_real_bid + 100   # leave gap; won't collide with real blocks
     rail_net_to_vid = {}  # net_id → virtual block_id
     virtual_blocks  = []
+
+    # Highest y_max among real circuit blocks — chip rail pins are clamped to this
+    # so their routing target stays within the GR grid bounds (chip rails sit above
+    # the real circuit area and their physical y-position can exceed the grid top).
+    safe_y_max_um = max(
+        (pb['main_bbox']['y_max'] for bid_str, pb in placed_dict.items()
+         if bid_str.lstrip('-').isdigit()),
+        default=0.0
+    )
 
     for bid_str, pb in placed_dict.items():
         if bid_str.lstrip('-').isdigit():
@@ -126,11 +135,27 @@ def convert_py101_to_magical(data: dict) -> dict:
 
         bbox = {'x_min': pb['x_min'], 'y_min': pb['y_min'],
                 'x_max': pb['x_max'], 'y_max': pb['y_max']}
+
+        # Clamp both the block position and pin to the real-circuit y-range.
+        # build_magical_db() computes pin relative coords as (pin_abs - main_bbox.y_min).
+        # If main_bbox stays at the physical rail y while pin_rects are clamped lower,
+        # the relative coord goes negative → clamped to 0 → clip is erased.
+        # Fix: set main_bbox = pin_bbox so node.setOffset() places the block at the
+        # safe y-position. Virtual blocks are excluded from OD insertion (bid > max_real_bid)
+        # so moving their origin does not corrupt the GDS.
+        pin_h_um = bbox['y_max'] - bbox['y_min']
+        pin_bbox = {
+            'x_min': bbox['x_min'],
+            'x_max': bbox['x_max'],
+            'y_max': min(bbox['y_max'], safe_y_max_um),
+            'y_min': min(bbox['y_min'], safe_y_max_um - pin_h_um),
+        }
+
         magical_placed.append({
             'block_id':    vbid,
             'device_type': 'nmos_rvt',
-            'main_bbox':   bbox,
-            'pin_rects':   {f'B{vbid}_P0': dict(bbox)},
+            'main_bbox':   pin_bbox,                  # block placed at safe y (not physical rail)
+            'pin_rects':   {f'B{vbid}_P0': pin_bbox},
         })
         virtual_blocks.append({'block_id': vbid, 'device_type': 'nmos_rvt'})
 
@@ -146,6 +171,7 @@ def convert_py101_to_magical(data: dict) -> dict:
     return {
         'design_name':   'CustomDesign',
         'technology':    data.get('technology', 'gpdk090_simple_tech'),
+        'max_real_bid':  max_real_bid,   # used by build_magical_db to skip OD on virtual blocks
         'blocks':        list(blocks_list) + virtual_blocks,
         'netlist':       netlist,
         'placed_blocks': magical_placed,
@@ -228,7 +254,8 @@ def run_magical_routing(magical_input: dict, pdk_tech_json: str,
                         signal_width_nm: int = 200,
                         power_width_nm: int = 500,
                         output_dir: str | None = None,
-                        container_name: str | None = None) -> dict:
+                        container_name: str | None = None,
+                        enable_block_fr: bool = True) -> dict:
     """
     Run MAGICAL Anaroute routing inside the Docker container.
 
@@ -281,6 +308,8 @@ def run_magical_routing(magical_input: dict, pdk_tech_json: str,
             '--signal-width-nm',  str(signal_width_nm),
             '--power-width-nm',   str(power_width_nm),
         ]
+        if not enable_block_fr:
+            cmd.append('--no-enable-block-fr')
         logger.info(f"Running transponder201.py (mode={routing_mode}) ...")
         t0  = time.time()
         res = subprocess.run(cmd, check=False)

@@ -40,6 +40,7 @@ Usage (normal mode, called by the host via docker exec):
 # =============================================================================
 import argparse
 import json
+import math
 import os
 import subprocess
 import sys
@@ -76,7 +77,8 @@ VIA_CONNECTS = {
 # =============================================================================
 
 def um_to_nm(um: float) -> int:
-    return int(float(um) * 1000)
+    raw = int(round(float(um) * 1000))
+    return round(raw / 5) * 5  # snap to 5nm manufacturing grid (LEF abs(xl)%10==0 or 8)
 
 
 def nm_to_um(nm: int) -> float:
@@ -87,7 +89,8 @@ def nm_to_um(nm: int) -> float:
 # 4. BUILD MagicalDB
 # =============================================================================
 
-def build_magical_db(json_data: dict, simple_tech_file: str):
+def build_magical_db(json_data: dict, simple_tech_file: str,
+                     enable_block_fr: bool = True):
     """
     Build magicalFlow.DesignDB + TechDB from the MAGICAL-ready placement JSON.
 
@@ -102,11 +105,13 @@ def build_magical_db(json_data: dict, simple_tech_file: str):
 
     block_by_id  = {b['block_id']: b for b in blocks}
     placed_by_id = {pb['block_id']: pb for pb in placed_list}
+    max_real_bid = json_data.get('max_real_bid', -1)  # virtual chip rail blocks have bid > max_real_bid
 
     # -- Tech DB -----------------------------------------------------------
     tDB = magicalFlow.TechDB()
     magicalFlow.parseSimpleTechFile(simple_tech_file, tDB)
     m1_tech_idx = tDB.layerNameToIdx('M1')
+    od_tech_idx  = tDB.layerNameToIdx('OD')
     print(f"[transponder201] TechDB: dbu={tDB.units().dbu}, M1 tech_idx={m1_tech_idx}")
 
     # -- Design DB ---------------------------------------------------------
@@ -191,6 +196,34 @@ def build_magical_db(json_data: dict, simple_tech_file: str):
         node.setOffset(x_nm, y_nm)
         bid_to_node_idx[bid] = node_idx
 
+    # Step 3b: grid-pad node — widen design x-range so findOrigin() computes a larger
+    # grid step that covers the full y-extent with the fixed 24 valid y-cells.
+    # findOrigin uses node bounding boxes; adding a zero-size node at the required
+    # x position forces step = req_x / 34, giving 24*step > y_max.
+    if bid_to_node_idx:
+        _y_max_nm = max(um_to_nm(placed_by_id[bid]['main_bbox']['y_max'])
+                        for bid in bid_to_node_idx)
+        _x_max_nm = max(um_to_nm(placed_by_id[bid]['main_bbox']['x_max'])
+                        for bid in bid_to_node_idx)
+        # 24 valid y-cells; require 24 * step_nm > _y_max_nm + 620 (offset)
+        _req_x_nm = math.ceil((_y_max_nm + 620) * 34 / 24)
+        if _x_max_nm < _req_x_nm:
+            _pad_sub_idx = db.allocateCkt()
+            _pad_sub = db.subCkt(_pad_sub_idx)
+            _pad_sub.name = f'{top_ckt.name}_GridPad'
+            _pad_sub.implType = magicalFlow.ImplTypePCELL_Nch
+            _pad_sub.layout().setBoundary(0, 0, 1, 1)
+            _pad_ni = top_ckt.allocateNode()
+            _pad_n  = top_ckt.node(_pad_ni)
+            _pad_n.name     = '_grid_pad'
+            _pad_n.refName  = 'nmos_rvt'
+            _pad_n.graphIdx = _pad_sub_idx
+            _pad_n.setOffset(_req_x_nm, 0)
+            _est_step = _req_x_nm // 34
+            print(f"[transponder201] Grid-pad node at x={nm_to_um(_req_x_nm):.2f}µm "
+                  f"(est. step≈{_est_step}nm, y-coverage≈{nm_to_um(24*_est_step-620):.2f}µm "
+                  f"> y_max={nm_to_um(_y_max_nm):.2f}µm)")
+
     # Step 4: top-level nets from netlist
     for net_data in netlist['nets']:
         net_idx = top_ckt.allocateNet()
@@ -217,8 +250,13 @@ def build_magical_db(json_data: dict, simple_tech_file: str):
     db.findRootCkt()
 
     # Step 7: build top layout
+    # OD shapes are inserted flat into the top-level layout at absolute main_bbox coordinates
+    # so the placement GDS contains OD at the top cell level (not buried in sub-cells),
+    # which is what the FR engine requires to enforce forbidden regions.
     top_ckt.layout().clear()
     all_x, all_y = [], []
+    real_y_max = 0  # highest y of real circuit blocks (not chip rail virtual blocks)
+
     for bid, node_idx in bid_to_node_idx.items():
         placed = placed_by_id[bid]
         x_nm = um_to_nm(placed['main_bbox']['x_min'])
@@ -229,12 +267,27 @@ def build_magical_db(json_data: dict, simple_tech_file: str):
         all_x += [x_nm + b.xLo, x_nm + b.xHi]
         all_y += [y_nm + b.yLo, y_nm + b.yHi]
 
+        if bid <= max_real_bid:  # real device block (not chip rail virtual block)
+            real_y_max = max(real_y_max, y_nm + b.yHi)
+            if enable_block_fr and od_tech_idx >= 0:
+                top_ckt.layout().insertRect(
+                    od_tech_idx,
+                    x_nm, y_nm, x_nm + (b.xHi - b.xLo), y_nm + b.yHi)
+
+    # Dynamic top margin: extend boundary above chip rail by at least the circuit→rail gap.
+    # This gives findOrigin() a larger design height → larger gridStep → chip rail pins
+    # (which are just above the real circuit area) stay within the GR grid bounds.
+    chip_rail_y_max = max(all_y)
+    rail_gap = max(0, chip_rail_y_max - real_y_max)
+    top_margin = MARGIN_NM + rail_gap
+
     top_xLo = min(all_x) - MARGIN_NM;  top_yLo = min(all_y) - MARGIN_NM
-    top_xHi = max(all_x) + MARGIN_NM;  top_yHi = max(all_y) + MARGIN_NM
+    top_xHi = max(all_x) + MARGIN_NM;  top_yHi = chip_rail_y_max + top_margin
     top_ckt.layout().setBoundary(top_xLo, top_yLo, top_xHi, top_yHi)
     print(f"[transponder201] Design boundary: "
           f"({nm_to_um(top_xLo):.2f},{nm_to_um(top_yLo):.2f}) → "
-          f"({nm_to_um(top_xHi):.2f},{nm_to_um(top_yHi):.2f}) µm")
+          f"({nm_to_um(top_xHi):.2f},{nm_to_um(top_yHi):.2f}) µm  "
+          f"rail_gap={nm_to_um(rail_gap):.2f}µm top_margin={nm_to_um(top_margin):.2f}µm")
 
     return db, tDB, top_ckt_idx, bid_to_node_idx, block_sub_ckt
 
@@ -260,8 +313,8 @@ def write_anaroute_logging_json(dirname: str, enable_gr: bool = False) -> str:
                 "drc_cost": 20000, "history_cost": 500, "legacy_routing": 0,
                 "layer_dir_mode": 2, "wrong_dir_cost": 2000,
                 "incompat_cost": 5000, "sens_radius": 1000,
-                "z_effect_multiplier": 10.0, "allow_stacked_vias": 1,
-                "max_iter": 3,
+                "z_effect_multiplier": 10.0, "allow_stacked_vias": 0,
+                "max_iter": 15,
                 "max_upper_routing_layer_idx_power": 6,
                 "max_upper_routing_layer_idx_signal": 6,
                 "center_only_acs": 1, "bend_penalty_pct": 5.0,
@@ -281,8 +334,9 @@ def write_anaroute_logging_json(dirname: str, enable_gr: bool = False) -> str:
     try:
         with open(ota1_path, 'w') as f:
             json.dump(config, f, indent=2)
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[transponder201] WARNING: could not update {ota1_path}: {e} "
+              f"(subprocess CWD=dirname means this is non-fatal)")
     return path
 
 
@@ -352,7 +406,16 @@ def _load_params(cfg: dict):
     """Load MAGICAL Params from ota1.json and apply width overrides from cfg."""
     import Params as ParamsModule
     params = ParamsModule.Params()
-    params.load('/install/MAGICAL/examples/ota1/ota1.json')
+    _ota1_path = '/install/MAGICAL/examples/ota1/ota1.json'
+    params.load(_ota1_path)
+    try:
+        with open(_ota1_path) as _f:
+            _ota1 = json.load(_f)
+        _grid_keys = {k: v for k, v in _ota1.items()
+                      if any(w in k.lower() for w in ('grid', 'cell', 'num', 'track', 'step', 'route'))}
+        print(f"[ota1.json] grid-related keys: {_grid_keys}")
+    except Exception as _e:
+        print(f"[ota1.json] cannot read for diagnostics: {_e}")
     params.simple_tech_file = cfg['simple_tech_file']
     params.lef              = cfg['lef']
     params.techfile         = cfg['techfile']
@@ -377,7 +440,9 @@ def _run_combined_helper(cfg_path: str) -> None:
         cfg = json.load(f)
 
     json_data = json.load(open(cfg['input_json']))
-    db, tDB, top_ckt_idx, _, _ = build_magical_db(json_data, cfg['simple_tech_file'])
+    db, tDB, top_ckt_idx, _, _ = build_magical_db(
+        json_data, cfg['simple_tech_file'],
+        enable_block_fr=cfg.get('enable_block_fr', True))
     params = _load_params(cfg)
     pnr    = _setup_pnr(db, tDB, top_ckt_idx, params, cfg['dirname'])
     ckt    = db.subCkt(top_ckt_idx)
@@ -386,6 +451,7 @@ def _run_combined_helper(cfg_path: str) -> None:
     skip_nets = set(cfg.get('skip_nets', []))
     pnr.routerNets = list(range(num_nets))
     pnr.findOrigin(top_ckt_idx)
+    print(f"[pnr] gridStep={pnr.gridStep} nm, origin={pnr.origin}")
     if skip_nets:
         pnr.routerNets = [i for i in range(num_nets) if ckt.net(i).name not in skip_nets]
         print(f'[combined_helper] Skipping nets: {sorted(skip_nets)}')
@@ -476,7 +542,9 @@ def _run_net_helper(cfg_path: str, net_idx: int, out_gds: str) -> None:
         cfg = json.load(f)
 
     json_data = json.load(open(cfg['input_json']))
-    db, tDB, top_ckt_idx, _, _ = build_magical_db(json_data, cfg['simple_tech_file'])
+    db, tDB, top_ckt_idx, _, _ = build_magical_db(
+        json_data, cfg['simple_tech_file'],
+        enable_block_fr=cfg.get('enable_block_fr', True))
     params = _load_params(cfg)
 
     # Per-net width: power nets get power_width even though all nets are analog
@@ -490,6 +558,7 @@ def _run_net_helper(cfg_path: str, net_idx: int, out_gds: str) -> None:
 
     pnr.routerNets = list(range(ckt.numNets()))
     pnr.findOrigin(top_ckt_idx)
+    print(f"[pnr] gridStep={pnr.gridStep} nm, origin={pnr.origin}")
     adj_x = max(pnr.origin[0], pnr.gridStep * 10)
     adj_y = max(pnr.origin[1], pnr.gridStep * 10)
 
@@ -529,7 +598,8 @@ def _run_net_helper(cfg_path: str, net_idx: int, out_gds: str) -> None:
 def run_routing(db, tDB, top_ckt_idx: int, json_data: dict, output_dir: str,
                 params, mode: str,
                 signal_width_nm: int, power_width_nm: int,
-                input_json_path: str) -> tuple:
+                input_json_path: str,
+                enable_block_fr: bool = True) -> tuple:
     """
     Orchestrate ANAROUTE routing in combined or isolated mode.
 
@@ -571,6 +641,7 @@ def run_routing(db, tDB, top_ckt_idx: int, json_data: dict, output_dir: str,
         'signal_width_nm':  signal_width_nm,
         'power_width_nm':   power_width_nm,
         'power_net_ids':    power_net_ids,
+        'enable_block_fr':  enable_block_fr,
     }
 
     # Write routing config files required by dev_wmi
@@ -599,6 +670,7 @@ def run_routing(db, tDB, top_ckt_idx: int, json_data: dict, output_dir: str,
             proc = subprocess.run(
                 [sys.executable, this_script, '--route-mode', 'combined-helper', cfg_path],
                 timeout=900, capture_output=True, text=True,
+                cwd=dirname,  # Anaroute reads anaroute_logging.json from CWD
             )
             elapsed = time.time() - t0
             for line in (proc.stdout + proc.stderr).splitlines():
@@ -667,19 +739,11 @@ def run_routing(db, tDB, top_ckt_idx: int, json_data: dict, output_dir: str,
             [sys.executable, this_script, '--route-mode', 'net-helper',
              cfg_path, str(ni), out_gds],
             timeout=120, capture_output=True, text=True,
+            cwd=dirname,  # Anaroute reads anaroute_logging.json from CWD
         )
         if proc.returncode == 0 and os.path.exists(out_gds):
             return out_gds
-        # Retry: Anaroute may expand pins automatically; log and return failure
-        print(f"[transponder201] Net {net_name} failed (exit {proc.returncode}), "
-              f"retry with 2× pin expansion (Anaroute handles internally) ...")
-        proc2 = subprocess.run(
-            [sys.executable, this_script, '--route-mode', 'net-helper',
-             cfg_path, str(ni), out_gds],
-            timeout=120, capture_output=True, text=True,
-        )
-        if proc2.returncode == 0 and os.path.exists(out_gds):
-            return out_gds
+        print(f"[transponder201] Net {net_name} failed (exit {proc.returncode})")
         return None
 
     import gdspy as _gdspy
@@ -770,6 +834,7 @@ def _merge_skipped_nets_isolated(skip_list, base_cfg, dirname, ckt_name,
             [sys.executable, this_script, '--route-mode', 'net-helper',
              cfg_path, str(ni), out_gds],
             timeout=120, capture_output=True, text=True,
+            cwd=dirname,  # Anaroute reads anaroute_logging.json from CWD
         )
         if proc.returncode == 0 and os.path.exists(out_gds):
             net_shapes = _gds_shapes(out_gds)
@@ -983,6 +1048,13 @@ def main() -> None:
                         choices=['combined', 'isolated'])
     parser.add_argument('--signal-width-nm', type=int, default=200)
     parser.add_argument('--power-width-nm',  type=int, default=500)
+    _fr_group = parser.add_mutually_exclusive_group()
+    _fr_group.add_argument('--enable-block-fr',    dest='enable_block_fr',
+                           action='store_true',  default=True,
+                           help="Add OD blockage shapes so FR enforcement avoids block interiors")
+    _fr_group.add_argument('--no-enable-block-fr', dest='enable_block_fr',
+                           action='store_false',
+                           help="Disable OD blockage shapes (routing may pass through blocks)")
 
     args, extra = parser.parse_known_args()
 
@@ -1021,7 +1093,8 @@ def main() -> None:
             sys.exit(1)
 
     print(f"[transponder201] Building MagicalDB ...")
-    db, tDB, top_ckt_idx, _, _ = build_magical_db(json_data, simple_tech_file)
+    db, tDB, top_ckt_idx, _, _ = build_magical_db(
+        json_data, simple_tech_file, enable_block_fr=args.enable_block_fr)
 
     import Params as ParamsModule
     params = ParamsModule.Params()
@@ -1040,6 +1113,7 @@ def main() -> None:
         signal_width_nm=args.signal_width_nm,
         power_width_nm=args.power_width_nm,
         input_json_path=input_json,
+        enable_block_fr=args.enable_block_fr,
     )
     t_routing = time.time() - t0
 

@@ -13,9 +13,9 @@ from dataclasses import dataclass, field
 # CONSTANTS
 # =============================================================================
 _DEFAULT_AREA_WEIGHT   = 0.6
-_DEFAULT_WL_WEIGHT     = 0.1
-_DEFAULT_AR_WEIGHT     = 0.3
-_DEFAULT_TARGET_AR     = 1.0
+_DEFAULT_WL_WEIGHT     = 0.4
+_DEFAULT_AR_WEIGHT     = 0.0
+_DEFAULT_TARGET_AR     = 2.0
 
 _VDD_NET_IDS: frozenset[str] = frozenset({"VDD", "AVDD", "VCC", "VDDA"})
 _VSS_NET_IDS: frozenset[str] = frozenset({"VSS", "GND", "AGND", "VSSA"})

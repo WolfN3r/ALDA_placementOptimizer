@@ -89,6 +89,8 @@ python WorkDir/viewer/main.py \
 
 ### Run routing — Tools → Route Placement
 
+> **Warning:** Docker Desktop must be running before starting a simulation or routing. If the Docker engine is not started, the routing stage will fail with exit code 127. Start Docker Desktop from the Start Menu and wait until the whale icon in the system tray stops animating before proceeding.
+
 Requires the MAGICAL Docker image (`magical_szaboga1_dev_wmi:latest`) to be running locally.
 
 1. Load a placed py101 JSON.

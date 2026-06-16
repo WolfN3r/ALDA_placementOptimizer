@@ -73,7 +73,8 @@ def route(data: dict,
           output_format: str = OUTPUT_FORMAT,
           pdk_dir: str = PDK_DIR,
           output_dir: str | None = None,
-          container_name: str | None = None) -> dict:
+          container_name: str | None = None,
+          enable_block_fr: bool = True) -> dict:
     """
     Run Anaroute on the py101 placement and return py201 JSON.
 
@@ -101,6 +102,7 @@ def route(data: dict,
             power_width_nm   = power_width_nm,
             output_dir       = output_dir,
             container_name   = container_name,
+            enable_block_fr  = enable_block_fr,
         )
     except Exception as e:
         logger.error(f"MAGICAL routing failed: {e}")
@@ -125,6 +127,7 @@ def route(data: dict,
                 power_width_nm   = power_width_nm,
                 output_dir       = output_dir,
                 container_name   = container_name,
+                enable_block_fr  = enable_block_fr,
             )
             # Attach isolated segments to unrouted nets in route_data
             iso_by_id = {n['net_id']: n for n in iso_data.get('nets', [])}
