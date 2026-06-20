@@ -76,6 +76,51 @@ def _abbrev_run_id(run_id: str) -> str:
     return "+".join(dedup)
 
 
+def _get_block_symmetry_info(block_id: int, sc: dict) -> str:
+    """Return a multi-line string describing which symmetry groups block_id belongs to."""
+    if not sc:
+        return ""
+    lines: list[str] = []
+    for g in sc.get("groups", []):
+        cid = g.get("compound_id", "?")
+        tag = str(g.get("topology_tag", ""))
+        emv = bool(g.get("enforce_matching_variants", False))
+        tag_str = f"[{tag}]" if tag else "[—]"
+        # Check symmetric pairs
+        for p in g.get("pairs", []):
+            if isinstance(p, dict):
+                a, b = int(p["block_a"]), int(p["block_b"])
+            else:
+                a, b = int(p[0]), int(p[1])
+            if block_id == a:
+                lines.append(f"Group {cid} {tag_str}")
+                lines.append(f"  Pair with B{b}" + ("  [enforce variants]" if emv else ""))
+                break
+            elif block_id == b:
+                lines.append(f"Group {cid} {tag_str}")
+                lines.append(f"  Pair with B{a}" + ("  [enforce variants]" if emv else ""))
+                break
+        # Check self-symmetric
+        for s in g.get("self_symmetric", []):
+            if int(s) == block_id:
+                lines.append(f"Group {cid} {tag_str}")
+                lines.append(f"  Self-symmetric" + ("  [enforce variants]" if emv else ""))
+                break
+    for entry in sc.get("cascode_proximity_pairs", []):
+        u, l = int(entry[0]), int(entry[1])
+        if block_id == u:
+            lines.append(f"Cascode proximity: upper (B{l})")
+        elif block_id == l:
+            lines.append(f"Cascode proximity: lower (B{u})")
+    for entry in sc.get("tail_cm_pairs", []):
+        t, m = int(entry[0]), int(entry[1])
+        if block_id == t:
+            lines.append(f"Tail-CM: tail (of B{m})")
+        elif block_id == m:
+            lines.append(f"Tail-CM: mirror ref (of B{t})")
+    return "\n".join(lines)
+
+
 # -----------------------------------------------------------------------
 # Canvas view with pan/zoom and grid
 # -----------------------------------------------------------------------
@@ -964,6 +1009,15 @@ class BlockInfoPanel(QWidget):
         self._pins.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         layout.addWidget(self._pins)
 
+        layout.addWidget(_separator())
+
+        # --- Symmetry ---------------------------------------------------------
+        layout.addWidget(QLabel("<b>Symmetry</b>"))
+        self._sym_info = QLabel("—")
+        self._sym_info.setWordWrap(True)
+        self._sym_info.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        layout.addWidget(self._sym_info)
+
         layout.addStretch()
 
         self.setMinimumWidth(210)
@@ -988,6 +1042,8 @@ class BlockInfoPanel(QWidget):
             f"Power rail: {block.power_rail or '—'}",
         ]
         self._info.setText("\n".join(rows))
+        sym_text = _get_block_symmetry_info(block.block_id, data.symmetry_constraints)
+        self._sym_info.setText(sym_text if sym_text else "—")
 
         self._variant_combo.blockSignals(True)
         self._variant_combo.clear()
@@ -1046,8 +1102,11 @@ class BlockInfoPanel(QWidget):
 class PlacementInfoPanel(QWidget):
     """Shows optimization metrics and info for the block selected in the placement view."""
 
+    group_highlight_requested = pyqtSignal(list)  # emits list[int] of block IDs to highlight
+
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
+        self._sym_groups: list = []
         self._build_ui()
 
     def _build_ui(self) -> None:
@@ -1110,6 +1169,25 @@ class PlacementInfoPanel(QWidget):
 
         layout.addWidget(_separator())
 
+        # --- Symmetry groups -------------------------------------------------
+        sym_gb = QGroupBox("Symmetry Groups")
+        sym_layout = QVBoxLayout(sym_gb)
+        sym_layout.setContentsMargins(4, 4, 4, 4)
+        sym_layout.setSpacing(2)
+        self._sym_table = QTableWidget(0, 4)
+        self._sym_table.setHorizontalHeaderLabels(["ID", "Type", "Blocks", "Variants"])
+        self._sym_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self._sym_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self._sym_table.setAlternatingRowColors(True)
+        self._sym_table.verticalHeader().setVisible(False)
+        self._sym_table.setMaximumHeight(110)
+        self._sym_table.horizontalHeader().setStretchLastSection(True)
+        self._sym_table.itemSelectionChanged.connect(self._on_sym_group_selected)
+        sym_layout.addWidget(self._sym_table)
+        layout.addWidget(sym_gb)
+
+        layout.addWidget(_separator())
+
         # --- Selected block --------------------------------------------------
         sel_gb = QGroupBox("Selected Block")
         sel_layout = QVBoxLayout(sel_gb)
@@ -1145,6 +1223,19 @@ class PlacementInfoPanel(QWidget):
         self._sel_pins.setWordWrap(True)
         self._sel_pins.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         sel_layout.addWidget(self._sel_pins)
+
+        self._sel_sym_sep = _separator()
+        self._sel_sym_sep.setVisible(False)
+        sel_layout.addWidget(self._sel_sym_sep)
+
+        self._sel_sym_header = QLabel("<b>Symmetry</b>")
+        self._sel_sym_header.setVisible(False)
+        sel_layout.addWidget(self._sel_sym_header)
+
+        self._sel_sym_info = QLabel("")
+        self._sel_sym_info.setWordWrap(True)
+        self._sel_sym_info.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        sel_layout.addWidget(self._sel_sym_info)
 
         layout.addWidget(sel_gb)
         layout.addStretch()
@@ -1186,6 +1277,33 @@ class PlacementInfoPanel(QWidget):
             for col, val in enumerate(vals):
                 self._runs_table.setItem(row, col, QTableWidgetItem(val))
         self._runs_table.resizeColumnsToContents()
+
+    def update_symmetry_groups(self, groups: list) -> None:
+        """Populate the Topology Groups table from the top-level groups list."""
+        self._sym_groups = groups or []
+        self._sym_table.setRowCount(len(self._sym_groups))
+        for row, g in enumerate(self._sym_groups):
+            vals = [
+                str(g.get("group_id", "?")),
+                str(g.get("topology_type", "—")),
+                str(len(g.get("block_ids", []))),
+                str(len(g.get("matching_variants", []))),
+            ]
+            for col, val in enumerate(vals):
+                self._sym_table.setItem(row, col, QTableWidgetItem(val))
+        self._sym_table.resizeColumnsToContents()
+
+    def _on_sym_group_selected(self) -> None:
+        rows = {idx.row() for idx in self._sym_table.selectedIndexes()}
+        if not rows:
+            self.group_highlight_requested.emit([])
+            return
+        row = next(iter(rows))
+        if row >= len(self._sym_groups):
+            return
+        g = self._sym_groups[row]
+        block_ids = [int(bid) for bid in g.get("block_ids", [])]
+        self.group_highlight_requested.emit(block_ids)
 
     def update_selected_block(
         self, block: json_loader.Block, data: json_loader.PlacementData
@@ -1231,18 +1349,25 @@ class PlacementInfoPanel(QWidget):
                 lines.append(f"{pin.name} → —")
 
         self._sel_pins.setText("\n".join(lines) if lines else "—")
+        sym_text = _get_block_symmetry_info(block.block_id, data.symmetry_constraints)
+        self._sel_sym_info.setText(sym_text if sym_text else "—")
         self._sel_variant_sep.setVisible(True)
         self._sel_pins_sep.setVisible(True)
         self._sel_pins_header.setVisible(True)
+        self._sel_sym_sep.setVisible(True)
+        self._sel_sym_header.setVisible(True)
 
     def clear_selection(self) -> None:
         self._sel_title.setText("<i>Click a block in the view</i>")
         self._sel_info.setText("")
         self._sel_variant.setText("")
         self._sel_pins.setText("")
+        self._sel_sym_info.setText("")
         self._sel_variant_sep.setVisible(False)
         self._sel_pins_sep.setVisible(False)
         self._sel_pins_header.setVisible(False)
+        self._sel_sym_sep.setVisible(False)
+        self._sel_sym_header.setVisible(False)
 
 
 # -----------------------------------------------------------------------
@@ -1842,7 +1967,13 @@ class MainWindow(QMainWindow):
             self._tabs.addTab(pv, "Placement")
             pv.fit()
             self._placement_info_panel.update_placement(data)
+            self._placement_info_panel.update_symmetry_groups(data.groups)
             self._placement_info_panel.clear_selection()
+            try:
+                self._placement_info_panel.group_highlight_requested.disconnect()
+            except (RuntimeError, TypeError):
+                pass
+            self._placement_info_panel.group_highlight_requested.connect(ps.highlight_group_blocks)
             self._right_stack.setCurrentIndex(1)
 
         else:

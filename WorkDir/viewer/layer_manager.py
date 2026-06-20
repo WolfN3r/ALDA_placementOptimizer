@@ -3,6 +3,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from PyQt6.QtGui import QColor
 
+# Maps topology_tag strings (from symmetry_detector) → layer key
+_TAG_TO_LAYER: dict[str, str] = {
+    "diff_pair":              "sym_diff_pair",
+    "current_mirror":         "sym_current_mirror",
+    "cascode_current_mirror": "sym_cascode",
+    "passive":                "sym_passive",
+    "tail_transistor":        "sym_tail",
+}
+
 
 @dataclass
 class LayerDef:
@@ -43,6 +52,13 @@ class LayerManager:
         ("net_routes",  "Route segments (py201)",     100, 200, 255),
         ("labels",      "Labels",                     255, 255, 100),
         ("symmetry",    "Symmetry pairs",             255, 150, 255),
+        ("sym_diff_pair",      "Symmetry: Diff pairs",        58, 126, 191),
+        ("sym_current_mirror", "Symmetry: Current mirrors",   58, 140,  58),
+        ("sym_cascode",        "Symmetry: Cascode mirrors",  123,  58, 191),
+        ("sym_passive",        "Symmetry: Passives",         122, 122, 122),
+        ("sym_tail",           "Symmetry: Tail transistors", 191, 123,  58),
+        ("sym_cascode_prox",   "Symmetry: Cascode proximity",191,  58, 140),
+        ("sym_tail_cm",        "Symmetry: Tail-CM pairs",     58, 191, 191),
         ("drc_overlay", "DRC violations",             255, 100, 100),
     ]
 
@@ -110,6 +126,14 @@ class LayerManager:
 
     def set_device_border(self, device_type: str, r: int, g: int, b: int) -> None:
         self._device_border[device_type] = (r, g, b)
+
+    def topology_layer_key(self, tag: str) -> str:
+        """Return the layer key for a topology_tag string (fallback: 'symmetry')."""
+        return _TAG_TO_LAYER.get(tag, "symmetry")
+
+    def topology_tag_color(self, tag: str) -> QColor:
+        """Return the QColor for a topology_tag string (fallback: symmetry layer color)."""
+        return self._layers[_TAG_TO_LAYER.get(tag, "symmetry")].color
 
     def device_types(self) -> list[str]:
         return list(_DEVICE_FILL_DEFAULTS.keys())

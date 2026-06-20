@@ -51,6 +51,10 @@ class PlacementScene(QGraphicsScene):
         self._block_rects: dict[int, QGraphicsRectItem] = {}
         self._route_items_by_net: dict[str, list] = {}
         self._highlighted_net: str | None = None
+        self._highlighted_group: set[int] = set()
+        # Flat lookup: maps every block ID (including sub_blocks) to its PlacedBlockInfo.
+        # Used by symmetry / cascode / tail drawing methods that need individual device positions.
+        self._flat_pb: dict[int, object] = {}
 
         pr = data.placement_result
         if pr and pr.placed_blocks:
@@ -74,8 +78,27 @@ class PlacementScene(QGraphicsScene):
 
     # ---- build scene --------------------------------------------------------
 
+    # Topology fill / border colors for composite group outlines
+    _COMPOSITE_FILLS: dict[str, tuple[int, int, int]] = {
+        "diff_pair":              (40, 120,  40),
+        "current_mirror":         (40,  80, 160),
+        "cascode_current_mirror": (100, 40, 140),
+        "tail_cm_pair":           (160,  90,  30),
+    }
+
     def _build(self, pr: PlacementResult) -> None:
+        from json_loader import _COMPOSITE_ID_BASE
+
         x_max = max(pb.main_bbox[2] for pb in pr.placed_blocks.values())
+
+        # Build flat lookup: includes top-level ungrouped blocks + all sub_blocks.
+        # Used by symmetry / cascode / tail drawing methods that reference original IDs.
+        self._flat_pb = {}
+        for bid, pb in pr.placed_blocks.items():
+            self._flat_pb[bid] = pb
+            if pb.is_composite:
+                for mbid, mpb in pb.sub_blocks.items():
+                    self._flat_pb[mbid] = mpb
 
         # Chip-level power rails (drawn first so blocks render on top)
         self._build_chip_rails(pr)
@@ -87,90 +110,153 @@ class PlacementScene(QGraphicsScene):
         self._add(outline, "annotation")
 
         for bid, pb in pr.placed_blocks.items():
-            block = self._data.block_by_id(bid)
-            x0, y0, x1, y1 = pb.main_bbox
-            w, h = x1 - x0, y1 - y0
-            sx = x0
-            sy = self._sy(y1)   # scene top = JSON y_max (flipped)
-
-            # Block fill rectangle
-            rect = QGraphicsRectItem(sx, sy, w, h)
-            fill   = self._lm.block_fill(block.device_type)   if block else QColor(80, 80, 120)
-            border = self._lm.block_border(block.device_type) if block else QColor(120, 120, 200)
-            rect.setBrush(QBrush(fill))
-            rect.setPen(_pen(border, self._lm.border_width))
-            rect.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable)
-            rect.setData(0, bid)
-            self._add(rect, "annotation")
-            self._block_rects[bid] = rect
-
-            # Block label
-            lbl = QGraphicsTextItem(f"B{bid}")
-            f = QFont("Monospace")
-            f.setPointSizeF(max(min(w, h) * 0.18, 0.25))
-            lbl.setFont(f)
-            lbl.setDefaultTextColor(QColor(220, 220, 220))
-            br = lbl.boundingRect()
-            lbl.setPos(sx + w / 2 - br.width() / 2, sy + h / 2 - br.height() / 2)
-            self._add(lbl, "labels")
-
-            # Pin shapes — rectangle (new format) or dot fallback (old format)
-            DOT_R = max(w, h) * 0.03
-            for pname, pdata in pb.pins.items():
-                if "x_min" in pdata:
-                    # New M1 rectangle format
-                    rx0 = float(pdata["x_min"])
-                    rx1 = float(pdata["x_max"])
-                    ry0 = float(pdata["y_min"])
-                    ry1 = float(pdata["y_max"])
-                    pin_type = pdata.get("type", "signal")
-                    if pin_type == "power":
-                        side = pdata.get("side", "top")
-                        col = _POWER_COLORS.get("VDD" if side == "top" else "VSS", QColor(220, 100, 100))
-                    else:
-                        col = _SIGNAL_COLOR
-                    fill = QColor(col.red(), col.green(), col.blue(), 90)
-                    scene_top = self._sy(ry1)   # JSON y_max → scene top (Y-flip)
-                    pin_item = QGraphicsRectItem(rx0, scene_top, rx1 - rx0, ry1 - ry0)
-                    pin_item.setPen(_pen(col, 0.02))
-                    pin_item.setBrush(QBrush(fill))
-                    net_name = pdata.get("net", "")
-                    if net_name:
-                        pin_item.setToolTip(f"{pname}: {net_name}")
-                    self._add(pin_item, "annotation")
-                else:
-                    # Old center-point format — dot fallback
-                    px = float(pdata.get("x", 0.0))
-                    py = float(pdata.get("y", 0.0))
-                    dot = QGraphicsEllipseItem(
-                        px - DOT_R, self._sy(py) - DOT_R, 2 * DOT_R, 2 * DOT_R
-                    )
-                    dot.setBrush(QBrush(QColor(255, 200, 50)))
-                    dot.setPen(QPen(Qt.PenStyle.NoPen))
-                    self._add(dot, "annotation")
+            if pb.is_composite:
+                self._draw_composite_block(bid, pb)
+            else:
+                self._draw_regular_block(bid, pb)
 
         self._build_nets(pr)
         self._build_routes(pr)
         self._build_symmetry(pr, x_max)
+        self._build_cascode_proximity_pairs(pr)
+        self._build_tail_cm_pairs(pr)
+        self._build_passive_clusters(pr)
+
+    def _draw_regular_block(self, bid: int, pb) -> None:
+        """Draw one ungrouped device block."""
+        block = self._data.block_by_id(bid)
+        x0, y0, x1, y1 = pb.main_bbox
+        w, h = x1 - x0, y1 - y0
+        sx, sy = x0, self._sy(y1)
+
+        rect = QGraphicsRectItem(sx, sy, w, h)
+        fill   = self._lm.block_fill(block.device_type)   if block else QColor(80, 80, 120)
+        border = self._lm.block_border(block.device_type) if block else QColor(120, 120, 200)
+        rect.setBrush(QBrush(fill))
+        rect.setPen(_pen(border, self._lm.border_width))
+        rect.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable)
+        rect.setData(0, bid)
+        self._add(rect, "annotation")
+        self._block_rects[bid] = rect
+
+        lbl = QGraphicsTextItem(f"B{bid}")
+        f = QFont("Monospace")
+        f.setPointSizeF(max(min(w, h) * 0.18, 0.25))
+        lbl.setFont(f)
+        lbl.setDefaultTextColor(QColor(220, 220, 220))
+        br = lbl.boundingRect()
+        lbl.setPos(sx + w / 2 - br.width() / 2, sy + h / 2 - br.height() / 2)
+        self._add(lbl, "labels")
+
+        DOT_R = max(w, h) * 0.03
+        for pname, pdata in pb.pins.items():
+            self._draw_pin(pname, pdata, DOT_R)
+
+    def _draw_composite_block(self, bid: int, pb) -> None:
+        """Draw a composite group block: outer bbox + sub_block outlines inside."""
+        x0, y0, x1, y1 = pb.main_bbox
+        w, h = x1 - x0, y1 - y0
+        sx, sy = x0, self._sy(y1)
+
+        ttype = pb.topology_type
+        r, g, b = self._COMPOSITE_FILLS.get(ttype, (60, 60, 60))
+        fill_color   = QColor(r, g, b, 60)    # semi-transparent fill
+        border_color = QColor(r, g, b).lighter(140)
+
+        # Outer composite rectangle
+        comp_rect = QGraphicsRectItem(sx, sy, w, h)
+        comp_rect.setBrush(QBrush(fill_color))
+        border_pen = _pen(border_color, self._lm.border_width * 2.5)
+        border_pen.setStyle(Qt.PenStyle.DashLine)
+        comp_rect.setPen(border_pen)
+        comp_rect.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable)
+        comp_rect.setData(0, bid)
+        self._add(comp_rect, "annotation")
+        self._block_rects[bid] = comp_rect
+
+        # Topology type label in the top-left corner of the composite
+        lbl = QGraphicsTextItem(ttype.replace("_", " "))
+        f = QFont("Monospace")
+        f.setPointSizeF(max(min(w, h) * 0.10, 0.20))
+        lbl.setFont(f)
+        lbl.setDefaultTextColor(border_color)
+        lbl.setPos(sx + 0.1, sy + 0.1)
+        self._add(lbl, "labels")
+
+        # Group-level pins (M1 rectangles placed on the composite outer bbox)
+        DOT_R = max(w, h) * 0.03
+        for pname, pdata in pb.pins.items():
+            self._draw_pin(pname, pdata, DOT_R)
+
+        # Sub-block outlines with device-type fill
+        for mbid, mpb in pb.sub_blocks.items():
+            member_block = self._data.block_by_id(mbid)
+            mx0, my0, mx1, my1 = mpb.main_bbox
+            mw, mh = mx1 - mx0, my1 - my0
+            msx, msy = mx0, self._sy(my1)
+
+            sub_rect = QGraphicsRectItem(msx, msy, mw, mh)
+            mfill   = self._lm.block_fill(member_block.device_type)   if member_block else QColor(80, 80, 120)
+            mborder = self._lm.block_border(member_block.device_type) if member_block else QColor(120, 120, 200)
+            sub_rect.setBrush(QBrush(mfill))
+            sub_rect.setPen(_pen(mborder, self._lm.border_width))
+            sub_rect.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable)
+            sub_rect.setData(0, mbid)
+            self._add(sub_rect, "annotation")
+            self._block_rects[mbid] = sub_rect
+
+            mlbl = QGraphicsTextItem(f"B{mbid}")
+            mf = QFont("Monospace")
+            mf.setPointSizeF(max(min(mw, mh) * 0.18, 0.25))
+            mlbl.setFont(mf)
+            mlbl.setDefaultTextColor(QColor(220, 220, 220))
+            mbr = mlbl.boundingRect()
+            mlbl.setPos(msx + mw / 2 - mbr.width() / 2, msy + mh / 2 - mbr.height() / 2)
+            self._add(mlbl, "labels")
+
+    def _draw_pin(self, pname: str, pdata: dict, dot_r: float) -> None:
+        """Draw a single pin shape (M1 rectangle or dot fallback)."""
+        if "x_min" in pdata:
+            rx0 = float(pdata["x_min"])
+            rx1 = float(pdata["x_max"])
+            ry0 = float(pdata["y_min"])
+            ry1 = float(pdata["y_max"])
+            pin_type = pdata.get("type", "signal")
+            if pin_type == "power":
+                side = pdata.get("side", "top")
+                col = _POWER_COLORS.get("VDD" if side == "top" else "VSS", QColor(220, 100, 100))
+            else:
+                col = _SIGNAL_COLOR
+            fill = QColor(col.red(), col.green(), col.blue(), 90)
+            scene_top = self._sy(ry1)
+            pin_item = QGraphicsRectItem(rx0, scene_top, rx1 - rx0, ry1 - ry0)
+            pin_item.setPen(_pen(col, 0.02))
+            pin_item.setBrush(QBrush(fill))
+            net_name = pdata.get("net", "")
+            if net_name:
+                pin_item.setToolTip(f"{pname}: {net_name}")
+            self._add(pin_item, "annotation")
+        else:
+            px = float(pdata.get("x", 0.0))
+            py = float(pdata.get("y", 0.0))
+            dot = QGraphicsEllipseItem(px - dot_r, self._sy(py) - dot_r, 2 * dot_r, 2 * dot_r)
+            dot.setBrush(QBrush(QColor(255, 200, 50)))
+            dot.setPen(QPen(Qt.PenStyle.NoPen))
+            self._add(dot, "annotation")
 
     def _build_symmetry(self, pr: PlacementResult, x_max: float) -> None:
         sc = self._data.symmetry_constraints
         if not sc:
             return
 
-        color = self._lm.layer("symmetry").color
-        all_self_sym: list[int] = []
-
-        axis_pen = QPen(color)
-        axis_pen.setCosmetic(True)
-        axis_pen.setWidthF(1.5)
-        axis_pen.setStyle(Qt.PenStyle.DashLine)
-
-        pair_pen = QPen(color)
-        pair_pen.setCosmetic(True)
-        pair_pen.setWidthF(1.0)
+        # (block_id, layer_key, color) collected for end-of-loop self-sym rendering
+        self_sym_entries: list[tuple[int, str, QColor]] = []
 
         for g in sc.get("groups", []):
+            tag = str(g.get("topology_tag", ""))
+            layer_key = self._lm.topology_layer_key(tag)
+            color = self._lm.topology_tag_color(tag)
+
             # Normalise pair format: old=[{"block_a":a,"block_b":b}], new=[[a,b]]
             group_pairs: list[tuple[int, int]] = []
             for p in g.get("pairs", []):
@@ -179,46 +265,67 @@ class PlacementScene(QGraphicsScene):
                 else:
                     group_pairs.append((int(p[0]), int(p[1])))
 
+            # Collect self-sym before the placed-pair guard so they always render
             for s in g.get("self_symmetric", []):
-                all_self_sym.append(int(s))
+                self_sym_entries.append((int(s), layer_key, color))
 
-            # Axis position derived from this group's pairs only (each group is independent)
+            # Axis position derived from this group's pairs only
             global_axis = sc.get("symmetry_axis", "vertical")
             axis_dir = g.get("axis", global_axis)
             placed = [(a, b) for a, b in group_pairs
-                      if a in pr.placed_blocks and b in pr.placed_blocks]
+                      if a in self._flat_pb and b in self._flat_pb]
             if not placed:
                 continue
 
+            axis_pen = QPen(color)
+            axis_pen.setCosmetic(True)
+            axis_pen.setWidthF(1.5)
+            axis_pen.setStyle(Qt.PenStyle.DashLine)
+
             if axis_dir == "horizontal":
-                # Horizontal axis: midpoint in Y (JSON Y-up → scene Y-down via _sy)
                 midpoints = [
-                    (self._sy((pr.placed_blocks[a].main_bbox[1] + pr.placed_blocks[a].main_bbox[3]) / 2)
-                     + self._sy((pr.placed_blocks[b].main_bbox[1] + pr.placed_blocks[b].main_bbox[3]) / 2)) / 2
+                    (self._sy((self._flat_pb[a].main_bbox[1] + self._flat_pb[a].main_bbox[3]) / 2)
+                     + self._sy((self._flat_pb[b].main_bbox[1] + self._flat_pb[b].main_bbox[3]) / 2)) / 2
                     for a, b in placed
                 ]
                 axis_pos = sum(midpoints) / len(midpoints)
                 axis_line = QGraphicsLineItem(0, axis_pos, x_max, axis_pos)
             else:
-                # Vertical axis: midpoint in X
                 midpoints = [
-                    ((pr.placed_blocks[a].main_bbox[0] + pr.placed_blocks[a].main_bbox[2]) / 2
-                     + (pr.placed_blocks[b].main_bbox[0] + pr.placed_blocks[b].main_bbox[2]) / 2) / 2
+                    ((self._flat_pb[a].main_bbox[0] + self._flat_pb[a].main_bbox[2]) / 2
+                     + (self._flat_pb[b].main_bbox[0] + self._flat_pb[b].main_bbox[2]) / 2) / 2
                     for a, b in placed
                 ]
                 axis_pos = sum(midpoints) / len(midpoints)
                 axis_line = QGraphicsLineItem(axis_pos, 0, axis_pos, self._H)
 
-            # One dashed axis line per group
             axis_line.setPen(axis_pen)
             axis_line.setZValue(50)
-            self._add(axis_line, "symmetry")
+            self._add(axis_line, layer_key)
+
+            # Topology tag label on the axis line
+            if tag:
+                lbl = QGraphicsTextItem(tag.replace("_", " "))
+                f = QFont("Monospace")
+                f.setPointSizeF(0.3)
+                lbl.setFont(f)
+                lbl.setDefaultTextColor(color)
+                lbl.setZValue(55)
+                br = lbl.boundingRect()
+                if axis_dir == "horizontal":
+                    lbl.setPos(x_max * 0.02, axis_pos - br.height() - 0.05)
+                else:
+                    lbl.setPos(axis_pos + 0.05, self._H * 0.02)
+                self._add(lbl, layer_key)
 
             # Center-to-center connector for each pair in this group
+            pair_pen = QPen(color)
+            pair_pen.setCosmetic(True)
+            pair_pen.setWidthF(1.0)
             for a, b in group_pairs:
-                if a not in pr.placed_blocks or b not in pr.placed_blocks:
+                if a not in self._flat_pb or b not in self._flat_pb:
                     continue
-                ba, bb = pr.placed_blocks[a].main_bbox, pr.placed_blocks[b].main_bbox
+                ba, bb = self._flat_pb[a].main_bbox, self._flat_pb[b].main_bbox
                 cx_a = (ba[0] + ba[2]) / 2
                 cy_a = self._sy((ba[1] + ba[3]) / 2)
                 cx_b = (bb[0] + bb[2]) / 2
@@ -226,16 +333,16 @@ class PlacementScene(QGraphicsScene):
                 line = QGraphicsLineItem(cx_a, cy_a, cx_b, cy_b)
                 line.setPen(pair_pen)
                 line.setZValue(50)
-                self._add(line, "symmetry")
+                self._add(line, layer_key)
 
         # Self-symmetric block markers — × cross at block center
-        cross_pen = QPen(color)
-        cross_pen.setCosmetic(True)
-        cross_pen.setWidthF(1.2)
-        for s in all_self_sym:
-            if s not in pr.placed_blocks:
+        for s, layer_key, color in self_sym_entries:
+            if s not in self._flat_pb:
                 continue
-            bb = pr.placed_blocks[s].main_bbox
+            cross_pen = QPen(color)
+            cross_pen.setCosmetic(True)
+            cross_pen.setWidthF(1.2)
+            bb = self._flat_pb[s].main_bbox
             cx = (bb[0] + bb[2]) / 2
             cy = self._sy((bb[1] + bb[3]) / 2)
             arm = min(bb[2] - bb[0], bb[3] - bb[1]) * 0.18
@@ -243,7 +350,126 @@ class PlacementScene(QGraphicsScene):
                 c = QGraphicsLineItem(cx + dx, cy + dy, cx + ex, cy + ey)
                 c.setPen(cross_pen)
                 c.setZValue(50)
-                self._add(c, "symmetry")
+                self._add(c, layer_key)
+
+    def _build_cascode_proximity_pairs(self, pr: PlacementResult) -> None:
+        """Draw vertical connector + midpoint dot for each cascode-stacked device pair."""
+        sc = self._data.symmetry_constraints
+        pairs = sc.get("cascode_proximity_pairs", []) if sc else []
+        if not pairs:
+            return
+        color = self._lm.layer("sym_cascode_prox").color
+        pen = QPen(color)
+        pen.setCosmetic(True)
+        pen.setWidthF(1.5)
+        for entry in pairs:
+            upper_id, lower_id = int(entry[0]), int(entry[1])
+            if upper_id not in self._flat_pb or lower_id not in self._flat_pb:
+                continue
+            bu = self._flat_pb[upper_id].main_bbox
+            bl = self._flat_pb[lower_id].main_bbox
+            cx_u = (bu[0] + bu[2]) / 2
+            cy_u = self._sy((bu[1] + bu[3]) / 2)
+            cx_l = (bl[0] + bl[2]) / 2
+            cy_l = self._sy((bl[1] + bl[3]) / 2)
+            line = QGraphicsLineItem(cx_u, cy_u, cx_l, cy_l)
+            line.setPen(pen)
+            line.setZValue(51)
+            self._add(line, "sym_cascode_prox")
+            arm = 0.25
+            dot = QGraphicsEllipseItem(
+                (cx_u + cx_l) / 2 - arm,
+                (cy_u + cy_l) / 2 - arm,
+                2 * arm, 2 * arm,
+            )
+            dot.setPen(_pen(color, 0.03))
+            dot.setBrush(QBrush(color))
+            dot.setZValue(52)
+            self._add(dot, "sym_cascode_prox")
+
+    def _build_tail_cm_pairs(self, pr: PlacementResult) -> None:
+        """Draw dashed connector + 'T' label for each tail-transistor / CM-ref pair."""
+        sc = self._data.symmetry_constraints
+        pairs = sc.get("tail_cm_pairs", []) if sc else []
+        if not pairs:
+            return
+        color = self._lm.layer("sym_tail_cm").color
+        pen = QPen(color)
+        pen.setCosmetic(True)
+        pen.setWidthF(1.2)
+        pen.setStyle(Qt.PenStyle.DashDotLine)
+        for entry in pairs:
+            tail_id, mirror_id = int(entry[0]), int(entry[1])
+            if tail_id not in self._flat_pb or mirror_id not in self._flat_pb:
+                continue
+            bt = self._flat_pb[tail_id].main_bbox
+            bm = self._flat_pb[mirror_id].main_bbox
+            cx_t = (bt[0] + bt[2]) / 2
+            cy_t = self._sy((bt[1] + bt[3]) / 2)
+            cx_m = (bm[0] + bm[2]) / 2
+            cy_m = self._sy((bm[1] + bm[3]) / 2)
+            line = QGraphicsLineItem(cx_t, cy_t, cx_m, cy_m)
+            line.setPen(pen)
+            line.setZValue(51)
+            self._add(line, "sym_tail_cm")
+            lbl = QGraphicsTextItem("T")
+            f = QFont("Monospace")
+            f.setPointSizeF(0.3)
+            f.setBold(True)
+            lbl.setFont(f)
+            lbl.setDefaultTextColor(color)
+            lbl.setZValue(55)
+            br = lbl.boundingRect()
+            lbl.setPos(cx_t - br.width() / 2, cy_t - br.height() / 2)
+            self._add(lbl, "sym_tail_cm")
+
+    def _build_passive_clusters(self, pr: PlacementResult) -> None:
+        """Draw semi-transparent bounding rect over each passive device cluster."""
+        sc = self._data.symmetry_constraints
+        clusters = sc.get("passive_clusters", []) if sc else []
+        if not clusters:
+            return
+        color = self._lm.layer("sym_passive").color
+        fill = QColor(color.red(), color.green(), color.blue(), 30)
+        pen = QPen(color)
+        pen.setCosmetic(True)
+        pen.setWidthF(1.0)
+        pen.setStyle(Qt.PenStyle.DashLine)
+        for cluster in clusters:
+            members = [int(m) for m in cluster.get("members", [])]
+            placed = [m for m in members if m in self._flat_pb]
+            if not placed:
+                continue
+            PAD = 0.15
+            x0 = min(self._flat_pb[m].main_bbox[0] for m in placed) - PAD
+            y1j = max(self._flat_pb[m].main_bbox[3] for m in placed) + PAD
+            x1 = max(self._flat_pb[m].main_bbox[2] for m in placed) + PAD
+            y0j = min(self._flat_pb[m].main_bbox[1] for m in placed) - PAD
+            rect = QGraphicsRectItem(x0, self._sy(y1j), x1 - x0, y1j - y0j)
+            rect.setPen(pen)
+            rect.setBrush(QBrush(fill))
+            rect.setZValue(15)
+            self._add(rect, "sym_passive")
+
+    # ---- group highlight API -------------------------------------------------
+
+    def highlight_group_blocks(self, block_ids: list[int]) -> None:
+        """Highlight a set of blocks with a bright border; call with [] to clear."""
+        self.clear_group_highlight()
+        for bid in block_ids:
+            rect = self._block_rects.get(bid)
+            if rect:
+                rect.setPen(_pen(QColor(255, 230, 50), 0.2))
+                self._highlighted_group.add(bid)
+
+    def clear_group_highlight(self) -> None:
+        for bid in self._highlighted_group:
+            rect = self._block_rects.get(bid)
+            if rect:
+                block = self._data.block_by_id(bid)
+                border = self._lm.block_border(block.device_type) if block else QColor(120, 120, 200)
+                rect.setPen(_pen(border, self._lm.border_width))
+        self._highlighted_group.clear()
 
     def _build_chip_rails(self, pr: PlacementResult) -> None:
         """Render chip-level VDD/VSS power rail rectangles outside the placement."""
@@ -355,8 +581,8 @@ class PlacementScene(QGraphicsScene):
                 parts = pin_ref.split("_", 1)
                 bid   = int(parts[0][1:])
                 pname = parts[1]
-                if bid in pr.placed_blocks:
-                    pb_pins = pr.placed_blocks[bid].pins
+                if bid in self._flat_pb:
+                    pb_pins = self._flat_pb[bid].pins
                     if pname in pb_pins:
                         pdata = pb_pins[pname]
                         if "x_min" in pdata:

@@ -1,0 +1,16 @@
+{
+  "enabled_pairs": [
+    [
+      "ILPTopology",
+      "ILPOptimizer"
+    ],
+    [
+      "ILPTopology",
+      "PSOILPOptimizer"
+    ],
+    [
+      "ILPTopology",
+      "BStarILPOptimizer"
+    ]
+  ]
+}

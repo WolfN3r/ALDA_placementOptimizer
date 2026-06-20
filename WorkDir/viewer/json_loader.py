@@ -43,11 +43,20 @@ class Net:
     route_status: str = ""  # "routed" | "unrouted" | ""
 
 
+_COMPOSITE_ID_BASE = 10_000  # block_id threshold: IDs >= this value are composite group blocks
+
+
 @dataclass
 class PlacedBlockInfo:
     block_id: int
     main_bbox: tuple[float, float, float, float]   # x_min, y_min, x_max, y_max (absolute)
     pins: dict[str, dict]   # pin_name -> {x,y} (old) or {layer,side,x_min,y_min,x_max,y_max} (new)
+    # Composite group fields — populated only when block_id >= _COMPOSITE_ID_BASE
+    is_composite: bool = False
+    group_id: int = 0
+    topology_type: str = ""
+    matching_variant: dict = field(default_factory=dict)
+    sub_blocks: dict = field(default_factory=dict)   # str(member_bid) -> PlacedBlockInfo
 
 
 @dataclass
@@ -75,7 +84,8 @@ class PlacementData:
     technology: str
     blocks: list[Block]
     nets: list[Net]
-    symmetry_constraints: dict
+    symmetry_constraints: dict  # keys: groups, passive_clusters, symmetric_net_pairs, self_symmetric_nets, cascode_proximity_pairs, tail_cm_pairs, compound_blocks
+    groups: list  # hierarchy groups from py011/py101 JSON top-level groups[] key
     has_placement: bool
     placement_result: PlacementResult | None = None
     placement_mode: str = ""
@@ -111,6 +121,25 @@ def _extract_chip_rails(pb_raw: dict) -> list[dict]:
     ]
 
 
+def _parse_pins(raw_pins: dict) -> dict[str, dict]:
+    pins: dict[str, dict] = {}
+    for pname, ppos in raw_pins.items():
+        if isinstance(ppos, dict):
+            if "x_min" in ppos:
+                pins[pname] = {k: (float(v) if isinstance(v, (int, float)) else v) for k, v in ppos.items()}
+            else:
+                pins[pname] = {"x": float(ppos["x"]), "y": float(ppos["y"])}
+        else:
+            pins[pname] = {"x": float(ppos[0]), "y": float(ppos[1])}
+    return pins
+
+
+def _parse_bbox(b) -> tuple[float, float, float, float]:
+    if isinstance(b, dict):
+        return (float(b["x_min"]), float(b["y_min"]), float(b["x_max"]), float(b["y_max"]))
+    return (float(b[0]), float(b[1]), float(b[2]), float(b[3]))
+
+
 def _parse_placed_blocks(pb_raw: dict) -> dict[int, PlacedBlockInfo]:
     placed_blocks: dict[int, PlacedBlockInfo] = {}
     for bid_str, pb in pb_raw.items():
@@ -120,27 +149,35 @@ def _parse_placed_blocks(pb_raw: dict) -> dict[int, PlacedBlockInfo]:
             bid = int(bid_str)
         except ValueError:
             continue
-        b = pb["main_bbox"]
-        if isinstance(b, dict):
-            bbox = (float(b["x_min"]), float(b["y_min"]), float(b["x_max"]), float(b["y_max"]))
+        bbox = _parse_bbox(pb["main_bbox"])
+        pins = _parse_pins(pb.get("pins", {}))
+
+        if bid >= _COMPOSITE_ID_BASE:
+            # Composite group block — parse sub_blocks and group metadata
+            raw_sub = pb.get("sub_blocks", {})
+            sub: dict[int, PlacedBlockInfo] = {}
+            for mbid_str, mpb in raw_sub.items():
+                try:
+                    mbid = int(mbid_str)
+                except ValueError:
+                    continue
+                sub[mbid] = PlacedBlockInfo(
+                    block_id=mbid,
+                    main_bbox=_parse_bbox(mpb["main_bbox"]),
+                    pins=_parse_pins(mpb.get("pins", {})),
+                )
+            placed_blocks[bid] = PlacedBlockInfo(
+                block_id=bid,
+                main_bbox=bbox,
+                pins=pins,
+                is_composite=True,
+                group_id=int(pb.get("group_id", bid - _COMPOSITE_ID_BASE)),
+                topology_type=str(pb.get("topology_type", "")),
+                matching_variant=dict(pb.get("matching_variant", {})),
+                sub_blocks=sub,
+            )
         else:
-            bbox = (float(b[0]), float(b[1]), float(b[2]), float(b[3]))
-        pins: dict[str, dict] = {}
-        for pname, ppos in pb.get("pins", {}).items():
-            if isinstance(ppos, dict):
-                if "x_min" in ppos:
-                    # New rectangle format — store as-is, coerce numeric values
-                    pins[pname] = {
-                        k: (float(v) if isinstance(v, (int, float)) else v)
-                        for k, v in ppos.items()
-                    }
-                else:
-                    # Old center-point format
-                    pins[pname] = {"x": float(ppos["x"]), "y": float(ppos["y"])}
-            else:
-                # List / tuple format
-                pins[pname] = {"x": float(ppos[0]), "y": float(ppos[1])}
-        placed_blocks[bid] = PlacedBlockInfo(block_id=bid, main_bbox=bbox, pins=pins)
+            placed_blocks[bid] = PlacedBlockInfo(block_id=bid, main_bbox=bbox, pins=pins)
     return placed_blocks
 
 
@@ -275,6 +312,7 @@ def load(path: str | Path) -> PlacementData:
         blocks=blocks,
         nets=nets,
         symmetry_constraints=raw.get("symmetry_constraints", {}),
+        groups=list(raw.get("groups", [])),
         has_placement=has_placement,
         placement_result=placement_result,
         placement_mode=placement_mode,
