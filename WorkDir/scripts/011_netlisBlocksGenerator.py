@@ -22,8 +22,9 @@ from collections import OrderedDict, defaultdict
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent / "lib"))
-from log_setup import get_logger
+from log_setup        import get_logger
 from symmetry_detector import detect_symmetries, find_passive_arrays
+from hierarchy_builder import build_groups
 
 # =============================================================================
 # 2. CONSTANTS
@@ -514,6 +515,8 @@ def wmi_generate_netlist_blocks(
                     "variants":            copy.deepcopy(ab["variants"]),
                     "num_pins":            ab["num_pins"],
                     "generation_attempts": 1,
+                    "unit_cell_w":         ab.get("unit_cell_w", 0.0),
+                    "unit_cell_h":         ab.get("unit_cell_h", 0.0),
                 }
             else:
                 block = {
@@ -568,6 +571,7 @@ def wmi_generate_netlist_blocks(
                     )
                     if tb["variants"]:
                         g01.append_rotation_90(tb["variants"], rot_cfg, grid)
+                        uw, uh = g01.compute_unit_cell_bbox(tech_file, W, L, NF)
                         block = {
                             "device_type":         tb["device_type"],
                             "block_id":            bid,
@@ -577,9 +581,11 @@ def wmi_generate_netlist_blocks(
                             "variants":            tb["variants"],
                             "num_pins":            num_pins,
                             "generation_attempts": attempt + 1,
+                            "unit_cell_w":         uw,
+                            "unit_cell_h":         uh,
                         }
-                        logger.debug("Block %d (%s): %d variant(s)", bid, pdk_type,
-                                     len(block["variants"]))
+                        logger.debug("Block %d (%s): %d variant(s)  unit_cell=%.3f×%.3f",
+                                     bid, pdk_type, len(block["variants"]), uw, uh)
                         break
                 except Exception as exc:
                     logger.debug("Block %d attempt %d: %s", bid, attempt, exc)
@@ -621,6 +627,8 @@ def wmi_generate_netlist_blocks(
         "passive_clusters":     passive_cluster_info,
         "symmetric_net_pairs":  sym_result["symmetric_net_pairs"],
         "self_symmetric_nets":  sym_result["self_symmetric_nets"],
+        "tail_cm_pairs":        sym_result.get("tail_cm_pairs", []),
+        "compound_blocks":      sym_result.get("compound_blocks", []),
     }
     return blocks, netlist, sym_constraints
 
@@ -629,7 +637,7 @@ def wmi_generate_netlist_blocks(
 # 5. ENTRY POINT
 # =============================================================================
 
-def run(netlist_path: str, seed: int) -> dict:
+def run(netlist_path: str, seed: int, sym_mode: str = "aggressive") -> dict:
     path = Path(netlist_path)
     if not path.exists():
         raise FileNotFoundError(f"Netlist not found: {path}")
@@ -643,7 +651,7 @@ def run(netlist_path: str, seed: int) -> dict:
     with open(_PDK_DIR / "generation_config.json", encoding="utf-8") as f:
         config = json.load(f)
 
-    logger.info("Parsing: %s  seed=%d", path.name, seed)
+    logger.info("Parsing: %s  seed=%d  sym_mode=%s", path.name, seed, sym_mode)
     top_ports, flat_devices, hierarchy_map = parse_and_flatten(str(path))
 
     if not flat_devices:
@@ -663,26 +671,45 @@ def run(netlist_path: str, seed: int) -> dict:
         netlist.get("num_internal_nets", 0),
     )
 
+    placement_config = {
+        "symmetry_mode":            sym_mode,
+        "enable_matching":          True,
+        "enable_passive_splitting": True,
+        "passive_max_split":        8,
+    }
+    groups = build_groups(sym_constraints, blocks, placement_config)
+
     return {
         "generation_params": {
             "num_of_blocks":  len(blocks),
             "seed":           seed,
             "source_netlist": path.name,
         },
-        "technology": tech_file["technology_info"]["name"],
-        "blocks":     blocks,
-        "netlist":    netlist,
+        "technology":           tech_file["technology_info"]["name"],
+        "placement_config":     placement_config,
+        "blocks":               blocks,
+        "netlist":              netlist,
         "symmetry_constraints": sym_constraints,
+        "groups":               groups,
     }
 
 
 if __name__ == "__main__":
-    if len(sys.argv) == 3:
-        try:
-            run(sys.argv[1], int(sys.argv[2]))
-        except (FileNotFoundError, ValueError) as exc:
-            logger.error("%s", exc)
-            sys.exit(1)
-    else:
-        logger.error("Usage: 011_netlisBlocksGenerator.py <netlist.sp> <seed>")
+    import argparse
+    parser = argparse.ArgumentParser(description="Generate placement JSON from SPICE netlist")
+    parser.add_argument("netlist", help="Path to SPICE netlist (.sp)")
+    parser.add_argument("seed",    type=int, help="Random seed")
+    parser.add_argument(
+        "--sym-mode",
+        default="aggressive",
+        choices=["none", "moderate", "aggressive"],
+        dest="sym_mode",
+        help="Symmetry enforcement: none | moderate | aggressive (default: aggressive)",
+    )
+    args = parser.parse_args()
+    try:
+        result = run(args.netlist, args.seed, sym_mode=args.sym_mode)
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+    except (FileNotFoundError, ValueError) as exc:
+        logger.error("%s", exc)
         sys.exit(1)

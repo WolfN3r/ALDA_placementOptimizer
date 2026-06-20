@@ -209,9 +209,9 @@ class BStarTopology(TopologyBase, SAMixin, GAMixin):
         self,
         positions: dict[str, tuple[float, float]],
     ) -> dict[str, tuple[float, float]]:
-        """Mirror each symmetric pair and shift the island so all x (or y) ≥ 0.
+        """Mirror each symmetric pair about a vertical axis (A | A') and shift so all x ≥ 0.
 
-        Vertical axis — axis at x=0 (left boundary of rep placement):
+        Axis at x=0 (left boundary of rep placement):
           mirror left edge = −(x_rep + w_rep)   [negative pre-shift]
           axis_x = max(x_rep + w_rep) over paired reps
           gap_x  = max same-type x_spacing over all pairs (PDK DRC rule)
@@ -221,11 +221,9 @@ class BStarTopology(TopologyBase, SAMixin, GAMixin):
           paired reps shift by axis_x+gap_x → reps in [axis_x+gap_x, ...]
           closest pair gap = 2*x_rep + gap_x ≥ gap_x = required spacing ✓
 
-        Self-symmetric modules are centered on the physical axis midpoint
+        Self-symmetric modules are centered on the physical axis midpoint:
           x_axis_mid = axis_x + gap_x/2
           x_ss_final = x_axis_mid − w_ss/2
-
-        Horizontal axis — analogous, using y_spacing.
         """
         all_positions = dict(positions)
         node_map = {n.block_id: n for n in self._nodes}
@@ -243,7 +241,7 @@ class BStarTopology(TopologyBase, SAMixin, GAMixin):
         #           system.  This preserves DFS-computed inter-block spacings across groups.
 
         group_bids_all: set[str] = set()
-        group_info: list[dict]   = []   # one entry per group, vertical or horizontal
+        group_info: list[dict]   = []   # one entry per group (vertical axis only)
         global_x_shift = 0.0
         global_gap_x   = 0.0
 
@@ -258,67 +256,42 @@ class BStarTopology(TopologyBase, SAMixin, GAMixin):
             for ss in self_syms:
                 group_bids_all.add(ss)
 
-            if axis == "vertical":
-                axis_x = 0.0
-                for pair in pairs:
-                    id_first  = str(pair[0])
-                    id_second = str(pair[1])
-                    id_rep = id_first if self._is_rep.get(id_first, True) else id_second
-                    node = node_map.get(id_rep)
-                    if node is None or id_rep not in positions:
-                        continue
-                    w_rep, _ = _wh(id_rep, node)
-                    x_rep, _ = positions[id_rep]
-                    axis_x = max(axis_x, x_rep + w_rep)
-                for ss_bid in self_syms:
-                    node = node_map.get(ss_bid)
-                    if node is None or ss_bid not in positions:
-                        continue
-                    w_ss, _ = _wh(ss_bid, node)
-                    x_ss, _ = positions[ss_bid]
-                    axis_x = max(axis_x, x_ss + w_ss)
+            if axis != "vertical":
+                logger.warning("B*-tree: group axis '%s' is not supported — treating as vertical", axis)
 
-                gap_x = 0.0
-                for pair in pairs:
-                    id_first  = str(pair[0])
-                    id_second = str(pair[1])
-                    id_rep = id_first if self._is_rep.get(id_first, True) else id_second
-                    if id_rep in self._blocks:
-                        sp = compute_block_spacing(self._blocks[id_rep],
-                                                   self._blocks[id_rep])
-                        gap_x = max(gap_x, sp.x_spacing)
+            axis_x = 0.0
+            for pair in pairs:
+                id_first  = str(pair[0])
+                id_second = str(pair[1])
+                id_rep = id_first if self._is_rep.get(id_first, True) else id_second
+                node = node_map.get(id_rep)
+                if node is None or id_rep not in positions:
+                    continue
+                w_rep, _ = _wh(id_rep, node)
+                x_rep, _ = positions[id_rep]
+                axis_x = max(axis_x, x_rep + w_rep)
+            for ss_bid in self_syms:
+                node = node_map.get(ss_bid)
+                if node is None or ss_bid not in positions:
+                    continue
+                w_ss, _ = _wh(ss_bid, node)
+                x_ss, _ = positions[ss_bid]
+                axis_x = max(axis_x, x_ss + w_ss)
 
-                global_x_shift = max(global_x_shift, axis_x)
-                global_gap_x   = max(global_gap_x,   gap_x)
-                group_info.append({"axis": "vertical", "pairs": pairs,
-                                   "self_syms": self_syms, "gap_x": gap_x})
+            gap_x = 0.0
+            for pair in pairs:
+                id_first  = str(pair[0])
+                id_second = str(pair[1])
+                id_rep = id_first if self._is_rep.get(id_first, True) else id_second
+                if id_rep in self._blocks:
+                    sp = compute_block_spacing(self._blocks[id_rep],
+                                               self._blocks[id_rep])
+                    gap_x = max(gap_x, sp.x_spacing)
 
-            elif axis == "horizontal":
-                axis_y = 0.0
-                for pair in pairs:
-                    id_first  = str(pair[0])
-                    id_second = str(pair[1])
-                    id_rep = id_first if self._is_rep.get(id_first, True) else id_second
-                    node = node_map.get(id_rep)
-                    if node is None or id_rep not in positions:
-                        continue
-                    _, h_rep = _wh(id_rep, node)
-                    _, y_rep = positions[id_rep]
-                    axis_y = max(axis_y, y_rep + h_rep)
-
-                gap_y = 0.0
-                for pair in pairs:
-                    id_first  = str(pair[0])
-                    id_second = str(pair[1])
-                    id_rep = id_first if self._is_rep.get(id_first, True) else id_second
-                    if id_rep in self._blocks:
-                        sp = compute_block_spacing(self._blocks[id_rep],
-                                                   self._blocks[id_rep])
-                        gap_y = max(gap_y, sp.y_spacing)
-
-                group_info.append({"axis": "horizontal", "pairs": pairs,
-                                   "self_syms": self_syms,
-                                   "axis_y": axis_y, "gap_y": gap_y})
+            global_x_shift = max(global_x_shift, axis_x)
+            global_gap_x   = max(global_gap_x,   gap_x)
+            group_info.append({"axis": "vertical", "pairs": pairs,
+                               "self_syms": self_syms, "gap_x": gap_x})
 
         # --- PASS 2 ---
         for gi in group_info:
@@ -363,42 +336,6 @@ class BStarTopology(TopologyBase, SAMixin, GAMixin):
                     w_ss, _ = _wh(ss_bid, node_map[ss_bid])
                     _, y_ss = all_positions[ss_bid]
                     all_positions[ss_bid] = (axis_mid - w_ss / 2.0, y_ss)
-
-            elif axis == "horizontal":
-                axis_y   = gi["axis_y"]
-                gap_y    = gi["gap_y"]
-                axis_mid = axis_y + gap_y / 2.0
-
-                for pair in pairs:
-                    id_first  = str(pair[0])
-                    id_second = str(pair[1])
-                    if self._is_rep.get(id_first, True):
-                        id_rep, id_mir = id_first, id_second
-                    else:
-                        id_rep, id_mir = id_second, id_first
-                    node = node_map.get(id_rep)
-                    if node is None or id_rep not in positions:
-                        continue
-                    _, h_rep     = _wh(id_rep, node)
-                    x_rep, y_rep = positions[id_rep]
-                    all_positions[id_mir] = (x_rep, -(y_rep + h_rep))
-
-                for pair in pairs:
-                    for bid in (str(pair[0]), str(pair[1])):
-                        if bid not in all_positions:
-                            continue
-                        x, y = all_positions[bid]
-                        if self._is_rep.get(bid, True) and self._partner.get(bid) != bid:
-                            all_positions[bid] = (x, y + axis_y + gap_y)
-                        else:
-                            all_positions[bid] = (x, y + axis_y)
-
-                for ss_bid in self_syms:
-                    if ss_bid not in all_positions or ss_bid not in node_map:
-                        continue
-                    _, h_ss = _wh(ss_bid, node_map[ss_bid])
-                    x_ss, _ = all_positions[ss_bid]
-                    all_positions[ss_bid] = (x_ss, axis_mid - h_ss / 2.0)
 
         # Non-group (asymmetric) blocks: use global_x_shift + global_gap_x so they
         # receive exactly the same shift as paired reps, preserving all DFS-computed

@@ -155,6 +155,38 @@ def wmi_generate_transistor_block(
     }
 
 
+def compute_unit_cell_bbox(
+    tech_file: dict,
+    width: float,
+    length: float,
+    num_fingers: int,
+) -> tuple[float, float]:
+    """
+    Return (width_µm, height_µm) for a single M=1 transistor with num_fingers in 1 row.
+
+    Uses the same PDK formula as wmi_generate_transistor_block with n_rows=1 and
+    n_cols=num_fingers — no aspect ratio constraint.  unit_h includes one
+    active_spacing so matched-array rows stack flush when spacing_y=0.
+    """
+    rules          = tech_file["physical_design_rules"]
+    poly_width     = rules["poly"]["min_width"]
+    poly_spacing   = rules["poly"]["min_spacing"]
+    active_spacing = rules["active"]["min_spacing"]
+    contact_size   = rules["contact"]["size"]
+    contact_enc    = rules["contact"]["enclosure_by_active"]
+    grid           = tech_file["technology_info"]["manufacturing_grid"]
+
+    w_finger  = width / num_fingers
+    finger_wc = w_finger + 2.0 * (contact_enc + contact_size)
+    f_pitch   = finger_wc + poly_width + poly_spacing
+
+    unit_w = snap_to_grid(num_fingers * f_pitch - poly_spacing, grid)
+    unit_h = snap_to_grid(w_finger + active_spacing, grid)
+    if unit_h <= 0.0:
+        unit_h = snap_to_grid(w_finger, grid)
+    return unit_w, unit_h
+
+
 def _shift_power_pin(pins: dict, moved_key: str, W: float, H: float, grid: float) -> None:
     """Push any pin within _PIN_MIN_PITCH of the power pin away along its edge."""
     pwr = pins[moved_key]

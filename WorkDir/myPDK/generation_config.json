@@ -13,12 +13,12 @@
     },
     "multiplier_range": {
       "min": 2,
-      "max": 6,
+      "max": 8,
       "comment": "Even numbers only, range: [min, max]"
     },
     "num_fingers_range": {
-      "min": 4,
-      "max": 20,
+      "min": 2,
+      "max": 4,
       "comment": "Number of fingers per transistor"
     },
     "aspect_ratio": {
@@ -31,8 +31,8 @@
   },
   "rotation_variants": {
     "comment": "Rotation variant generation. prob_90 < prob_180. Set to 0.0 to disable. deduplicate_square skips rotation when |W-H| < grid.",
-    "prob_180": 0.6,
-    "prob_90": 0.1,
+    "prob_180": 0.0,
+    "prob_90": 0.0,
     "deduplicate_square": true
   },
   "design_constraints": {

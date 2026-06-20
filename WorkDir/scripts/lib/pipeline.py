@@ -129,6 +129,7 @@ class PipelineResult:
     n_iterations:     int             = 0
     positions:        dict            = field(default_factory=dict)
     placed_blocks:    dict            = field(default_factory=dict)
+    variant_map:      dict            = field(default_factory=dict)
     power_rails:      dict            = field(default_factory=dict)
     t_seed_ms:        float           = 0.0
     t_first_decode_ms: float          = 0.0
@@ -274,13 +275,11 @@ class OptimizationPipeline:
             result.final_cost    = opt_result.best_cost
             result.n_iterations  = opt_result.n_iterations
             result.positions     = final_positions
+            result.variant_map   = variant_map
             placed = _compute_placed_blocks(final_positions, blocks, variant_map)
             try:
                 from pin_optimizer import optimize_pin_positions
-                placed = optimize_pin_positions(
-                    placed, nets, blocks,
-                    sym_groups=self._sym_groups if self._sym_groups else None,
-                )
+                placed = optimize_pin_positions(placed, nets, blocks)
             except Exception as _pin_exc:
                 warnings.warn(f"pin_optimizer skipped: {_pin_exc}")
             result.placed_blocks = placed

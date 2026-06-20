@@ -69,6 +69,9 @@ if __name__ == "__main__":
     parser.add_argument("--version",    default=VERSION, help="Output version tag (default: %(default)s)")
     parser.add_argument("--no-routing", dest="no_routing", action="store_true", default=False,
                         help="Skip routing stage (stage 201) even when RUN_ROUTING=True in config")
+    parser.add_argument("--sym-mode", dest="sym_mode", default="aggressive",
+                        choices=["none", "moderate", "aggressive"],
+                        help="Symmetry constraint aggressiveness for netlist-driven runs (default: %(default)s)")
     args = parser.parse_args()
 
     seed       = args.seed
@@ -78,7 +81,7 @@ if __name__ == "__main__":
     # --- Stage 1: block generation ---
     if args.netlist:
         gen = _load_script("011_netlisBlocksGenerator.py")
-        blocks_data: dict = gen.run(args.netlist, seed)
+        blocks_data: dict = gen.run(args.netlist, seed, sym_mode=args.sym_mode)
         script_id_gen = "011"
     else:
         gen = _load_script("001_L1blocksGenerator.py")

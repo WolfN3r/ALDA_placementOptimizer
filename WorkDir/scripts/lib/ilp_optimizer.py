@@ -53,9 +53,9 @@ class GurobiParams:
     time_limit: float = 500.0
     # Hard wall-clock limit in seconds. Solver returns best incumbent found so far.
 
-    mip_gap: float = 0.1
+    mip_gap: float = 0.03
     # Stop when gap between best incumbent and LP bound ≤ this fraction.
-    # Tighter → longer solve; 1% is negligible for layout quality.
+    # Tighter → longer solve but finds better solutions; 3% is a good trade-off.
 
     mip_focus: int = 2
     # 0=balanced, 1=feasibility first, 2=optimality, 3=best-bound.
@@ -106,6 +106,16 @@ class GurobiParams:
     #   "Root relaxation" line shows LP gap at root node.
     #   "Explored N nodes" line shows B&B effort (large N = loose LP relaxation).
     #   "Found heuristic solution" at t=0 confirms MIP warm start was accepted.
+
+    ar_limit: float = 3.0
+    # Aspect-ratio dead-band: no penalty when W/H ≤ this value.
+    # Penalty = ar_weight * (W - ar_limit * H) when W > ar_limit * H.
+    # Set > 1 to allow rectangular (non-square) layouts while banning flat strips.
+
+    ar_weight: float = 0.3
+    # Weight of the AR penalty term relative to area_weight * (W + H).
+    # 0.3 means a 613µm-wide strip (AR=44) pays +171 over a valid 2D layout
+    # with AR≤3 — enough to strongly prefer the 2D packing.
 
     use_fdgd_start: bool = True
     # True → run FDGD before solving, sort blocks by FDGD x-centroid, row-pack to
@@ -276,6 +286,11 @@ def _solve_mip_gurobi(
     W = m.addVar(lb=0.0, ub=M_x, name="W")
     H = m.addVar(lb=0.0, ub=M_y, name="H")
 
+    # AR dead-band penalty: cost = ar_weight * max(0, W - ar_limit * H).
+    # Linearised via auxiliary variable excess_ar ≥ 0.
+    excess_ar = m.addVar(lb=0.0, name="excess_ar")
+    m.addConstr(excess_ar >= W - params.ar_limit * H, name="ar_deadband")
+
     # Variant dimensions — computed early so position variable bounds can use them
     all_dims: dict[str, list[tuple[float, float]]] = {bid: _variant_dims(blocks[bid]) for bid in bids}
 
@@ -365,12 +380,11 @@ def _solve_mip_gurobi(
             m.addConstr(y[bj] + h[bj] + ay <= y[bi] + M_y * (1 - rv[3]), name=f"no_{bi}_{bj}_3")
             m.addConstr(gp.quicksum(rv) >= 1, name=f"no_sum_{bi}_{bj}")
 
-    # Symmetry constraints — vertical axis only
+    # Symmetry constraints — vertical axis (A | A'): same y-row, x-mirrored
     for gi, group in enumerate(sym_groups):
         axis = group.get("axis", "vertical")
         if axis != "vertical":
-            logger.warning("ILP: group %d axis '%s' not supported — skipped", gi, axis)
-            continue
+            logger.warning("ILP: group %d has axis '%s' — enforcing vertical (A | A')", gi, axis)
         x_sym = m.addVar(lb=0.0, name=f"x_sym_{gi}")
 
         for pair in group.get("pairs", []):
@@ -480,7 +494,8 @@ def _solve_mip_gurobi(
     m.setObjective(
         area_weight * (W + H)
         + (wl_weight / n_nets_used) * hpwl_expr
-        + power_scale * power_proximity_expr,
+        + power_scale * power_proximity_expr
+        + params.ar_weight * excess_ar,
         GRB.MINIMIZE,
     )
 

@@ -628,35 +628,57 @@ def _assign_compound_ids(
 
 # ── Phase 7 — Compound group output ───────────────────────────────────────────
 
+# Priority for choosing the dominant topology tag when a compound mixes types.
+_TAG_PRIORITY: Dict[str, int] = {
+    "diff_pair":              5,
+    "cascode_current_mirror": 4,
+    "current_mirror":         3,
+    "passive":                2,
+    "tail_transistor":        1,
+}
+
+
 def _assemble_compound_groups(
     all_pairs:     List[Tuple[int, int]],
     all_self_syms: List[int],
     pair_compound: Dict[int, int],
     self_compound: Dict[int, int],
+    pair_types:    List[str],
 ) -> list:
     compound_data: Dict[int, dict] = {}
 
     def _get(cid: int) -> dict:
         if cid not in compound_data:
-            compound_data[cid] = {"pairs": [], "self_symmetric": []}
+            compound_data[cid] = {"pairs": [], "self_symmetric": [], "types": set()}
         return compound_data[cid]
 
     for i, (a, b) in enumerate(all_pairs):
-        _get(pair_compound[i])["pairs"].append([a, b])
+        entry = _get(pair_compound[i])
+        entry["pairs"].append([a, b])
+        if i < len(pair_types):
+            entry["types"].add(pair_types[i])
 
     for bid in all_self_syms:
         _get(self_compound[bid])["self_symmetric"].append(bid)
 
-    return [
-        {
+    result = []
+    for cid, data in sorted(compound_data.items()):
+        if data["types"]:
+            tag = max(data["types"], key=lambda t: _TAG_PRIORITY.get(t, 0))
+        elif data["pairs"]:
+            tag = "current_mirror"
+        else:
+            tag = "tail_transistor"
+
+        result.append({
             "compound_id":               cid,
             "axis":                      "vertical",
+            "topology_tag":              tag,
             "pairs":                     data["pairs"],
             "self_symmetric":            data["self_symmetric"],
             "enforce_matching_variants": bool(data["pairs"]),
-        }
-        for cid, data in sorted(compound_data.items())
-    ]
+        })
+    return result
 
 
 # ── Symmetric net-pair annotations (schema unchanged) ─────────────────────────
@@ -839,13 +861,53 @@ def detect_symmetries(devices: list, port_nets: set, power_nets: set) -> dict:
     all_pairs     = all_mos_pairs + passive_pairs
     all_self_syms = mos_self_syms + passive_self_syms
 
+    # Build per-pair topology type tags for Phase 7 compound labelling.
+    # ssfg_device_pairs are SSFG-propagated pairs (usually load mirrors for a DP).
+    pair_types: List[str] = (
+        ["diff_pair"]              * len(direct_dp_pairs)   +
+        ["current_mirror"]         * len(ssfg_device_pairs) +
+        ["current_mirror"]         * len(mirror_pairs)      +
+        ["cascode_current_mirror"] * len(cascode_pairs)     +
+        ["passive"]                * len(passive_pairs)
+    )
+
     pair_compound, self_compound = _assign_compound_ids(
         all_pairs, all_self_syms, id_to_dev, sym_net_registry
     )
 
+    # ── Tail-CM pair detection ─────────────────────────────────────────────────
+    # A tail transistor has its gate driven by the drain of a current-mirror
+    # reference device.  Grouping them preserves the intended current ratio.
+    tail_cm_pairs: List[Tuple[int, int]] = []
+
+    tail_gate_nets: Dict[str, List[int]] = defaultdict(list)
+    for bid in mos_self_syms:
+        dev = id_to_dev.get(bid)
+        if dev and _is_mosfet(dev):
+            gnet = _gate(dev)
+            if gnet and gnet not in power_nets:
+                tail_gate_nets[gnet].append(bid)
+
+    mirror_drain_to_bid: Dict[str, int] = {}
+    for group in bbs["mirror_groups"]:
+        for d in group:
+            dr = _drain(d)
+            if dr and dr not in power_nets:
+                mirror_drain_to_bid[dr] = d["block_id"]
+
+    for gate_net, tail_bids in tail_gate_nets.items():
+        mirror_bid = mirror_drain_to_bid.get(gate_net)
+        if mirror_bid is not None:
+            for tbid in tail_bids:
+                tail_cm_pairs.append((tbid, mirror_bid))
+                logger.info(
+                    "Tail-CM pair: tail block %d ← Vbias from mirror block %d via %s",
+                    tbid, mirror_bid, gate_net,
+                )
+
     # ── Phase 7: output ───────────────────────────────────────────────────────
     groups = _assemble_compound_groups(
-        all_pairs, all_self_syms, pair_compound, self_compound
+        all_pairs, all_self_syms, pair_compound, self_compound, pair_types
     )
 
     logger.info(
@@ -859,6 +921,7 @@ def detect_symmetries(devices: list, port_nets: set, power_nets: set) -> dict:
         "symmetric_net_pairs":     _build_sym_net_pairs(devices, all_mos_pairs),
         "self_symmetric_nets":     self_sym_nets,
         "cascode_proximity_pairs": cascode_prox,
+        "tail_cm_pairs":           tail_cm_pairs,
         "compound_blocks":         _build_compound_clusters(
             bbs["diff_pairs"], bbs["mirror_groups"], bbs["cascode_groups"], mos_self_syms,
         ),

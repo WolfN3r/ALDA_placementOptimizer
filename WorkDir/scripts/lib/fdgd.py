@@ -30,7 +30,7 @@ from log_setup import get_logger
 # =============================================================================
 DEBUG = False
 
-_CANVAS_FACTOR = 1.5    # canvas side = sqrt(total_block_area) × factor
+_CANVAS_FACTOR = 2.0    # canvas side = sqrt(total_block_area) × factor
 _K_ATTRACT     = 0.4    # attractive spring per unit distance per net weight
 _K_REPEL       = 3.0    # repulsive force per µm of underspacing
 _K_BOUNDARY    = 0.8    # restoring force per µm outside canvas

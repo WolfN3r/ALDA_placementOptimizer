@@ -125,6 +125,125 @@ def _build_blocks_dict(raw_blocks: list) -> dict:
     return {str(b["block_id"]): b for b in raw_blocks}
 
 
+def _expand_composite_placements(
+    composite_list: list,
+    placed_blocks:  dict,
+    block_by_id:    dict,
+    variant_map:    dict | None = None,
+) -> dict:
+    """
+    Enrich placed composite block entries with group metadata and nested sub_blocks.
+
+    For each composite block in placed_blocks, identifies the selected matching
+    variant (via variant_map or bbox matching), computes each member device's
+    absolute position, and returns an enriched dict keyed by the composite block_id.
+
+    The composite entry keeps the same top-level fields as a regular placed block
+    (main_bbox, pins) but gains: group_id, topology_type, matching_variant,
+    and sub_blocks — one entry per member device with their absolute main_bbox and
+    absolute pin positions.
+
+    Returns {str(comp_id): enriched_composite_dict} — merge into placed_blocks
+    in-place; individual member IDs are NOT added to the top-level placed_blocks.
+    """
+    enriched: dict = {}
+
+    for cb in composite_list:
+        comp_id  = cb["block_id"]
+        comp_key = str(comp_id)
+        if comp_key not in placed_blocks:
+            continue
+
+        pb = placed_blocks[comp_key]
+        cx = pb["main_bbox"]["x_min"]
+        cy = pb["main_bbox"]["y_min"]
+        pw = pb["main_bbox"]["x_max"] - cx
+        ph = pb["main_bbox"]["y_max"] - cy
+
+        # Select which matching variant was used — prefer explicit variant_map.
+        variants  = cb.get("variants", [])
+        vidx      = (variant_map or {}).get(comp_key)
+        if vidx is not None and 0 <= vidx < len(variants):
+            sel_v = variants[vidx]
+        else:
+            sel_v = None
+            for v in variants:
+                vw = v["main_bbox"].get("x_max", 0.0)
+                vh = v["main_bbox"].get("y_max", 0.0)
+                if abs(vw - pw) < 1e-3 and abs(vh - ph) < 1e-3:
+                    sel_v = v
+                    break
+            if sel_v is None:
+                sel_v = next((v for v in variants if v.get("is_used")), variants[0] if variants else {})
+
+        rows            = sel_v.get("rows", 1)
+        cols_per_device = sel_v.get("cols_per_device", 1)
+        dummy_cols      = sel_v.get("dummy_cols_per_side", 0)
+        dummy_rows      = sel_v.get("dummy_rows_top_bottom", 0)
+
+        member_bids = cb.get("group_block_ids", [])
+        n_devices   = len(member_bids)
+        if n_devices == 0:
+            continue
+
+        # Sub_blocks: equal contiguous strips of the composite bbox.
+        # Horizontal (side by side) when composite is wider than tall; vertical otherwise.
+        sub_blocks: dict = {}
+        if pw >= ph:
+            strip = pw / n_devices
+            for i, mbid in enumerate(member_bids):
+                sub_blocks[str(mbid)] = {
+                    "main_bbox": {
+                        "x_min": round(cx + i * strip,         6),
+                        "y_min": round(cy,                      6),
+                        "x_max": round(cx + (i + 1) * strip,   6),
+                        "y_max": round(cy + ph,                 6),
+                    },
+                    "pins": {"center": {
+                        "x": round(cx + (i + 0.5) * strip, 6),
+                        "y": round(cy + ph / 2.0,           6),
+                    }},
+                }
+        else:
+            strip = ph / n_devices
+            for i, mbid in enumerate(member_bids):
+                sub_blocks[str(mbid)] = {
+                    "main_bbox": {
+                        "x_min": round(cx,                      6),
+                        "y_min": round(cy + i * strip,         6),
+                        "x_max": round(cx + pw,                 6),
+                        "y_max": round(cy + (i + 1) * strip,   6),
+                    },
+                    "pins": {"center": {
+                        "x": round(cx + pw / 2.0,           6),
+                        "y": round(cy + (i + 0.5) * strip,  6),
+                    }},
+                }
+
+        # Build the matching_variant summary for the output (metadata only).
+        mv_summary = {
+            "rows":                  rows,
+            "cols_per_device":       cols_per_device,
+            "matching_type":         sel_v.get("matching_type") or "",
+            "dummy_cols_per_side":   dummy_cols,
+            "dummy_rows_top_bottom": dummy_rows,
+            "width_um":              sel_v.get("width_um",  round(pw, 6)),
+            "height_um":             sel_v.get("height_um", round(ph, 6)),
+        }
+
+        enriched[comp_key] = {
+            **pb,  # keeps main_bbox and pins from _compute_placed_blocks
+            "block_id":        comp_id,
+            "device_type":     cb.get("device_type", ""),
+            "group_id":        cb.get("group_id", comp_id - 10_000),
+            "topology_type":   cb.get("topology_type", ""),
+            "matching_variant": mv_summary,
+            "sub_blocks":      sub_blocks,
+        }
+
+    return enriched
+
+
 def _resolve_combination():
     """
     Return (topology_cls, optimizer_cls) when TOPOLOGY + OPTIMIZER are set,
@@ -246,21 +365,122 @@ def optimize(data: dict) -> dict:
     from solver_picker  import SolverPicker, _build_exhaustive_doc
     from pipeline       import OptimizationPipeline, build_default_registry
 
-    raw_blocks      = data.get("blocks", [])
-    netlist         = data.get("netlist", {})
-    gen_params      = data.get("generation_params", {})
-    blocks          = _build_blocks_dict(raw_blocks)
-    nets            = netlist.get("nets", [])
-    sym_constraints = data.get("symmetry_constraints", {})
-    sym_groups      = sym_constraints.get("groups", []) if sym_constraints else []
+    from hierarchy_builder import (
+        filter_groups_for_sym_mode,
+        build_composite_blocks,
+        remap_nets_for_composites,
+        COMPOSITE_ID_BASE,
+    )
 
-    n_blks     = gen_params.get("num_of_blocks", len(blocks))
+    raw_blocks       = data.get("blocks", [])
+    netlist          = data.get("netlist", {})
+    gen_params       = data.get("generation_params", {})
+    nets             = netlist.get("nets", [])
+    placement_config = data.get("placement_config", {})
+    sym_mode         = placement_config.get("symmetry_mode", "aggressive")
+
+    # Build composite blocks from hierarchy groups so each matched building
+    # block (diff pair, current mirror, …) is placed as one atomic unit whose
+    # variants are the pre-computed matching_variants from hierarchy_builder.
+    raw_groups      = data.get("groups", [])
+    filtered_groups = filter_groups_for_sym_mode(raw_groups, sym_mode)
+
+    block_by_id = {b["block_id"]: b for b in raw_blocks if "error" not in b}
+    composite_list, excluded_ids = build_composite_blocks(filtered_groups, block_by_id)
+
+    # Effective block set: composite blocks + ungrouped individual blocks
+    effective_raw: list = list(composite_list)
+    for blk in raw_blocks:
+        if blk.get("block_id") not in excluded_ids and "error" not in blk:
+            effective_raw.append(blk)
+    blocks = _build_blocks_dict(effective_raw)
+
+    # Remap net pin references so composite members are referenced via the
+    # composite block's centre pin (used for HPWL estimation during optimisation).
+    effective_nets = remap_nets_for_composites(nets, composite_list, block_by_id)
+
+    # For moderate mode: symmetry is encoded inside each composite block's
+    # matching_variants — no inter-composite axis constraints needed.
+    # For aggressive mode: additionally enforce global vertical axis constraints
+    # between composite pairs that the circuit analyzer placed on the same axis.
+    sym_constraints_raw = data.get("symmetry_constraints", {})
+    sym_groups: list = []
+
+    if sym_mode == "aggressive":
+        # Build mapping: original block_id → composite_id (COMPOSITE_ID_BASE + group_id)
+        bid_to_comp: dict = {
+            int(mbid): cb["block_id"]
+            for cb in composite_list
+            for mbid in cb.get("group_block_ids", [])
+        }
+        for cg in sym_constraints_raw.get("groups", []):
+            # Pass 1: classify pairs.
+            # Two blocks mapping to different composites → inter-composite pair (axis-mirrored).
+            # Two blocks mapping to the SAME composite → that composite is self-symmetric.
+            comp_pairs: list = []
+            seen_pairs: set = set()
+            intra_ss_candidates: list = []
+            seen_intra: set = set()
+
+            for a, b in cg.get("pairs", []):
+                ca  = bid_to_comp.get(a, a)
+                cb_ = bid_to_comp.get(b, b)
+                if ca == cb_:
+                    if ca not in seen_intra:
+                        intra_ss_candidates.append(ca)
+                        seen_intra.add(ca)
+                else:
+                    key = (min(ca, cb_), max(ca, cb_))
+                    if key not in seen_pairs:
+                        comp_pairs.append([ca, cb_])
+                        seen_pairs.add(key)
+
+            # Composites in comp_pairs already have a defined role (left/right of axis).
+            # They cannot simultaneously be self-symmetric (would make the ILP infeasible).
+            in_pairs: set = {e for pair in comp_pairs for e in pair}
+
+            # Pass 2: build comp_ss, skipping anything already in a pair role.
+            comp_ss: list = []
+            seen_ss: set = set()
+
+            for ca in intra_ss_candidates:
+                if ca not in in_pairs and ca not in seen_ss:
+                    comp_ss.append(ca)
+                    seen_ss.add(ca)
+
+            for ss in cg.get("self_symmetric", []):
+                cid = bid_to_comp.get(ss, ss)
+                if cid not in in_pairs and cid not in seen_ss:
+                    comp_ss.append(cid)
+                    seen_ss.add(cid)
+
+            if comp_pairs or comp_ss:
+                sym_groups.append({
+                    "compound_id": cg.get("compound_id", 0),
+                    "axis": "vertical",
+                    "pairs": comp_pairs,
+                    "self_symmetric": comp_ss,
+                })
+        logger.info(
+            "Aggressive sym_groups: %d axis group(s) with %d composite pair(s)",
+            len(sym_groups),
+            sum(len(g["pairs"]) for g in sym_groups),
+        )
+
+    logger.info(
+        "Symmetry mode: %s  →  %d group(s)  "
+        "(%d composite + %d ungrouped = %d effective blocks)",
+        sym_mode, len(filtered_groups),
+        len(composite_list), len(effective_raw) - len(composite_list), len(effective_raw),
+    )
+
+    n_blks     = gen_params.get("num_of_blocks", len(raw_blocks))
     seed       = gen_params.get("seed", 0)
     netlist_id = f"s{seed}_n{n_blks}"
 
     logger.info(
-        "Starting optimizer: %d blocks, %d nets — topology=%s optimizer=%s mode=%s",
-        len(blocks), len(nets),
+        "Starting optimizer: %d effective blocks, %d nets — topology=%s optimizer=%s mode=%s",
+        len(blocks), len(effective_nets),
         TOPOLOGY or f"({RUN_MODE})", OPTIMIZER or "auto", RUN_MODE,
     )
 
@@ -307,7 +527,7 @@ def optimize(data: dict) -> dict:
             use_power_rails  = USE_POWER_RAILS,
         )
         run_id = f"{t_cls.__name__}+{o_cls.__name__}"
-        result = pipeline.run(blocks, nets, seed_mode=SEED_MODE, run_id=run_id)
+        result = pipeline.run(blocks, effective_nets, seed_mode=SEED_MODE, run_id=run_id)
         all_results = [result]
         logger.info(
             "Single run %s: status=%s cost=%.4f t=%.0fms",
@@ -327,11 +547,11 @@ def optimize(data: dict) -> dict:
         )
         if RUN_MODE == "exhaustive":
             doc = picker.run_exhaustive(
-                blocks, nets, seed_mode=SEED_MODE, netlist_id=netlist_id
+                blocks, effective_nets, seed_mode=SEED_MODE, netlist_id=netlist_id
             )
             all_results = picker._last_results
         else:
-            all_results = picker.run_random(blocks, nets, seed_mode=SEED_MODE)
+            all_results = picker.run_random(blocks, effective_nets, seed_mode=SEED_MODE)
 
     # Pick the best successful run
     success = [r for r in all_results if r.status == "success"]
@@ -347,6 +567,28 @@ def optimize(data: dict) -> dict:
             "Best run: %s  cost=%.4f  area=%.2f µm²  AR=%.3f",
             best.run_id, best.final_cost, best.area_um2, best.aspect_ratio,
         )
+
+    # Enrich composite block entries with group metadata and nested sub_blocks.
+    # Composite IDs (≥ 10_000) are kept as top-level keys in placed_blocks so
+    # DRC operates on the composite bounding box; individual member positions
+    # are nested inside each composite's sub_blocks dict.
+    if best is not None and composite_list:
+        expanded = _expand_composite_placements(
+            composite_list, best.placed_blocks, block_by_id, best.variant_map
+        )
+        best.placed_blocks.update(expanded)
+        logger.info(
+            "Composite expansion: enriched %d group block(s) with sub_blocks", len(expanded)
+        )
+
+    # Same enrichment for every exhaustive run result so all placed_blocks are consistent.
+    if RUN_MODE == "exhaustive" and composite_list:
+        for r in all_results:
+            if r.status == "success" and r.placed_blocks:
+                exp = _expand_composite_placements(
+                    composite_list, r.placed_blocks, block_by_id, r.variant_map
+                )
+                r.placed_blocks.update(exp)
 
     placement_meta: dict = {}
     is_exhaustive = RUN_MODE == "exhaustive" and len(all_results) > 1
@@ -393,9 +635,11 @@ def optimize(data: dict) -> dict:
     return {
         "generation_params":    gen_params,
         "technology":           data.get("technology", ""),
+        "placement_config":     placement_config,
         "blocks":               raw_blocks,
         "netlist":              netlist,
         "symmetry_constraints": data.get("symmetry_constraints", {}),
+        "groups":               data.get("groups", []),
         "placement":            placement_meta,
     }
 
