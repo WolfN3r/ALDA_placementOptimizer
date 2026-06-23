@@ -28,7 +28,7 @@ _PIN_HALF    = _PIN_W / 2     # 0.12
 _M1_SPC      = 0.12   # M1 min_spacing (µm)
 _MIN_CC      = _PIN_W + _M1_SPC   # 0.36 µm min centre-to-centre for two signal pins
 _PWR_W       = 0.20   # block-level power rail stripe width (µm)
-_CHIP_RAIL_W = 0.50   # chip-level power rail width (µm, from routing_widths.power)
+_CHIP_RAIL_W = 1.00   # chip-level power rail width (µm, from routing_widths.power)
 _SIDES       = ("left", "right")
 
 # Power net name sets — must stay consistent with cost_evaluator._VDD/_VSS_NET_IDS
@@ -210,7 +210,7 @@ def _compute_chip_rails(placed_blocks: dict, nets: list, pdk: dict) -> dict:
 
     tables  = pdk["routing_widths"]["wire_width_tables"].get("power", [[0, _CHIP_RAIL_W]])
     rail_w  = float(tables[0][1]) if tables else _CHIP_RAIL_W
-    gap     = 10.0 * float(pdk["routing_grid"]["vertical_pitch"])  # 10 × 0.28 = 2.80 µm
+    gap     = 5.0 * float(pdk["routing_grid"]["vertical_pitch"])   # 5 × 0.28 = 1.40 µm
 
     vdd_name, vss_name = _power_net_names(nets)
 

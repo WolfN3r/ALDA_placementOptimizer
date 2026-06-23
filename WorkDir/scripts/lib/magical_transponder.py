@@ -176,6 +176,19 @@ def convert_py101_to_magical(data: dict) -> dict:
         default=0.0
     )
 
+    # Chip outline = bounding box of all real blocks + rail entries (blocks + rails)
+    _real_bb   = [pb['main_bbox'] for bid_str, pb in placed_dict.items()
+                  if bid_str.lstrip('-').isdigit()]
+    _rail_bb   = [pb for bid_str, pb in placed_dict.items()
+                  if not bid_str.lstrip('-').isdigit() and 'x_min' in pb]
+    chip_outline = {
+        'x_min':       min([b['x_min'] for b in _real_bb] + [r['x_min'] for r in _rail_bb], default=0.0),
+        'y_min':       min([b['y_min'] for b in _real_bb] + [r['y_min'] for r in _rail_bb], default=0.0),
+        'x_max':       max([b['x_max'] for b in _real_bb] + [r['x_max'] for r in _rail_bb], default=0.0),
+        'y_max':       max([b['y_max'] for b in _real_bb] + [r['y_max'] for r in _rail_bb], default=0.0),
+        'blocks_y_max': safe_y_max_um,
+    }
+
     for bid_str, pb in placed_dict.items():
         if bid_str.lstrip('-').isdigit():
             continue
@@ -242,6 +255,7 @@ def convert_py101_to_magical(data: dict) -> dict:
         'blocks':        list(blocks_list) + virtual_blocks + composite_block_dicts,
         'netlist':       netlist,
         'placed_blocks': magical_placed,
+        'chip_outline':  chip_outline,
     }
 
 

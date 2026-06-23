@@ -693,9 +693,13 @@ class TikZExportWindow(QMainWindow):
 
         self._layer_checks: dict[str, QCheckBox] = {}
         self._dtype_checks: dict[str, QCheckBox] = {}
+        self._symmetry_check: QCheckBox | None = None
         self._scale_slider: QSlider | None = None
         self._scale_spin: QSpinBox | None = None
         self._scale_label: QLabel | None = None
+        self._fig_check: QCheckBox | None = None
+        self._fig_placement_combo: QComboBox | None = None
+        self._fig_caption_edit: QLineEdit | None = None
         self._result_window: TikZResultWindow | None = None
 
         central = QWidget()
@@ -748,17 +752,32 @@ class TikZExportWindow(QMainWindow):
         )
         return swatch
 
+    _SYM_LAYER_KEYS = frozenset({
+        "symmetry", "sym_diff_pair", "sym_current_mirror", "sym_cascode",
+        "sym_passive", "sym_tail", "sym_cascode_prox", "sym_tail_cm",
+    })
+
     def _build_layers_group(self, parent_layout: QVBoxLayout) -> None:
         box = QGroupBox("Layers")
         grid = QGridLayout(box)
         grid.setSpacing(3)
-        for row_idx, ld in enumerate(self._lm.all_layers()):
+        row_idx = 0
+        for ld in self._lm.all_layers():
+            if ld.name in self._SYM_LAYER_KEYS:
+                continue
             chk = QCheckBox(ld.display_name)
             chk.setChecked(ld.name != "drc_overlay")
             self._layer_checks[ld.name] = chk
             swatch = self._make_swatch(ld.color)
             grid.addWidget(swatch, row_idx, 0)
             grid.addWidget(chk, row_idx, 1)
+            row_idx += 1
+        # Single combined symmetry checkbox
+        sym_swatch = self._make_swatch(self._lm.layer("symmetry").color)
+        self._symmetry_check = QCheckBox("Symmetry annotations")
+        self._symmetry_check.setChecked(True)
+        grid.addWidget(sym_swatch, row_idx, 0)
+        grid.addWidget(self._symmetry_check, row_idx, 1)
         parent_layout.addWidget(box)
 
     def _build_dtypes_group(self, parent_layout: QVBoxLayout) -> None:
@@ -912,6 +931,25 @@ class TikZExportWindow(QMainWindow):
         name_row.addWidget(self._name_edit)
         vlayout.addLayout(name_row)
 
+        # Figure environment wrapper
+        self._fig_check = QCheckBox("Wrap in \\begin{figure} environment")
+        self._fig_check.setChecked(True)
+        vlayout.addWidget(self._fig_check)
+
+        fig_opts_row = QHBoxLayout()
+        fig_opts_row.addWidget(QLabel("  Placement:"))
+        self._fig_placement_combo = QComboBox()
+        for opt in ("h", "b", "t", "H", "!h", "htbp"):
+            self._fig_placement_combo.addItem(opt)
+        self._fig_placement_combo.setFixedWidth(70)
+        fig_opts_row.addWidget(self._fig_placement_combo)
+        fig_opts_row.addSpacing(10)
+        fig_opts_row.addWidget(QLabel("Caption:"))
+        self._fig_caption_edit = QLineEdit()
+        self._fig_caption_edit.setPlaceholderText("optional caption")
+        fig_opts_row.addWidget(self._fig_caption_edit)
+        vlayout.addLayout(fig_opts_row)
+
         parent_layout.addWidget(box)
 
     # ── Slots ────────────────────────────────────────────────────────────
@@ -946,6 +984,8 @@ class TikZExportWindow(QMainWindow):
             name for name, chk in self._layer_checks.items()
             if chk.isChecked()
         }
+        if self._symmetry_check and self._symmetry_check.isChecked():
+            enabled_layers.add("symmetry")
         enabled_dtypes = {
             dt for dt, chk in self._dtype_checks.items()
             if chk.isChecked()
@@ -964,6 +1004,11 @@ class TikZExportWindow(QMainWindow):
             show_legend=self._legend_check.isChecked(),
             show_net_labels=self._net_labels_check.isChecked(),
             comment_name=self._name_edit.text().strip(),
+            wrap_in_figure=self._fig_check.isChecked() if self._fig_check else True,
+            figure_placement=(self._fig_placement_combo.currentText()
+                              if self._fig_placement_combo else "h"),
+            figure_caption=(self._fig_caption_edit.text().strip()
+                            if self._fig_caption_edit else ""),
         )
 
     def _generate(self) -> None:
@@ -2336,7 +2381,7 @@ class MainWindow(QMainWindow):
                 )
                 ps = PlacementScene(run_data, self.lm)
                 pv = CanvasView(ps)
-                pv.set_y_up(ps._H)
+                pv.set_y_up(ps._total_H)
                 pv.set_grid(small, main, vis)
                 pv.mouse_moved.connect(self._on_mouse_moved)
                 pv.right_clicked.connect(self._on_placement_right_click)
@@ -2360,7 +2405,7 @@ class MainWindow(QMainWindow):
             # Single-run placement mode: one Placement tab
             ps = PlacementScene(data, self.lm)
             pv = CanvasView(ps)
-            pv.set_y_up(ps._H)
+            pv.set_y_up(ps._total_H)
             pv.set_grid(small, main, vis)
             pv.mouse_moved.connect(self._on_mouse_moved)
             pv.right_clicked.connect(self._on_placement_right_click)

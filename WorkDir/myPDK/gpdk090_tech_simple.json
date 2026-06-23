@@ -462,7 +462,7 @@
         "wire_width_tables": {
             "signal_analog": [[0, 0.1], [120, 0.2]],
             "signal_digital": [[0, 0.1], [100, 0.12]],
-            "power": [[0, 0.5]],
+            "power": [[0, 1.0]],
             "digital_power": [[0, 0.3]]
         },
         "via_cuts_tables": {

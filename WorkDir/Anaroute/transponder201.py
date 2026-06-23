@@ -266,8 +266,6 @@ def build_magical_db(json_data: dict, simple_tech_file: str,
     # so the placement GDS contains OD at the top cell level (not buried in sub-cells),
     # which is what the FR engine requires to enforce forbidden regions.
     top_ckt.layout().clear()
-    all_x, all_y = [], []
-    real_y_max = 0  # highest y of real circuit blocks (not chip rail virtual blocks)
 
     for bid, node_idx in bid_to_node_idx.items():
         placed = placed_by_id[bid]
@@ -276,25 +274,27 @@ def build_magical_db(json_data: dict, simple_tech_file: str,
         sub = db.subCkt(block_sub_ckt[bid])
         top_ckt.layout().insertLayout(sub.layout(), x_nm, y_nm, False)
         b = sub.layout().boundary()
-        all_x += [x_nm + b.xLo, x_nm + b.xHi]
-        all_y += [y_nm + b.yLo, y_nm + b.yHi]
 
         if bid <= max_real_bid:  # real device block (not chip rail virtual block)
-            real_y_max = max(real_y_max, y_nm + b.yHi)
             if enable_block_fr and od_tech_idx >= 0:
                 top_ckt.layout().insertRect(
                     od_tech_idx,
                     x_nm, y_nm, x_nm + (b.xHi - b.xLo), y_nm + b.yHi)
 
-    # Dynamic top margin: extend boundary above chip rail by at least the circuit→rail gap.
-    # This gives findOrigin() a larger design height → larger gridStep → chip rail pins
-    # (which are just above the real circuit area) stay within the GR grid bounds.
-    chip_rail_y_max = max(all_y)
-    rail_gap = max(0, chip_rail_y_max - real_y_max)
+    # Design boundary from pre-computed chip outline (blocks + rails).
+    # Dynamic top margin: extend above chip rail by the circuit→rail gap so
+    # findOrigin() gets a larger design height → larger gridStep → rail pins
+    # stay within GR grid bounds.
+    outline = json_data.get('chip_outline', {})
+    chip_rail_y_max = um_to_nm(outline.get('y_max', 0.0))
+    real_y_max_nm   = um_to_nm(outline.get('blocks_y_max', outline.get('y_max', 0.0)))
+    rail_gap   = max(0, chip_rail_y_max - real_y_max_nm)
     top_margin = MARGIN_NM + rail_gap
 
-    top_xLo = min(all_x) - MARGIN_NM;  top_yLo = min(all_y) - MARGIN_NM
-    top_xHi = max(all_x) + MARGIN_NM;  top_yHi = chip_rail_y_max + top_margin
+    top_xLo = um_to_nm(outline.get('x_min', 0.0)) - MARGIN_NM
+    top_yLo = um_to_nm(outline.get('y_min', 0.0)) - MARGIN_NM
+    top_xHi = um_to_nm(outline.get('x_max', 0.0)) + MARGIN_NM
+    top_yHi = chip_rail_y_max + top_margin
     top_ckt.layout().setBoundary(top_xLo, top_yLo, top_xHi, top_yHi)
     print(f"[transponder201] Design boundary: "
           f"({nm_to_um(top_xLo):.2f},{nm_to_um(top_yLo):.2f}) → "

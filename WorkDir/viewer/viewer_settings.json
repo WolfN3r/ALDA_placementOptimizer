@@ -1,6 +1,10 @@
 {
   "enabled_pairs": [
     [
+      "SequencePairTopology",
+      "SimulatedAnnealingOptimizer"
+    ],
+    [
       "ILPTopology",
       "ILPOptimizer"
     ]

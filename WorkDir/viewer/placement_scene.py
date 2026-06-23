@@ -48,6 +48,7 @@ class PlacementScene(QGraphicsScene):
         self._by_layer: dict[str, list] = {}
         self._nets_enabled = True
         self._H = 0.0
+        self._total_H = 0.0   # full height from VSS bottom to VDD top (= grid origin scene-y)
         self._block_rects: dict[int, QGraphicsRectItem] = {}
         self._route_items_by_net: dict[str, list] = {}
         self._highlighted_net: str | None = None
@@ -59,6 +60,12 @@ class PlacementScene(QGraphicsScene):
         pr = data.placement_result
         if pr and pr.placed_blocks:
             self._H = max(pb.main_bbox[3] for pb in pr.placed_blocks.values())
+            _y_bot = 0.0
+            # Extend H to include VDD/VSS rail y_max so _sy maps rail tops to scene y≈0
+            for rail in getattr(pr, "chip_power_rails", []):
+                self._H  = max(self._H,  float(rail.get("y_max", 0)))
+                _y_bot   = min(_y_bot,   float(rail.get("y_min", 0)))
+            self._total_H = self._H - _y_bot  # scene y of outline VSS bottom = grid (0,0)
             self._build(pr)
 
         lm.register_callback(self._on_layer_toggle)
@@ -103,8 +110,17 @@ class PlacementScene(QGraphicsScene):
         # Chip-level power rails (drawn first so blocks render on top)
         self._build_chip_rails(pr)
 
-        # Floorplan outline
-        outline = QGraphicsRectItem(0, 0, x_max, self._H)
+        # Floorplan outline — expanded to include power rails
+        rails = getattr(pr, "chip_power_rails", [])
+        out_x_min = min([0.0] + [float(r.get("x_min", 0)) for r in rails])
+        out_x_max = max([x_max] + [float(r.get("x_max", 0)) for r in rails])
+        out_y_min = min([0.0] + [float(r.get("y_min", 0)) for r in rails])
+        # out_y_max == self._H (already extended in __init__ to include rail tops)
+        outline = QGraphicsRectItem(
+            out_x_min, 0.0,
+            out_x_max - out_x_min,
+            self._H - out_y_min,
+        )
         outline.setPen(_pen(QColor(90, 90, 90), 0.25))
         outline.setBrush(QBrush(Qt.GlobalColor.transparent))
         self._add(outline, "annotation")
@@ -141,7 +157,7 @@ class PlacementScene(QGraphicsScene):
 
         lbl = QGraphicsTextItem(f"B{bid}")
         f = QFont("Monospace")
-        f.setPointSizeF(max(min(w, h) * 0.18, 0.25))
+        f.setPointSizeF(max(min(w, h) * 0.18, 1.0))
         lbl.setFont(f)
         lbl.setDefaultTextColor(QColor(220, 220, 220))
         br = lbl.boundingRect()
@@ -177,7 +193,7 @@ class PlacementScene(QGraphicsScene):
         # Topology type label in the top-left corner of the composite
         lbl = QGraphicsTextItem(ttype.replace("_", " "))
         f = QFont("Monospace")
-        f.setPointSizeF(max(min(w, h) * 0.10, 0.20))
+        f.setPointSizeF(max(min(w, h) * 0.10, 1.0))
         lbl.setFont(f)
         lbl.setDefaultTextColor(border_color)
         lbl.setPos(sx + 0.1, sy + 0.1)
@@ -204,7 +220,7 @@ class PlacementScene(QGraphicsScene):
 
             mlbl = QGraphicsTextItem(f"B{mbid}")
             mf = QFont("Monospace")
-            mf.setPointSizeF(max(min(mw, mh) * 0.18, 0.25))
+            mf.setPointSizeF(max(min(mw, mh) * 0.18, 1.0))
             mlbl.setFont(mf)
             mlbl.setDefaultTextColor(QColor(220, 220, 220))
             mbr = mlbl.boundingRect()
@@ -310,7 +326,7 @@ class PlacementScene(QGraphicsScene):
             if tag:
                 lbl = QGraphicsTextItem(tag.replace("_", " "))
                 f = QFont("Monospace")
-                f.setPointSizeF(0.3)
+                f.setPointSizeF(1.0)
                 lbl.setFont(f)
                 lbl.setDefaultTextColor(color)
                 lbl.setZValue(55)
@@ -417,7 +433,7 @@ class PlacementScene(QGraphicsScene):
             self._add(line, "sym_tail_cm")
             lbl = QGraphicsTextItem("T")
             f = QFont("Monospace")
-            f.setPointSizeF(0.3)
+            f.setPointSizeF(1.0)
             f.setBold(True)
             lbl.setFont(f)
             lbl.setDefaultTextColor(color)
