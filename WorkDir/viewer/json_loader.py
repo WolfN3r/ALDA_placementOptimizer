@@ -75,6 +75,7 @@ class PlacementResult:
     renorm_cost: float = 0.0
     t_optimize_ms: float = 0.0
     chip_power_rails: list[dict] = field(default_factory=list)  # VDD/VSS M1 chip rails
+    warmup_runs: list[dict] = field(default_factory=list)       # warmup multi-start results
 
 
 @dataclass
@@ -298,6 +299,7 @@ def load(path: str | Path) -> PlacementData:
                 placed_blocks=_parse_placed_blocks(_pb_raw2),
                 all_runs=list(raw_placement.get("all_runs", [])),
                 chip_power_rails=_extract_chip_rails(_pb_raw2),
+                warmup_runs=list(raw_placement.get("warmup_runs", [])),
             )
 
     has_placement = bool(

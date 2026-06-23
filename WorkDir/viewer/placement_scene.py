@@ -183,10 +183,7 @@ class PlacementScene(QGraphicsScene):
         lbl.setPos(sx + 0.1, sy + 0.1)
         self._add(lbl, "labels")
 
-        # Group-level pins (M1 rectangles placed on the composite outer bbox)
         DOT_R = max(w, h) * 0.03
-        for pname, pdata in pb.pins.items():
-            self._draw_pin(pname, pdata, DOT_R)
 
         # Sub-block outlines with device-type fill
         for mbid, mpb in pb.sub_blocks.items():
@@ -214,6 +211,10 @@ class PlacementScene(QGraphicsScene):
             mlbl.setPos(msx + mw / 2 - mbr.width() / 2, msy + mh / 2 - mbr.height() / 2)
             self._add(mlbl, "labels")
 
+        # Group-level pins drawn last so they render on top of sub-block fills
+        for pname, pdata in pb.pins.items():
+            self._draw_pin(pname, pdata, DOT_R)
+
     def _draw_pin(self, pname: str, pdata: dict, dot_r: float) -> None:
         """Draw a single pin shape (M1 rectangle or dot fallback)."""
         if "x_min" in pdata:
@@ -232,6 +233,7 @@ class PlacementScene(QGraphicsScene):
             pin_item = QGraphicsRectItem(rx0, scene_top, rx1 - rx0, ry1 - ry0)
             pin_item.setPen(_pen(col, 0.02))
             pin_item.setBrush(QBrush(fill))
+            pin_item.setZValue(10)
             net_name = pdata.get("net", "")
             if net_name:
                 pin_item.setToolTip(f"{pname}: {net_name}")
@@ -242,6 +244,7 @@ class PlacementScene(QGraphicsScene):
             dot = QGraphicsEllipseItem(px - dot_r, self._sy(py) - dot_r, 2 * dot_r, 2 * dot_r)
             dot.setBrush(QBrush(QColor(255, 200, 50)))
             dot.setPen(QPen(Qt.PenStyle.NoPen))
+            dot.setZValue(10)
             self._add(dot, "annotation")
 
     def _build_symmetry(self, pr: PlacementResult, x_max: float) -> None:

@@ -16,6 +16,11 @@ from PyQt6.QtWidgets import (
 
 from routing_window import RoutingSettingsDialog, find_routing_output
 
+try:
+    import winsound as _winsound
+except ImportError:
+    _winsound = None
+
 # Paths
 _VIEWER_DIR    = Path(__file__).parent
 _SCRIPTS_DIR   = _VIEWER_DIR.parent / "scripts"
@@ -169,6 +174,7 @@ class SimulationWindow(QMainWindow):
         root.addWidget(self._build_source_group())
         root.addWidget(self._build_config_group())
         root.addWidget(self._build_mode_group())
+        root.addWidget(self._build_warmup_group())
         root.addWidget(self._build_routing_group())
 
         # Run button + status
@@ -182,6 +188,8 @@ class SimulationWindow(QMainWindow):
         self._stop_btn.setEnabled(False)
         self._stop_btn.clicked.connect(self._on_stop)
         run_row.addWidget(self._stop_btn)
+        self._beep_chk = QCheckBox("Beep on finish")
+        run_row.addWidget(self._beep_chk)
         self._status_label = QLabel("Ready")
         self._status_label.setAlignment(
             Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
@@ -307,6 +315,38 @@ class SimulationWindow(QMainWindow):
 
         return box
 
+    def _build_warmup_group(self) -> QGroupBox:
+        box = QGroupBox("Warmup (ILP only)")
+        form = QFormLayout(box)
+        form.setSpacing(6)
+
+        self._warmup_strategy_combo = QComboBox()
+        for label, key in [
+            ("CORP (default)",       "corp"),
+            ("Contour placer",       "contour"),
+            ("Spring / FDGD (paper)", "spring"),
+            ("SPSA",                  "spsa"),
+        ]:
+            self._warmup_strategy_combo.addItem(label, userData=key)
+        form.addRow("Strategy:", self._warmup_strategy_combo)
+
+        self._warmup_n_runs_spin = QSpinBox()
+        self._warmup_n_runs_spin.setRange(1, 16)
+        self._warmup_n_runs_spin.setValue(3)
+        self._warmup_n_runs_spin.setToolTip(
+            "Number of parallel warmup runs; the median-cost result is passed to ILP"
+        )
+        form.addRow("Parallel runs:", self._warmup_n_runs_spin)
+
+        self._cb_warmup_viz = QCheckBox("Save warmup placements for viewer")
+        self._cb_warmup_viz.setToolTip(
+            "When checked, all warmup placements are saved to JSON so you can "
+            "inspect them in the viewer after the run."
+        )
+        form.addRow("", self._cb_warmup_viz)
+
+        return box
+
     def _build_routing_group(self) -> QGroupBox:
         box = QGroupBox("Router")
         row = QHBoxLayout(box)
@@ -383,6 +423,16 @@ class SimulationWindow(QMainWindow):
             "--run-mode",   mode,
             "--no-routing",          # routing is owned by the Router checkbox below
         ]
+
+        # Warmup args (only override when the user actually changed from defaults)
+        warmup_strategy = self._warmup_strategy_combo.currentData() or "corp"
+        warmup_n_runs   = self._warmup_n_runs_spin.value()
+        args += [
+            "--warmup-strategy", warmup_strategy,
+            "--warmup-n-runs",   str(warmup_n_runs),
+        ]
+        if self._cb_warmup_viz.isChecked():
+            args.append("--warmup-visualize")
 
         if self._rb_src_netlist.isChecked():
             netlist_name = self._netlist_combo.currentText()
@@ -469,6 +519,7 @@ class SimulationWindow(QMainWindow):
 
         self._status_label.setText("Done")
         self._log.append(f"\n[viewer] Loading: {out.name}")
+        self._maybe_beep()
         self.result_ready.emit(out)
 
     def _start_router(self, py101_path: Path) -> None:
@@ -517,13 +568,19 @@ class SimulationWindow(QMainWindow):
         if out is not None:
             self._status_label.setText("Done (routed)")
             self._log.append(f"\n[viewer] Loading: {out.name}")
+            self._maybe_beep()
             self.result_ready.emit(out)
         else:
             self._status_label.setText("Done (routing failed — loading placement)")
             self._log.append(f"\n[viewer] Router exit {exit_code}. Loading placement: {self._placement_out.name}")
+            self._maybe_beep()
             self.result_ready.emit(self._placement_out)
 
     # ------------------------------------------------------------------
+
+    def _maybe_beep(self) -> None:
+        if self._beep_chk.isChecked() and _winsound is not None:
+            _winsound.MessageBeep()
 
     def closeEvent(self, event) -> None:
         if self._process and self._process.state() != QProcess.ProcessState.NotRunning:

@@ -11,11 +11,11 @@ from PyQt6.QtWidgets import (
     QMainWindow, QFileDialog, QSplitter, QWidget, QVBoxLayout,
     QHBoxLayout, QLabel, QTreeWidget, QTreeWidgetItem, QGraphicsView,
     QFrame, QTabWidget, QStatusBar, QToolBar, QApplication,
-    QComboBox, QDoubleSpinBox, QCheckBox, QScrollArea, QGroupBox,
+    QComboBox, QDoubleSpinBox, QSpinBox, QCheckBox, QScrollArea, QGroupBox,
     QGridLayout, QStackedWidget, QTableWidget, QTableWidgetItem,
     QToolButton, QMenu, QWidgetAction, QPushButton, QListWidget,
     QListWidgetItem, QLineEdit, QMessageBox, QHeaderView,
-    QDialog, QColorDialog,
+    QDialog, QColorDialog, QSlider, QPlainTextEdit,
 )
 from PyQt6.QtGui import (
     QAction, QKeySequence, QWheelEvent, QMouseEvent, QPainter,
@@ -30,6 +30,7 @@ from placement_scene import PlacementScene
 from drc_checker import load_rules, run_drc, DRCViolation, DRC_CATEGORY_COLORS
 from simulation_window import SimulationWindow
 from routing_window import RoutingWindow
+import tikz_exporter as _tikz
 
 
 # -----------------------------------------------------------------------
@@ -590,6 +591,391 @@ class BlockRenderingDialog(QDialog):
             self._lm.set_device_border(dt, *rgb)
         self._lm.apply_render_settings()
         self.reject()
+
+
+# -----------------------------------------------------------------------
+# TikZ export — result viewer  (shows generated LaTeX code)
+# -----------------------------------------------------------------------
+class TikZResultWindow(QDialog):
+    """Displays generated TikZ code with Copy-to-clipboard and Save-as-file actions."""
+
+    def __init__(self, tex_text: str, parent=None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("TikZ Export — Generated Code")
+        self.resize(820, 600)
+        self._tex = tex_text
+        self._build_ui()
+
+    def _build_ui(self) -> None:
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(6)
+
+        # Info bar
+        n_lines = self._tex.count("\n") + 1
+        n_chars = len(self._tex)
+        info = QLabel(f"{n_lines} lines  ·  {n_chars} characters")
+        info.setStyleSheet("color: #888; font-size: 11px;")
+        layout.addWidget(info)
+
+        # Code editor (read-only)
+        editor = QPlainTextEdit()
+        editor.setReadOnly(True)
+        editor.setPlainText(self._tex)
+        from PyQt6.QtGui import QFont as _QFont
+        font = _QFont("Courier New", 9)
+        font.setFixedPitch(True)
+        editor.setFont(font)
+        editor.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
+        layout.addWidget(editor)
+
+        # Buttons
+        btn_row = QHBoxLayout()
+        btn_copy = QPushButton("Copy to Clipboard")
+        btn_copy.setMinimumWidth(150)
+        btn_copy.clicked.connect(self._copy_to_clipboard)
+        btn_save = QPushButton("Save as .tex…")
+        btn_save.setMinimumWidth(130)
+        btn_save.clicked.connect(self._save_as_file)
+        btn_close = QPushButton("Close")
+        btn_close.clicked.connect(self.accept)
+        btn_row.addWidget(btn_copy)
+        btn_row.addWidget(btn_save)
+        btn_row.addStretch()
+        btn_row.addWidget(btn_close)
+        layout.addLayout(btn_row)
+
+    def _copy_to_clipboard(self) -> None:
+        QApplication.clipboard().setText(self._tex)
+        # Brief visual feedback via window title
+        orig = self.windowTitle()
+        self.setWindowTitle("TikZ Export — Copied!")
+        from PyQt6.QtCore import QTimer
+        QTimer.singleShot(1500, lambda: self.setWindowTitle(orig))
+
+    def _save_as_file(self) -> None:
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Save TikZ File", "placement.tex",
+            "LaTeX files (*.tex);;All files (*)",
+        )
+        if path:
+            try:
+                from pathlib import Path as _Path
+                _Path(path).write_text(self._tex, encoding="utf-8")
+            except OSError as exc:
+                QMessageBox.critical(self, "Save Error", str(exc))
+
+
+# -----------------------------------------------------------------------
+# TikZ export — settings dialog  (Tools > Export TikZ…)
+# -----------------------------------------------------------------------
+class TikZExportWindow(QMainWindow):
+    """Settings dialog for TikZ figure export."""
+
+    def __init__(
+        self,
+        data: json_loader.PlacementData,
+        lm: LayerManager,
+        drc_violations=None,
+        parent=None,
+    ) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("Export TikZ")
+        self.resize(480, 680)
+        self._data = data
+        self._lm = lm
+        self._drc_violations = drc_violations
+
+        # Collect device types present in this design
+        self._present_dtypes: list[str] = sorted({
+            b.device_type for b in data.blocks
+        })
+
+        self._layer_checks: dict[str, QCheckBox] = {}
+        self._dtype_checks: dict[str, QCheckBox] = {}
+        self._scale_slider: QSlider | None = None
+        self._scale_spin: QSpinBox | None = None
+        self._scale_label: QLabel | None = None
+        self._result_window: TikZResultWindow | None = None
+
+        central = QWidget()
+        self.setCentralWidget(central)
+        outer = QVBoxLayout(central)
+        outer.setContentsMargins(0, 0, 0, 0)
+
+        # Scroll area for all settings
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        pane = QWidget()
+        pane_layout = QVBoxLayout(pane)
+        pane_layout.setContentsMargins(10, 10, 10, 10)
+        pane_layout.setSpacing(8)
+        scroll.setWidget(pane)
+        outer.addWidget(scroll, 1)
+
+        self._build_layers_group(pane_layout)
+        self._build_dtypes_group(pane_layout)
+        self._build_scale_group(pane_layout)
+        self._build_labels_group(pane_layout)
+        self._build_scalebar_group(pane_layout)
+        self._build_legend_group(pane_layout)
+        pane_layout.addStretch()
+
+        # Generate button in a non-scrolling footer
+        footer = QWidget()
+        footer_row = QHBoxLayout(footer)
+        footer_row.setContentsMargins(10, 6, 10, 10)
+        gen_btn = QPushButton("Generate TikZ")
+        gen_btn.setMinimumHeight(32)
+        gen_btn.setMinimumWidth(160)
+        gen_btn.clicked.connect(self._generate)
+        footer_row.addStretch()
+        footer_row.addWidget(gen_btn)
+        footer_row.addStretch()
+        outer.addWidget(footer)
+
+        self._update_scale_label(100)
+
+    # ── UI builders ──────────────────────────────────────────────────────
+
+    def _make_swatch(self, color: "QColor") -> QLabel:
+        swatch = QLabel()
+        swatch.setFixedSize(14, 14)
+        swatch.setStyleSheet(
+            f"background-color: rgb({color.red()},{color.green()},{color.blue()});"
+            "border: 1px solid #555; border-radius: 2px;"
+        )
+        return swatch
+
+    def _build_layers_group(self, parent_layout: QVBoxLayout) -> None:
+        box = QGroupBox("Layers")
+        grid = QGridLayout(box)
+        grid.setSpacing(3)
+        for row_idx, ld in enumerate(self._lm.all_layers()):
+            chk = QCheckBox(ld.display_name)
+            chk.setChecked(ld.name != "drc_overlay")
+            self._layer_checks[ld.name] = chk
+            swatch = self._make_swatch(ld.color)
+            grid.addWidget(swatch, row_idx, 0)
+            grid.addWidget(chk, row_idx, 1)
+        parent_layout.addWidget(box)
+
+    def _build_dtypes_group(self, parent_layout: QVBoxLayout) -> None:
+        box = QGroupBox("Device Types")
+        grid = QGridLayout(box)
+        grid.setSpacing(3)
+        for row_idx, dt in enumerate(self._present_dtypes):
+            chk = QCheckBox(dt)
+            chk.setChecked(True)
+            self._dtype_checks[dt] = chk
+            fill_c = self._lm.block_fill(dt)
+            border_c = self._lm.block_border(dt)
+            fill_sw = self._make_swatch(fill_c)
+            border_sw = self._make_swatch(border_c)
+            lbl = QLabel("fill / border")
+            lbl.setStyleSheet("color: #888; font-size: 10px;")
+            row = QHBoxLayout()
+            row.setSpacing(3)
+            row.addWidget(fill_sw)
+            row.addWidget(border_sw)
+            row.addWidget(lbl)
+            row.addStretch()
+            w = QWidget()
+            w.setLayout(row)
+            grid.addWidget(chk, row_idx, 0)
+            grid.addWidget(w, row_idx, 1)
+        if not self._present_dtypes:
+            grid.addWidget(QLabel("(no device types detected)"), 0, 0)
+        parent_layout.addWidget(box)
+
+    def _build_scale_group(self, parent_layout: QVBoxLayout) -> None:
+        box = QGroupBox("Scale && Geometry")
+        vlayout = QVBoxLayout(box)
+        vlayout.setSpacing(6)
+
+        # Slider row
+        slider_row = QHBoxLayout()
+        lbl_min = QLabel("50%")
+        lbl_min.setStyleSheet("color: #888; font-size: 10px;")
+        self._scale_slider = QSlider(Qt.Orientation.Horizontal)
+        self._scale_slider.setRange(50, 500)
+        self._scale_slider.setValue(100)
+        self._scale_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
+        self._scale_slider.setTickInterval(50)
+        self._scale_spin = QSpinBox()
+        self._scale_spin.setRange(50, 500)
+        self._scale_spin.setValue(100)
+        self._scale_spin.setSuffix(" %")
+        self._scale_spin.setFixedWidth(75)
+        lbl_max = QLabel("500%")
+        lbl_max.setStyleSheet("color: #888; font-size: 10px;")
+        slider_row.addWidget(lbl_min)
+        slider_row.addWidget(self._scale_slider, 1)
+        slider_row.addWidget(lbl_max)
+        slider_row.addWidget(self._scale_spin)
+        vlayout.addLayout(slider_row)
+
+        # Live size preview
+        self._scale_label = QLabel()
+        self._scale_label.setStyleSheet("color: #aaa; font-size: 11px;")
+        vlayout.addWidget(self._scale_label)
+
+        self._scale_slider.valueChanged.connect(self._on_scale_changed)
+        self._scale_spin.valueChanged.connect(self._on_scale_changed)
+
+        # Line width
+        lw_row = QHBoxLayout()
+        lw_row.addWidget(QLabel("Border line width:"))
+        self._lw_spin = QDoubleSpinBox()
+        self._lw_spin.setRange(0.05, 5.0)
+        self._lw_spin.setValue(0.4)
+        self._lw_spin.setSingleStep(0.05)
+        self._lw_spin.setDecimals(2)
+        self._lw_spin.setSuffix(" pt")
+        self._lw_spin.setFixedWidth(90)
+        lw_row.addWidget(self._lw_spin)
+        lw_row.addStretch()
+        vlayout.addLayout(lw_row)
+
+        # White background
+        self._bg_check = QCheckBox("White background")
+        self._bg_check.setChecked(True)
+        vlayout.addWidget(self._bg_check)
+
+        parent_layout.addWidget(box)
+
+    def _build_labels_group(self, parent_layout: QVBoxLayout) -> None:
+        box = QGroupBox("Labels")
+        vlayout = QVBoxLayout(box)
+        self._show_labels_check = QCheckBox("Show block labels (B0, B1, …)")
+        self._show_labels_check.setChecked(True)
+        vlayout.addWidget(self._show_labels_check)
+
+        font_row = QHBoxLayout()
+        font_row.addWidget(QLabel("Label font size:"))
+        self._font_combo = QComboBox()
+        self._font_combo.addItems(["tiny", "scriptsize", "footnotesize", "small"])
+        font_row.addWidget(self._font_combo)
+        font_row.addStretch()
+        vlayout.addLayout(font_row)
+
+        self._net_labels_check = QCheckBox("Show net labels near ratsnest centroid")
+        self._net_labels_check.setChecked(False)
+        vlayout.addWidget(self._net_labels_check)
+
+        parent_layout.addWidget(box)
+
+    def _build_scalebar_group(self, parent_layout: QVBoxLayout) -> None:
+        box = QGroupBox("Scale Bar")
+        vlayout = QVBoxLayout(box)
+
+        self._scalebar_check = QCheckBox("Show scale bar")
+        self._scalebar_check.setChecked(True)
+        vlayout.addWidget(self._scalebar_check)
+
+        len_row = QHBoxLayout()
+        len_row.addWidget(QLabel("Bar length (µm):"))
+        self._bar_len_spin = QDoubleSpinBox()
+        self._bar_len_spin.setRange(0.0, 10000.0)
+        self._bar_len_spin.setValue(0.0)
+        self._bar_len_spin.setSingleStep(1.0)
+        self._bar_len_spin.setDecimals(1)
+        self._bar_len_spin.setSpecialValueText("auto")
+        self._bar_len_spin.setFixedWidth(100)
+        len_row.addWidget(self._bar_len_spin)
+        len_row.addStretch()
+        vlayout.addLayout(len_row)
+
+        pos_row = QHBoxLayout()
+        pos_row.addWidget(QLabel("Position:"))
+        self._bar_pos_combo = QComboBox()
+        self._bar_pos_combo.addItems(["bottom-left", "bottom-right"])
+        pos_row.addWidget(self._bar_pos_combo)
+        pos_row.addStretch()
+        vlayout.addLayout(pos_row)
+
+        parent_layout.addWidget(box)
+
+    def _build_legend_group(self, parent_layout: QVBoxLayout) -> None:
+        box = QGroupBox("Legend && Extras")
+        vlayout = QVBoxLayout(box)
+
+        self._legend_check = QCheckBox("Show color legend")
+        self._legend_check.setChecked(True)
+        vlayout.addWidget(self._legend_check)
+
+        name_row = QHBoxLayout()
+        name_row.addWidget(QLabel("Comment / name:"))
+        self._name_edit = QLineEdit()
+        self._name_edit.setPlaceholderText("my_placement  (shown in header comment)")
+        name_row.addWidget(self._name_edit)
+        vlayout.addLayout(name_row)
+
+        parent_layout.addWidget(box)
+
+    # ── Slots ────────────────────────────────────────────────────────────
+
+    def _on_scale_changed(self, value: int) -> None:
+        self._scale_slider.blockSignals(True)
+        self._scale_spin.blockSignals(True)
+        self._scale_slider.setValue(value)
+        self._scale_spin.setValue(value)
+        self._scale_slider.blockSignals(False)
+        self._scale_spin.blockSignals(False)
+        self._update_scale_label(value)
+
+    def _update_scale_label(self, scale_pct: int) -> None:
+        if self._scale_label is None:
+            return
+        pr = self._data.placement_result
+        if not pr or not pr.placed_blocks:
+            self._scale_label.setText("→ no placement data loaded")
+            return
+        flat_bbs = [pb.main_bbox for pb in pr.placed_blocks.values()]
+        chip_w = max(b[2] for b in flat_bbs) - min(b[0] for b in flat_bbs)
+        chip_h = max(b[3] for b in flat_bbs) - min(b[1] for b in flat_bbs)
+        S = scale_pct / 100.0
+        self._scale_label.setText(
+            f"→ {chip_w*S:.1f} × {chip_h*S:.1f} mm on paper"
+            f"  (1 µm = {S:.2f} mm)"
+        )
+
+    def _collect_settings(self) -> "_tikz.TikZExportSettings":
+        enabled_layers = {
+            name for name, chk in self._layer_checks.items()
+            if chk.isChecked()
+        }
+        enabled_dtypes = {
+            dt for dt, chk in self._dtype_checks.items()
+            if chk.isChecked()
+        }
+        return _tikz.TikZExportSettings(
+            scale_pct=float(self._scale_spin.value()),
+            enabled_layers=enabled_layers,
+            enabled_device_types=enabled_dtypes,
+            show_labels=self._show_labels_check.isChecked(),
+            label_font_size=self._font_combo.currentText(),
+            line_width_pt=self._lw_spin.value(),
+            background_white=self._bg_check.isChecked(),
+            show_scale_bar=self._scalebar_check.isChecked(),
+            scale_bar_length_um=self._bar_len_spin.value(),
+            scale_bar_position=self._bar_pos_combo.currentText(),
+            show_legend=self._legend_check.isChecked(),
+            show_net_labels=self._net_labels_check.isChecked(),
+            comment_name=self._name_edit.text().strip(),
+        )
+
+    def _generate(self) -> None:
+        settings = self._collect_settings()
+        try:
+            tex = _tikz.generate(self._data, self._lm, settings, self._drc_violations)
+        except Exception as exc:
+            QMessageBox.critical(self, "TikZ Export Error", str(exc))
+            return
+        self._result_window = TikZResultWindow(tex, parent=self)
+        self._result_window.show()
+        self._result_window.raise_()
 
 
 # -----------------------------------------------------------------------
@@ -1694,12 +2080,15 @@ class MainWindow(QMainWindow):
         self._placement_tab_idx: int = -1
         self._detail_windows: list[BlockDetailWindow] = []
         self._drc_window:  DRCWindow | None = None
-        self._drc_action:  QAction  | None = None
-        self._sim_action:   QAction  | None = None
-        self._gds_action:   QAction  | None = None
-        self._route_action: QAction  | None = None
+        self._drc_action:    QAction  | None = None
+        self._sim_action:    QAction  | None = None
+        self._gds_action:    QAction  | None = None
+        self._tikz_action:   QAction  | None = None
+        self._route_action:  QAction  | None = None
+        self._warmup_action: QAction  | None = None
         self._sim_window:   SimulationWindow | None = None
         self._gds_window:   GDSExportWindow  | None = None
+        self._tikz_window:  TikZExportWindow | None = None
         self._route_window: RoutingWindow    | None = None
         self._current_path: Path | None = None
 
@@ -1839,12 +2228,24 @@ class MainWindow(QMainWindow):
         self._route_action.triggered.connect(self._open_routing_window)
         tm.addAction(self._route_action)
 
+        self._warmup_action = QAction("&Warmup Runs…", self)
+        self._warmup_action.setToolTip("View all warmup placements from the last ILP run")
+        self._warmup_action.setEnabled(False)
+        self._warmup_action.triggered.connect(self._on_view_warmup_runs)
+        tm.addAction(self._warmup_action)
+
         tm.addSeparator()
         self._gds_action = QAction("&Export GDS…", self)
         self._gds_action.setToolTip("Export placement to GDS-II file")
         self._gds_action.setEnabled(False)
         self._gds_action.triggered.connect(self._open_gds_window)
         tm.addAction(self._gds_action)
+
+        self._tikz_action = QAction("Export &TikZ…", self)
+        self._tikz_action.setToolTip("Export placement as TikZ/LaTeX figure")
+        self._tikz_action.setEnabled(False)
+        self._tikz_action.triggered.connect(self._open_tikz_window)
+        tm.addAction(self._tikz_action)
 
     # -----------------------------------------------------------------------
     def _current_view(self) -> CanvasView | None:
@@ -1902,6 +2303,9 @@ class MainWindow(QMainWindow):
         if self._gds_window is not None:
             self._gds_window.close()
             self._gds_window = None
+        if self._tikz_window is not None:
+            self._tikz_window.close()
+            self._tikz_window = None
 
         self._data = data
         self._scenes.clear()
@@ -2020,6 +2424,14 @@ class MainWindow(QMainWindow):
             self._route_action.setEnabled(has_placement)
         if self._gds_action:
             self._gds_action.setEnabled(True)  # available for any loaded data
+        if self._tikz_action:
+            self._tikz_action.setEnabled(True)
+        if self._warmup_action:
+            has_warmup = (
+                data.placement_result is not None
+                and bool(data.placement_result.warmup_runs)
+            )
+            self._warmup_action.setEnabled(has_warmup)
 
     # -----------------------------------------------------------------------
     def _on_tab_changed(self, idx: int) -> None:
@@ -2108,6 +2520,25 @@ class MainWindow(QMainWindow):
         self._current_path = path
         data = json_loader.load(path)
         self._load_data(data, path.name)
+        # Auto-open warmup visualizer if warmup_runs were saved
+        if (
+            data.placement_result is not None
+            and data.placement_result.warmup_runs
+        ):
+            self._open_warmup_view(data.placement_result.warmup_runs)
+
+    def _open_warmup_view(self, warmup_runs: list) -> None:
+        from warmup_view import WarmupViewDialog
+        dlg = WarmupViewDialog(warmup_runs, parent=self)
+        dlg.show()
+
+    def _on_view_warmup_runs(self) -> None:
+        if (
+            self._data is not None
+            and self._data.placement_result is not None
+            and self._data.placement_result.warmup_runs
+        ):
+            self._open_warmup_view(self._data.placement_result.warmup_runs)
 
     def _open_routing_window(self) -> None:
         if self._route_window is not None and self._route_window.isVisible():
@@ -2195,6 +2626,23 @@ class MainWindow(QMainWindow):
             return
         self._gds_window = GDSExportWindow(self._data, parent=self)
         self._gds_window.show()
+
+    def _open_tikz_window(self) -> None:
+        if self._tikz_window is not None and self._tikz_window.isVisible():
+            self._tikz_window.raise_()
+            self._tikz_window.activateWindow()
+            return
+        if not self._data:
+            return
+        drc_viols = (
+            self._drc_window._violations
+            if self._drc_window is not None and self._drc_window.isVisible()
+            else None
+        )
+        self._tikz_window = TikZExportWindow(
+            self._data, self.lm, drc_viols, parent=self
+        )
+        self._tikz_window.show()
 
     # -----------------------------------------------------------------------
     def keyPressEvent(self, event) -> None:

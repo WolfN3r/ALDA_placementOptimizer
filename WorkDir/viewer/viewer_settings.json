@@ -3,14 +3,6 @@
     [
       "ILPTopology",
       "ILPOptimizer"
-    ],
-    [
-      "ILPTopology",
-      "PSOILPOptimizer"
-    ],
-    [
-      "ILPTopology",
-      "BStarILPOptimizer"
     ]
   ]
 }
