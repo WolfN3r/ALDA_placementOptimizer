@@ -77,30 +77,83 @@ def convert_py101_to_magical(data: dict) -> dict:
     blocks_list = data.get('blocks', [])
     block_info  = {b['block_id']: b for b in blocks_list}
 
-    # --- real circuit blocks ---
-    magical_placed = []
-    real_bids = []
+    # --- composite group block metadata ---
+    # Composite blocks (bid >= 10000, created by hierarchy_builder) use net names as pin
+    # keys (e.g. "tail", "vin") instead of P<N> indices.  Build remapping tables so we
+    # can convert to B<bid>_P<N> format expected by transponder201 and rebuild the
+    # routing netlist to reference composite boundary pins rather than sub-block atomic pins.
+    sub_to_composite: dict[int, int] = {}          # atomic sub-block bid → composite bid
+    composite_pin_remap: dict[int, dict] = {}       # composite bid → {old_key → "P<N>"}
+    net_to_composite_pins: dict[str, list] = {}    # net_id → ["B<bid>_P<N>", …]
+    composite_block_dicts: list[dict] = []
+
     for bid_str, pb in placed_dict.items():
         if not bid_str.lstrip('-').isdigit():
             continue
         bid = int(bid_str)
-        real_bids.append(bid)
+        if 'sub_blocks' not in pb:
+            continue
+        for sb_bid_str in pb.get('sub_blocks', {}):
+            sub_to_composite[int(sb_bid_str)] = bid
+        # Assign P<N> indices: keep existing P<digit> keys, assign sequential to the rest
+        pin_keys = list(pb.get('pins', {}).keys())
+        p_numeric = {k: int(k[1:]) for k in pin_keys if k.startswith('P') and k[1:].isdigit()}
+        non_numeric = [k for k in pin_keys if k not in p_numeric]
+        next_idx = (max(p_numeric.values()) + 1) if p_numeric else 0
+        key_map = {k: f'P{idx}' for k, idx in p_numeric.items()}
+        for k in non_numeric:
+            key_map[k] = f'P{next_idx}'
+            next_idx += 1
+        composite_pin_remap[bid] = key_map
+        composite_block_dicts.append({'block_id': bid, 'device_type': pb.get('device_type', 'nmos_rvt')})
+
+    for bid_str, pb in placed_dict.items():
+        if not bid_str.lstrip('-').isdigit():
+            continue
+        bid = int(bid_str)
+        if bid not in composite_pin_remap:
+            continue
+        key_map = composite_pin_remap[bid]
+        for old_key, p_val in pb.get('pins', {}).items():
+            net_id = p_val.get('net', '')
+            if net_id:
+                net_to_composite_pins.setdefault(net_id, []).append(f'B{bid}_{key_map[old_key]}')
+
+    # --- real circuit blocks (atomic + composite) ---
+    magical_placed = []
+    real_bids = []   # only atomic bids; composite bids > max_real_bid → no OD insertion
+    for bid_str, pb in placed_dict.items():
+        if not bid_str.lstrip('-').isdigit():
+            continue
+        bid = int(bid_str)
         binfo = block_info.get(bid, {})
 
         pin_rects = {}
-        for p_key, p_val in pb.get('pins', {}).items():
-            pin_idx = int(p_key.lstrip('P'))
-            new_key = f'B{bid}_P{pin_idx}'
-            pin_rects[new_key] = {
-                'x_min': p_val['x_min'],
-                'y_min': p_val['y_min'],
-                'x_max': p_val['x_max'],
-                'y_max': p_val['y_max'],
-            }
+        if bid in composite_pin_remap:
+            key_map = composite_pin_remap[bid]
+            for old_key, p_val in pb.get('pins', {}).items():
+                new_key = f'B{bid}_{key_map[old_key]}'
+                pin_rects[new_key] = {
+                    'x_min': p_val['x_min'],
+                    'y_min': p_val['y_min'],
+                    'x_max': p_val['x_max'],
+                    'y_max': p_val['y_max'],
+                }
+        else:
+            real_bids.append(bid)
+            for p_key, p_val in pb.get('pins', {}).items():
+                pin_idx = int(p_key.lstrip('P'))
+                new_key = f'B{bid}_P{pin_idx}'
+                pin_rects[new_key] = {
+                    'x_min': p_val['x_min'],
+                    'y_min': p_val['y_min'],
+                    'x_max': p_val['x_max'],
+                    'y_max': p_val['y_max'],
+                }
 
         magical_placed.append({
             'block_id':    bid,
-            'device_type': binfo.get('device_type', 'nmos_rvt'),
+            'device_type': pb.get('device_type', binfo.get('device_type', 'nmos_rvt')),
             'main_bbox':   pb['main_bbox'],
             'pin_rects':   pin_rects,
         })
@@ -161,18 +214,32 @@ def convert_py101_to_magical(data: dict) -> dict:
 
     magical_placed.sort(key=lambda b: b['block_id'])
 
-    # Deep-copy netlist and add rail terminal pins to their power nets
+    # Rebuild netlist: replace sub-block atomic pins with composite boundary pins,
+    # then add virtual power-rail terminal pins.
     netlist = copy.deepcopy(data['netlist'])
     for net in netlist.get('nets', []):
-        vbid = rail_net_to_vid.get(net['net_id'])
+        net_id = net['net_id']
+        new_pins = []
+        for pin_ref in net.get('pins', []):
+            sep = pin_ref.find('_')
+            if pin_ref.startswith('B') and sep > 0:
+                try:
+                    if int(pin_ref[1:sep]) in sub_to_composite:
+                        continue  # absorbed into composite; boundary pin added below
+                except ValueError:
+                    pass
+            new_pins.append(pin_ref)
+        new_pins.extend(net_to_composite_pins.get(net_id, []))
+        vbid = rail_net_to_vid.get(net_id)
         if vbid is not None:
-            net['pins'] = list(net.get('pins', [])) + [f'B{vbid}_P0']
+            new_pins.append(f'B{vbid}_P0')
+        net['pins'] = new_pins
 
     return {
         'design_name':   'CustomDesign',
         'technology':    data.get('technology', 'gpdk090_simple_tech'),
         'max_real_bid':  max_real_bid,   # used by build_magical_db to skip OD on virtual blocks
-        'blocks':        list(blocks_list) + virtual_blocks,
+        'blocks':        list(blocks_list) + virtual_blocks + composite_block_dicts,
         'netlist':       netlist,
         'placed_blocks': magical_placed,
     }

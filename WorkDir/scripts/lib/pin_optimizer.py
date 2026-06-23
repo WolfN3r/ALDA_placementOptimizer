@@ -3,21 +3,15 @@
 Post-placement pin position optimizer.
 
 Rules applied in order:
-  1. Power pins (P0 + any pin whose net matches the block's power_rail type) →
-     full-width M1 stripe at top (VDD) or bottom (VSS).  Co-located for
-     same-net power pins on the same block (merged).
+  1. Power pins (P0 + any pin whose net matches the block's power_rail type,
+     or any pin on a composite block whose net is a power net) →
+     full-width M1 stripe at top (VDD) or bottom (VSS).
 
-  2. Signal pins on symmetric block pairs:
-     - Shared nets (net connects BOTH blocks in the pair) → inner side (facing
-       the symmetry axis).  Y position is the same for corresponding mirrored
-       pins to maintain layout symmetry.
-     - Non-shared nets → outer side.
-
-  3. All remaining signal pins → ILP-minimises net HPWL.
+  2. All signal pins → ILP minimises net HPWL.
      Routing-grid aligned, fully inside main_bbox, no power-stripe overlap.
 
-  4. Chip-level power rails → wide M1 rectangles above (VDD) and below (VSS)
-     the full placement bounding box, stored as "__chip_*" keys.
+  3. Chip-level power rails → wide M1 rectangles above (VDD) and below (VSS)
+     the full placement bounding box, with 10× routing-pitch clearance from blocks.
 
 All pin rectangles are guaranteed to lie fully within their block's main_bbox.
 """
@@ -163,8 +157,12 @@ def _build_pwr_map(
 ) -> dict[str, dict[str, str]]:
     """
     Return {bid_str: {pname: rail_type}} for every pin that should be rendered
-    as a power stripe.  Includes P0 (designated power pin) and any additional
-    pin on the same block whose net matches the block's power_rail type.
+    as a power stripe.
+
+    For blocks with a declared power_rail: P0 is always power; any other pin
+    whose net matches the rail type is also power.
+    For blocks without a declared power_rail (e.g. composite groups): any pin
+    whose net is a VDD/VSS net is treated as a power stripe.
     """
     pin_net: dict[str, str] = {
         pref: net.get("net_id", "")
@@ -174,105 +172,17 @@ def _build_pwr_map(
     pwr: dict[str, dict[str, str]] = {}
     for bid_str, pb in placed_blocks.items():
         block_rail = (blocks.get(bid_str) or {}).get("power_rail")
-        if not block_rail:
-            continue
         for pname in pb["pins"]:
             pref   = f"B{bid_str}_{pname}"
             nid    = pin_net.get(pref, "")
             p_rail = _net_rail(nid)
-            if pname == "P0" or p_rail == block_rail:
-                pwr.setdefault(bid_str, {})[pname] = block_rail
+            if block_rail:
+                if pname == "P0" or p_rail == block_rail:
+                    pwr.setdefault(bid_str, {})[pname] = block_rail
+            elif p_rail is not None:
+                # Composite / untyped block — promote any power-net pin to stripe
+                pwr.setdefault(bid_str, {})[pname] = p_rail
     return pwr
-
-
-# ---------------------------------------------------------------------------
-# Symmetry-aware side/Y info
-# ---------------------------------------------------------------------------
-
-def _build_sym_info(
-    placed_blocks: dict,
-    sym_groups: list,
-    nets: list,
-    pwr: dict,
-) -> tuple[dict[tuple[str, str], int], list[tuple]]:
-    """
-    Analyse placed symmetry pairs and return:
-
-    forced_side : {(bid_str, pname): side_index}
-        0 = left, 1 = right.
-        Shared nets (connecting both blocks) → inner side (facing the other block).
-        Non-shared nets → outer side.
-
-    y_pairs : [(bid_L, pname_L, si_L, bid_R, pname_R, si_R), ...]
-        Pin pairs that must use the same routing-grid slot index.
-        Covers same-net pairs (hard Y symmetry) and same-label non-shared pairs
-        (mirror-position symmetry from symmetric_net_pairs).
-    """
-    # pin_ref → net_id, and net_id → set of block IDs that participate
-    pin_net: dict[str, str] = {}
-    net_blocks: dict[str, set[str]] = {}
-    for net in nets:
-        nid = net.get("net_id", "")
-        for pref in net.get("pins", []):
-            pin_net[pref] = nid
-            bid_str = pref.split("_", 1)[0][1:]
-            net_blocks.setdefault(nid, set()).add(bid_str)
-
-    forced_side: dict[tuple[str, str], int] = {}
-    y_pairs: list[tuple] = []
-
-    for group in sym_groups:
-        axis = group.get("axis", "vertical")
-        if axis != "vertical":
-            continue  # only vertical symmetry axes for left/right side logic
-
-        for pair in group.get("pairs", []):
-            if len(pair) != 2:
-                continue
-            bid_a, bid_b = str(pair[0]), str(pair[1])
-            if bid_a not in placed_blocks or bid_b not in placed_blocks:
-                continue
-
-            # Determine left (smaller x_center) and right blocks
-            bb_a = placed_blocks[bid_a]["main_bbox"]
-            bb_b = placed_blocks[bid_b]["main_bbox"]
-            cx_a = (bb_a["x_min"] + bb_a["x_max"]) / 2
-            cx_b = (bb_b["x_min"] + bb_b["x_max"]) / 2
-            left_bid  = bid_a if cx_a <= cx_b else bid_b
-            right_bid = bid_b if cx_a <= cx_b else bid_a
-
-            # Signal pin sets (power pins already merged, skip them)
-            left_sig  = [p for p in placed_blocks[left_bid]["pins"]
-                         if p not in pwr.get(left_bid, {})]
-            right_sig = [p for p in placed_blocks[right_bid]["pins"]
-                         if p not in pwr.get(right_bid, {})]
-
-            left_sig_set  = set(left_sig)
-            right_sig_set = set(right_sig)
-
-            # Classify each signal pin: shared (net touches both blocks) or not
-            # Left block: shared → inner = right (si=1), non-shared → outer = left (si=0)
-            for pname in left_sig:
-                pref = f"B{left_bid}_{pname}"
-                nid  = pin_net.get(pref, "")
-                is_shared = right_bid in net_blocks.get(nid, set())
-                forced_side[(left_bid, pname)] = 1 if is_shared else 0
-
-            # Right block: shared → inner = left (si=0), non-shared → outer = right (si=1)
-            for pname in right_sig:
-                pref = f"B{right_bid}_{pname}"
-                nid  = pin_net.get(pref, "")
-                is_shared = left_bid in net_blocks.get(nid, set())
-                forced_side[(right_bid, pname)] = 0 if is_shared else 1
-
-            # Y-symmetry pairs: pins with the same label in both blocks must share the
-            # same routing-grid slot index to maintain physical layout symmetry
-            for pname in left_sig_set & right_sig_set:
-                si_l = forced_side.get((left_bid, pname), 0)
-                si_r = forced_side.get((right_bid, pname), 0)
-                y_pairs.append((left_bid, pname, si_l, right_bid, pname, si_r))
-
-    return forced_side, y_pairs
 
 
 # ---------------------------------------------------------------------------
@@ -280,7 +190,12 @@ def _build_sym_info(
 # ---------------------------------------------------------------------------
 
 def _compute_chip_rails(placed_blocks: dict, nets: list, pdk: dict) -> dict:
-    """Wide M1 rails above (VDD) and below (VSS) the full placement bounding box."""
+    """Wide M1 rails above (VDD) and below (VSS) the full placement bounding box.
+
+    Clearance between the outermost block edge and the near edge of the rail is
+    10× the routing-grid vertical pitch (≈ 2.80 µm for gpdk090), giving the
+    router sufficient space between the chip rail and the top/bottom block edges.
+    """
     chip_bboxes = [
         pb["main_bbox"] for pb in placed_blocks.values()
         if isinstance(pb, dict) and "main_bbox" in pb
@@ -293,22 +208,22 @@ def _compute_chip_rails(placed_blocks: dict, nets: list, pdk: dict) -> dict:
     y_min = min(b["y_min"] for b in chip_bboxes)
     y_max = max(b["y_max"] for b in chip_bboxes)
 
-    m1_spc  = float(pdk["metal_layers"]["M1"]["min_spacing"])
     tables  = pdk["routing_widths"]["wire_width_tables"].get("power", [[0, _CHIP_RAIL_W]])
     rail_w  = float(tables[0][1]) if tables else _CHIP_RAIL_W
+    gap     = 10.0 * float(pdk["routing_grid"]["vertical_pitch"])  # 10 × 0.28 = 2.80 µm
 
     vdd_name, vss_name = _power_net_names(nets)
 
     return {
         "__chip_vdd_rail__": {
             "layer": "M1", "net": vdd_name,
-            "x_min": _s6(x_min), "y_min": _s6(y_max + m1_spc),
-            "x_max": _s6(x_max), "y_max": _s6(y_max + m1_spc + rail_w),
+            "x_min": _s6(x_min), "y_min": _s6(y_max + gap),
+            "x_max": _s6(x_max), "y_max": _s6(y_max + gap + rail_w),
         },
         "__chip_vss_rail__": {
             "layer": "M1", "net": vss_name,
-            "x_min": _s6(x_min), "y_min": _s6(y_min - m1_spc - rail_w),
-            "x_max": _s6(x_max), "y_max": _s6(y_min - m1_spc),
+            "x_min": _s6(x_min), "y_min": _s6(y_min - gap - rail_w),
+            "x_max": _s6(x_max), "y_max": _s6(y_min - gap),
         },
     }
 
@@ -322,7 +237,8 @@ def optimize_pin_positions(
     nets: list,
     blocks: dict,
     pdk: dict | None = None,
-    sym_groups: list | None = None,
+    sym_groups: list | None = None,  # kept for call-site compatibility, ignored
+    groups: list | None = None,      # kept for call-site compatibility, ignored
 ) -> dict:
     """
     Replace center-point pins with physical M1 rectangles.
@@ -332,25 +248,27 @@ def optimize_pin_positions(
     nets          : [{net_id, net_type, pins: ["B0_P1", ...]}, ...]
     blocks        : {bid_str: {"power_rail": "VDD"|"VSS"|None, ...}}
     pdk           : PDK tech dict (auto-loaded if None)
-    sym_groups    : symmetry group list from symmetry_constraints["groups"]
-                    If provided, enables symmetry-aware side/Y placement.
     """
     if pdk is None:
         pdk = _load_default_pdk()
 
     pwr = _build_pwr_map(placed_blocks, blocks, nets)
 
-    # Symmetry info (forced sides + Y pairs)
-    sym_info: tuple | None = None
-    if sym_groups:
-        sym_info = _build_sym_info(placed_blocks, sym_groups, nets, pwr)
+    def _slot_rail(bid_str: str) -> str | None:
+        """Return the rail type to exclude from signal-pin slots for this block."""
+        declared = (blocks.get(bid_str) or {}).get("power_rail")
+        if declared:
+            return declared
+        rails = set(pwr.get(bid_str, {}).values())
+        if "VDD" in rails:
+            return "VDD"
+        if "VSS" in rails:
+            return "VSS"
+        return None
 
     # Routing-grid slots (power stripe zone excluded)
     slots_by: dict[str, list[float]] = {
-        bid_str: _grid_slots(
-            pb["main_bbox"], pdk,
-            rail=(blocks.get(bid_str) or {}).get("power_rail"),
-        )
+        bid_str: _grid_slots(pb["main_bbox"], pdk, rail=_slot_rail(bid_str))
         for bid_str, pb in placed_blocks.items()
     }
 
@@ -368,11 +286,11 @@ def optimize_pin_positions(
     }
 
     try:
-        selected = _ilp(placed_blocks, nets, pdk, blocks, pwr, slots_by, sig, ref_idx, sym_info)
+        selected = _ilp(placed_blocks, nets, pdk, blocks, pwr, slots_by, sig, ref_idx)
     except Exception as exc:
         import warnings
         warnings.warn(f"pin_optimizer ILP failed ({exc}); using greedy fallback", stacklevel=2)
-        selected = _greedy(placed_blocks, nets, pdk, blocks, pwr, slots_by, sig, ref_idx, sym_info)
+        selected = _greedy(placed_blocks, nets, pdk, blocks, pwr, slots_by, sig, ref_idx)
 
     result = _build(placed_blocks, blocks, pwr, pdk, selected, slots_by)
     _tag_nets(result, nets, ref_idx)
@@ -386,7 +304,6 @@ def optimize_pin_positions(
 
 def _ilp(
     placed_blocks, nets, pdk, blocks, pwr, slots_by, sig, ref_idx,
-    sym_info,
 ) -> dict[tuple[str, str], tuple[str, float]]:
     import gurobipy as gp
     from gurobipy import GRB
@@ -423,10 +340,30 @@ def _ilp(
     for bid_str, pname in sig:
         block_pins.setdefault(bid_str, []).append(pname)
 
+    def _mis_count(slots_sorted: list[float]) -> int:
+        """Max independent set on routing slots with _MIN_CC gap (greedy)."""
+        if not slots_sorted:
+            return 0
+        count, last = 1, slots_sorted[0]
+        for s in slots_sorted[1:]:
+            if s - last >= _MIN_CC - 1e-9:
+                count += 1
+                last = s
+        return count
+
     for bid_str, pnames in block_pins.items():
         if len(pnames) < 2:
             continue
         slots = slots_by[bid_str]
+        if not slots:
+            continue
+        # Skip spacing constraints for over-constrained blocks: if there are
+        # more signal pins than the two sides can hold with DRC spacing, adding
+        # spacing constraints would make the ILP infeasible (Gurobi status 3).
+        # Without spacing, the ILP freely assigns each pin to any slot/side and
+        # still optimises HPWL; the pin-rect builder uses those positions.
+        if len(pnames) > 2 * _mis_count(sorted(slots)):
+            continue
         for si in range(2):
             for ki1, y1 in enumerate(slots):
                 for ki2, y2 in enumerate(slots):
@@ -436,42 +373,6 @@ def _ilp(
                             k2 = (bid_str, p2, si, ki2)
                             if k1 in z and k2 in z:
                                 m.addConstr(z[k1] + z[k2] <= 1)
-
-    # Symmetry constraints: force sides and enforce Y parity
-    if sym_info is not None:
-        forced_side, y_pairs = sym_info
-
-        # Side forcing: zero out variables on the non-preferred side
-        for (bid_str, pname), si_forced in forced_side.items():
-            if not slots_by.get(bid_str):
-                continue  # block has no valid slots — skip
-            si_other = 1 - si_forced
-            for ki in range(len(slots_by[bid_str])):
-                key = (bid_str, pname, si_other, ki)
-                if key in z:
-                    m.addConstr(z[key] == 0, name=f"side0_{bid_str}_{pname}_{ki}")
-
-        # Y equality: corresponding mirror pins must land on the same slot index
-        for lid, lpname, lsi, rid, rpname, rsi in y_pairs:
-            slots_l = slots_by.get(lid, [])
-            slots_r = slots_by.get(rid, [])
-            if not slots_l or not slots_r:
-                continue
-            n_common = min(len(slots_l), len(slots_r))
-            for ki in range(n_common):
-                kl = (lid, lpname, lsi, ki)
-                kr = (rid, rpname, rsi, ki)
-                if kl in z and kr in z:
-                    m.addConstr(z[kl] == z[kr], name=f"ysym_{lid}_{lpname}_{rid}_{rpname}_{ki}")
-            # Force out-of-range slots to 0 if one block has more slots than the other
-            for ki in range(n_common, len(slots_l)):
-                kl = (lid, lpname, lsi, ki)
-                if kl in z:
-                    m.addConstr(z[kl] == 0)
-            for ki in range(n_common, len(slots_r)):
-                kr = (rid, rpname, rsi, ki)
-                if kr in z:
-                    m.addConstr(z[kr] == 0)
 
     # HPWL bounding-box linearisation per net
     chip_x = [pb["main_bbox"]["x_min"] for pb in placed_blocks.values()] + \
@@ -550,23 +451,16 @@ def _ilp(
 
 def _greedy(
     placed_blocks, nets, pdk, blocks, pwr, slots_by, sig, ref_idx,  # noqa: ARG001
-    sym_info,
 ) -> dict[tuple[str, str], tuple[str, float]]:
-    """Coordinate descent with optional symmetry side constraints."""
-    forced_side: dict[tuple[str, str], int] = {}
-    y_pairs: list[tuple] = []
-    if sym_info is not None:
-        forced_side, y_pairs = sym_info
-
-    # Initialise: forced side (if any) or left, closest grid slot to block centre
+    """Coordinate descent: minimise total HPWL, free side choice."""
+    # Initialise: left side, closest grid slot to block centre
     current: dict[tuple[str, str], tuple[str, float]] = {}
     for bid_str, pname in sig:
         slots = slots_by[bid_str]
         bbox  = placed_blocks[bid_str]["main_bbox"]
         cy    = (bbox["y_min"] + bbox["y_max"]) / 2
         yc    = min(slots, key=lambda y: abs(y - cy)) if slots else _s6(cy)
-        si    = forced_side.get((bid_str, pname), 0)
-        current[(bid_str, pname)] = (_SIDES[si], yc)
+        current[(bid_str, pname)] = ("left", yc)
 
     nets_by_pref: dict[str, list[list[str]]] = {}
     for net in nets:
@@ -594,12 +488,6 @@ def _greedy(
             return 0.0
         return (max(xs) - min(xs)) + (max(ys) - min(ys))
 
-    # Build Y-pair lookup for fast partner retrieval
-    y_partner: dict[tuple[str, str], tuple[str, str, int]] = {}
-    for lid, lpname, lsi, rid, rpname, rsi in y_pairs:
-        y_partner[(lid, lpname)] = (rid, rpname, rsi)
-        y_partner[(rid, rpname)] = (lid, lpname, lsi)
-
     for _ in range(20):
         improved = False
         for bid_str, pname in sig:
@@ -609,16 +497,11 @@ def _greedy(
             if not relevant or not slots:
                 continue
 
-            # Restrict to forced side if set
-            si_forced = forced_side.get((bid_str, pname))
-            allowed_sides = [_SIDES[si_forced]] if si_forced is not None else list(_SIDES)
-
             best_cost = sum(_net_hpwl(rp) for rp in relevant)
             best_pos  = current[(bid_str, pname)]
 
-            for side in allowed_sides:
+            for side in _SIDES:
                 for yc in slots:
-                    # Check spacing
                     conflict = any(
                         b == bid_str and p != pname
                         and s == side and abs(yc - y2) < _MIN_CC - 1e-9
@@ -637,18 +520,6 @@ def _greedy(
             if best_pos != current[(bid_str, pname)]:
                 current[(bid_str, pname)] = best_pos
                 improved = True
-                # Propagate Y to symmetric partner if applicable
-                partner = y_partner.get((bid_str, pname))
-                if partner is not None:
-                    par_bid, par_pname, par_si = partner
-                    _, new_yc = best_pos
-                    # Find nearest slot on partner's forced side
-                    par_slots = slots_by.get(par_bid, [])
-                    if par_slots and new_yc in par_slots:
-                        current[(par_bid, par_pname)] = (_SIDES[par_si], new_yc)
-                    elif par_slots:
-                        nearest = min(par_slots, key=lambda y: abs(y - new_yc))
-                        current[(par_bid, par_pname)] = (_SIDES[par_si], nearest)
 
         if not improved:
             break

@@ -39,27 +39,27 @@
     "comment": "Design-specific size constraints for each device type (designer-adjustable)",
     "nmos_rvt": {
       "L": {"min": 0.2, "max": 1.0, "comment": "Length range for NMOS regular-Vt (LV)"},
-      "W": {"min": 0.5, "max": 10.0, "comment": "Width range for NMOS regular-Vt"}
+      "W": {"min": 0.5, "max": 5.0, "comment": "Width range for NMOS regular-Vt"}
     },
     "nmos_lvt": {
       "L": {"min": 0.2, "max": 1.0, "comment": "Length range for NMOS low-Vt (LV) — shorter L allowed for speed"},
-      "W": {"min": 0.5, "max": 10.0, "comment": "Width range for NMOS low-Vt"}
+      "W": {"min": 0.5, "max": 5.0, "comment": "Width range for NMOS low-Vt"}
     },
     "nmos_hvt": {
       "L": {"min": 0.3, "max": 2.0, "comment": "Length range for NMOS high-Vt (HV, power stages)"},
-      "W": {"min": 0.5, "max": 15.0, "comment": "Width range for NMOS high-Vt"}
+      "W": {"min": 0.5, "max": 10.0, "comment": "Width range for NMOS high-Vt"}
     },
     "pmos_rvt": {
       "L": {"min": 0.2, "max": 1.0, "comment": "Length range for PMOS regular-Vt (LV)"},
-      "W": {"min": 0.5, "max": 10.0, "comment": "Width range for PMOS regular-Vt"}
+      "W": {"min": 0.5, "max": 5.0, "comment": "Width range for PMOS regular-Vt"}
     },
     "pmos_lvt": {
       "L": {"min": 0.2, "max": 1.0, "comment": "Length range for PMOS low-Vt (LV)"},
-      "W": {"min": 0.5, "max": 10.0, "comment": "Width range for PMOS low-Vt"}
+      "W": {"min": 0.5, "max": 5.0, "comment": "Width range for PMOS low-Vt"}
     },
     "pmos_hvt": {
       "L": {"min": 0.3, "max": 2.0, "comment": "Length range for PMOS high-Vt (HV, power stages)"},
-      "W": {"min": 0.5, "max": 15.0, "comment": "Width range for PMOS high-Vt"}
+      "W": {"min": 0.5, "max": 10.0, "comment": "Width range for PMOS high-Vt"}
     },
     "res_poly": {
       "L": {"min": 1.0, "max": 10.0, "comment": "Length range for polysilicon resistor (determines R value)"},

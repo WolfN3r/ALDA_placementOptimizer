@@ -203,10 +203,21 @@ def build_magical_db(json_data: dict, simple_tech_file: str,
     if bid_to_node_idx:
         _y_max_nm = max(um_to_nm(placed_by_id[bid]['main_bbox']['y_max'])
                         for bid in bid_to_node_idx)
+        _y_min_nm = min(um_to_nm(placed_by_id[bid]['main_bbox']['y_min'])
+                        for bid in bid_to_node_idx)
         _x_max_nm = max(um_to_nm(placed_by_id[bid]['main_bbox']['x_max'])
                         for bid in bid_to_node_idx)
-        # 24 valid y-cells; require 24 * step_nm > _y_max_nm + 620 (offset)
-        _req_x_nm = math.ceil((_y_max_nm + 620) * 34 / 24)
+        # findOrigin picks GR step = floor(x_max_LEF / n_x_cells) rounded DOWN to the
+        # nearest 1200 LEF-DBU (= 3 x M1_pitch(200nm) x 2 L_DBU/nm).  For 24 y-cells
+        # to cover y_max (including the GR origin offset from blocks below y=0), derive
+        # the required step_LEF and work backwards to the pad x-position that forces it.
+        GR_STEP_BASE_L = 1200   # LEF-DBU per multiple; = 3 x 200nm x 2 L_DBU/nm
+        GR_Y_CELLS = 24
+        GR_X_CELLS = 43         # empirical n_x for our design range
+        _gr_offset_nm = max(0, -_y_min_nm)   # GR origin shifts down when blocks go below y=0
+        _y_need_L = (_y_max_nm + _gr_offset_nm + 1000) * 2   # +1000nm margin, x2 to LEF-DBU
+        _step_req_L = math.ceil(_y_need_L / GR_Y_CELLS / GR_STEP_BASE_L) * GR_STEP_BASE_L
+        _req_x_nm = _step_req_L * GR_X_CELLS // 2   # MAGICAL nm (LEF-DBU -> nm: /2)
         if _x_max_nm < _req_x_nm:
             _pad_sub_idx = db.allocateCkt()
             _pad_sub = db.subCkt(_pad_sub_idx)
@@ -219,10 +230,11 @@ def build_magical_db(json_data: dict, simple_tech_file: str,
             _pad_n.refName  = 'nmos_rvt'
             _pad_n.graphIdx = _pad_sub_idx
             _pad_n.setOffset(_req_x_nm, 0)
-            _est_step = _req_x_nm // 34
-            print(f"[transponder201] Grid-pad node at x={nm_to_um(_req_x_nm):.2f}µm "
-                  f"(est. step≈{_est_step}nm, y-coverage≈{nm_to_um(24*_est_step-620):.2f}µm "
-                  f"> y_max={nm_to_um(_y_max_nm):.2f}µm)")
+            _step_nm = _step_req_L // 2
+            print(f"[transponder201] Grid-pad node at x={nm_to_um(_req_x_nm):.2f}um "
+                  f"(step_req={_step_nm}nm, "
+                  f"y-coverage={nm_to_um(GR_Y_CELLS * _step_nm - _gr_offset_nm):.2f}um "
+                  f"> y_max={nm_to_um(_y_max_nm):.2f}um)")
 
     # Step 4: top-level nets from netlist
     for net_data in netlist['nets']:
