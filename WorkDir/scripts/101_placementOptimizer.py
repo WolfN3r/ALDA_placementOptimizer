@@ -20,6 +20,7 @@ from log_setup      import get_logger
 from ilp_optimizer     import GurobiParams
 from pso_optimizer     import PSOConfig
 from sa_optimizer      import SAConfig
+from warmup_manager    import WarmupConfig
 
 # =============================================================================
 # 2. CONSTANTS
@@ -50,9 +51,10 @@ SA_EPOCH_SIZE   = 0      # 0 → max(n_blocks × 8, 50)
 SA_STAGNATION   = 15     # epochs without improvement before reheating
 
 # --- Cost weights (must sum to 1.0) -----------------------------------------
-W_AREA    = 0.6
-W_WL      = 0.1
-W_AR      = 0.3
+W_AREA    = 0.30
+W_WL      = 0.55
+W_AR      = 0.05
+W_CLUSTER = 0.10         # device-type bounding-box clustering (nmos_lvt, pmos_rvt, …)
 TARGET_AR = 1.0          # target width/height ratio for the full placement
 
 # --- Power rails -------------------------------------------------------------
@@ -84,7 +86,7 @@ PSO_CONFIG = PSOConfig(
     c2                = 0.3,
     canvas_factor     = 1.8,
     overlap_penalty_w = 200.0,
-    use_fdgd_init     = True,
+    use_corp_init     = True,
 )
 
 # --- B*-tree+ILP hybrid tuning ----------------------------------------------
@@ -93,7 +95,7 @@ PSO_CONFIG = PSOConfig(
 #   epoch_size=0      → auto-computed as max(n_blocks × 8, 50).
 #   Pass explicit values here to override.  initial_temp is always auto-calibrated.
 # BSTAR_ILP_GUROBI_PARAMS: same fields as ILP_GUROBI_PARAMS.
-#   use_fdgd_start is False: B*-tree SA already provides a 2D warm start, so FDGD
+#   use_corp_start is False: B*-tree SA already provides a 2D warm start, so CORP
 #   row-pack would overwrite it with a less informative 1D layout.
 BSTAR_ILP_SA_CONFIG = SAConfig(
     max_iterations    = 0,       # 0 → epoch_size × 60 (set in BStarILPOptimizer)
@@ -101,11 +103,33 @@ BSTAR_ILP_SA_CONFIG = SAConfig(
 )
 BSTAR_ILP_GUROBI_PARAMS = GurobiParams(
     verbose           = False,
-    use_fdgd_start    = False,   # B*-tree SA provides the ordering; no FDGD needed
+    use_corp_start    = False,   # B*-tree SA provides the ordering; no CORP needed
     time_limit        = 120.0,
     mip_gap           = 0.03,
     no_rel_heur_time  = 5,
 )
+
+# --- Warmup multi-start (ILP only) ------------------------------------------
+# WARMUP_STRATEGY selects which warm-start heuristic to run N times in parallel.
+#   "corp"    — spring-embedding connectivity-ordered row placement
+#   "contour" — greedy skyline placer with random block-ordering diversity
+#   "spsa"    — SequencePairTopology+SA warm start
+# WARMUP_N_RUNS: number of parallel warmup sessions; 0 disables the system
+#   and falls back to the single-run CORP inside ILPOptimizer.
+# WARMUP_MASTER_SEED: base seed; child seeds are master_seed × 10000 + run_index.
+#   Same master_seed always produces exactly the same warmup results.
+# WARMUP_VISUALIZE: when True, all warmup placements are saved in the output
+#   JSON under placement.warmup_runs so the viewer can display them.
+# WARMUP_EXHAUSTIVE_ILP: when True, a full ILP pass is run for each warmup
+#   result and N ILP placements are stored for comparison (serial — one Gurobi
+#   instance at a time due to license constraints).
+# WARMUP_SPSA_TIMEOUT_SEC: wall-clock budget per SPSA run (ignored for other strategies).
+WARMUP_STRATEGY         = "spsa"  # "corp" | "contour" | "spsa"
+WARMUP_N_RUNS           = 8       # 0 → disabled (use single-run CORP inside ILPOptimizer)
+WARMUP_MASTER_SEED      = 42
+WARMUP_VISUALIZE        = False
+WARMUP_EXHAUSTIVE_ILP   = False
+WARMUP_SPSA_TIMEOUT_SEC = 10.0    # wall-clock seconds per SPSA warmup run
 
 # --- Output ------------------------------------------------------------------
 _OUTPUT_DIR = Path(__file__).parent.parent / "json_files"
@@ -386,7 +410,7 @@ def optimize(data: dict) -> dict:
     filtered_groups = filter_groups_for_sym_mode(raw_groups, sym_mode)
 
     block_by_id = {b["block_id"]: b for b in raw_blocks if "error" not in b}
-    composite_list, excluded_ids = build_composite_blocks(filtered_groups, block_by_id)
+    composite_list, excluded_ids = build_composite_blocks(filtered_groups, block_by_id, nets)
 
     # Effective block set: composite blocks + ungrouped individual blocks
     effective_raw: list = list(composite_list)
@@ -485,10 +509,11 @@ def optimize(data: dict) -> dict:
     )
 
     weights = CostWeights(
-        area_weight         = W_AREA,
-        wirelength_weight   = W_WL,
-        aspect_ratio_weight = W_AR,
-        target_aspect_ratio = TARGET_AR,
+        area_weight              = W_AREA,
+        wirelength_weight        = W_WL,
+        aspect_ratio_weight      = W_AR,
+        target_aspect_ratio      = TARGET_AR,
+        device_clustering_weight = W_CLUSTER,
     )
     sa_cfg = SAConfig(
         initial_temp     = SA_INITIAL_TEMP,
@@ -504,8 +529,20 @@ def optimize(data: dict) -> dict:
     # Per-optimizer kwargs — each optimizer only receives its own params.
     # Used in exhaustive/random mode so ILP kwargs don't pollute SA/PSO runs.
     per_opt_kwargs: dict = {}
+    ilp_kwargs: dict = {}
     if ILP_GUROBI_PARAMS is not None:
-        per_opt_kwargs["ILPOptimizer"] = {"gurobi_params": ILP_GUROBI_PARAMS}
+        ilp_kwargs["gurobi_params"] = ILP_GUROBI_PARAMS
+    if WARMUP_N_RUNS > 0:
+        ilp_kwargs["warmup_config"] = WarmupConfig(
+            strategy         = WARMUP_STRATEGY,
+            n_runs           = WARMUP_N_RUNS,
+            master_seed      = WARMUP_MASTER_SEED,
+            visualize        = WARMUP_VISUALIZE,
+            exhaustive_ilp   = WARMUP_EXHAUSTIVE_ILP,
+            spsa_timeout_sec = WARMUP_SPSA_TIMEOUT_SEC,
+        )
+    if ilp_kwargs:
+        per_opt_kwargs["ILPOptimizer"] = ilp_kwargs
     per_opt_kwargs["PSOOptimizer"]      = {"pso_config": PSO_CONFIG}
     per_opt_kwargs["BStarILPOptimizer"] = {
         "bstar_sa_config": BSTAR_ILP_SA_CONFIG,
@@ -631,6 +668,8 @@ def optimize(data: dict) -> dict:
             "t_total_ms":    round(best.t_total_ms, 2),
             "placed_blocks": best.placed_blocks,
         }
+        if best.warmup_runs:
+            placement_meta["warmup_runs"] = best.warmup_runs
 
     return {
         "generation_params":    gen_params,

@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).parent))
-from ilp_optimizer import _solve_mip, _fdgd_row_pack, GurobiParams, ILP_LARGE_N_WARN
+from ilp_optimizer import _solve_mip, _corp_row_pack, GurobiParams, ILP_LARGE_N_WARN
 from log_setup import get_logger
 
 DEBUG = False
@@ -98,9 +98,9 @@ class BStarILPOptimizer:
 
         # Stage 2: ILP fine-tuning.
         # B*-tree output is DRC-clean (the contour already enforces spacing), but
-        # _fdgd_row_pack gives Gurobi a tight 1D incumbent with a known feasible
+        # _corp_row_pack gives Gurobi a tight 1D incumbent with a known feasible
         # cost bound, while the raw 2D positions feed the r-var direction hints.
-        bstar_ordered_warm = _fdgd_row_pack(bids, blocks, bstar_positions)
+        bstar_ordered_warm = _corp_row_pack(bids, blocks, bstar_positions)
 
         c_area = self._evaluator._w.area_weight
         c_wl   = self._evaluator._w.wirelength_weight

@@ -271,10 +271,74 @@ def filter_sym_constraints_for_mode(
 # (real device IDs are assigned sequentially from 0 by the block generator).
 COMPOSITE_ID_BASE = 10_000
 
+_POWER_NET_TYPES = frozenset({"power"})
+
+
+def _parse_bid(pin_ref: str) -> int | None:
+    """Extract block_id int from 'B<id>_<pin>' string; return None on failure."""
+    if not pin_ref.startswith("B"):
+        return None
+    sep = pin_ref.find("_", 1)
+    if sep < 0:
+        return None
+    try:
+        return int(pin_ref[1:sep])
+    except ValueError:
+        return None
+
+
+def _boundary_pins_for_group(nets: list, member_bids: set) -> list[tuple[str, str]]:
+    """
+    Return (pin_name, net_id) pairs for the boundary pins a composite group needs.
+
+    Rules:
+      - Power net (net_type=="power"): always → ("P0", net_id), one per group.
+      - Signal/internal net with ≥1 pin outside the group
+        OR with only 1 total connection (dangling input): → (net_id, net_id).
+      - Signal/internal net where every connection belongs to ≥2 distinct
+        member blocks with no outside blocks: internal-only → skip.
+    """
+    seen_power = False
+    result: list[tuple[str, str]] = []
+    for net in nets:
+        net_id   = net.get("net_id", "")
+        net_type = net.get("net_type", "signal")
+        is_power = net_type in _POWER_NET_TYPES
+
+        blocks_on_net: set[int] = set()
+        for p in net.get("pins", []):
+            bid = _parse_bid(p)
+            if bid is not None:
+                blocks_on_net.add(bid)
+
+        member_blocks = blocks_on_net & member_bids
+        if not member_blocks:
+            continue  # net does not touch this composite at all
+
+        outside_blocks = blocks_on_net - member_bids
+        is_internal = (
+            not is_power
+            and len(outside_blocks) == 0
+            and len(member_blocks) >= 2
+        )
+
+        if is_internal:
+            continue
+
+        if is_power:
+            if not seen_power:
+                result.append(("P0", net_id))
+                seen_power = True
+        else:
+            result.append((net_id, net_id))
+
+    return result
+
 
 def build_composite_blocks(
     filtered_groups: List[dict],
     block_by_id:     dict,
+    nets:            list | None = None,
 ) -> tuple:
     """
     Convert filtered placement groups into composite block dicts for the placer.
@@ -312,19 +376,43 @@ def build_composite_blocks(
                 device_type = blk["device_type"]
                 break
 
+        # Determine power rail from member blocks (first non-None wins).
+        power_rail: str | None = None
+        for bid in member_bids:
+            rail = (block_by_id.get(bid) or {}).get("power_rail")
+            if rail:
+                power_rail = rail
+                break
+
+        # Compute boundary pins when net information is available.
+        if nets is not None:
+            boundary_pins = _boundary_pins_for_group(nets, set(member_bids))
+        else:
+            boundary_pins = [("center", "center")]
+
         # Build variants from matching_variants; carry layout fields for
         # post-placement expansion back to individual device coordinates.
         variants: List[dict] = []
         for k, mv in enumerate(matching_mvs):
             w = float(mv.get("width_um",  0.0))
             h = float(mv.get("height_um", 0.0))
+
+            # Pin positions: power pin at fixed top/bottom edge; signal pins at center.
+            pin_positions: dict = {}
+            for pname, _ in boundary_pins:
+                if pname == "P0":
+                    py = h if power_rail == "VDD" else 0.0
+                    pin_positions["P0"] = {"x": w / 2.0, "y": py}
+                else:
+                    pin_positions[pname] = {"x": w / 2.0, "y": h / 2.0}
+
             variants.append({
                 "main_bbox": {
                     "x_min": 0.0, "y_min": 0.0,
                     "x_max": w,   "y_max": h,
                 },
                 "is_used":        (k == 0),
-                "pin_positions":  {"center": {"x": w / 2.0, "y": h / 2.0}},
+                "pin_positions":  pin_positions,
                 # Layout parameters needed for post-placement device expansion
                 "rows":                  mv.get("rows", 1),
                 "cols_per_device":       mv.get("cols_per_device", len(member_bids)),
@@ -347,8 +435,8 @@ def build_composite_blocks(
             "group_id":        group_id,
             "topology_type":   group.get("topology_type", ""),
             # Standard block fields expected by pipeline components
-            "num_pins": 1,
-            "power_rail": None,
+            "num_pins":   len(boundary_pins),
+            "power_rail": power_rail,
         })
         excluded_ids.update(member_bids)
         logger.info(
@@ -367,50 +455,73 @@ def remap_nets_for_composites(
 ) -> list:
     """
     Return a remapped net list where pin references belonging to composite-block
-    members are replaced with a single centre-point pin on the composite block.
+    members are replaced with a named pin on the composite block.
 
-    Original:  "B{orig_bid}_{pin}"
-    Replaced:  "B{composite_id}_center"
+    Mapping rules per net:
+      - Power net  → "B{composite_id}_P0"
+      - Signal/internal net that crosses group boundary or is dangling
+                   → "B{composite_id}_{net_id}"
+      - Signal/internal net purely internal to one composite (≥2 distinct
+        member blocks, no outside connections) → composite pin suppressed
+        (member refs removed; net may have 0 pins if no outside connections)
 
-    If multiple member pins from the same composite appear on one net, only one
-    "B{composite_id}_center" entry is emitted (de-duplicated).
+    Multiple member pins from the same composite on one net → deduplicated
+    (at most one composite pin reference per composite per net).
     """
     # Map original block_id (int) → composite block_id (int)
     bid_to_comp: dict = {}
+    comp_member_sets: dict = {}   # comp_id → set of member block_ids
     for cb in composite_blocks:
         comp_id = cb["block_id"]
-        for mbid in cb.get("group_block_ids", []):
-            bid_to_comp[int(mbid)] = comp_id
+        members = {int(m) for m in cb.get("group_block_ids", [])}
+        comp_member_sets[comp_id] = members
+        for mbid in members:
+            bid_to_comp[mbid] = comp_id
 
     if not bid_to_comp:
         return list(nets)
 
     remapped: List[dict] = []
     for net in nets:
-        new_pins: List[str] = []
-        seen_comps: set = set()
-        for pin_ref in net.get("pins", []):
-            # Format: "B<bid>_<pname>"
-            if not pin_ref.startswith("B"):
-                new_pins.append(pin_ref)
-                continue
-            sep = pin_ref.find("_", 1)
-            if sep < 0:
-                new_pins.append(pin_ref)
-                continue
-            try:
-                orig_bid = int(pin_ref[1:sep])
-            except ValueError:
-                new_pins.append(pin_ref)
-                continue
+        net_id   = net.get("net_id", "")
+        is_power = net.get("net_type", "signal") in _POWER_NET_TYPES
 
-            comp_id = bid_to_comp.get(orig_bid)
+        # Classify every pin as belonging to a composite or staying outside
+        # comp_pins: comp_id → set of distinct member block_ids on this net
+        comp_pins: dict[int, set] = {}
+        outside_bids: set = set()
+        for pin_ref in net.get("pins", []):
+            bid = _parse_bid(pin_ref)
+            if bid is None:
+                outside_bids.add(pin_ref)   # non-standard ref — treat as outside
+                continue
+            comp_id = bid_to_comp.get(bid)
             if comp_id is None:
-                new_pins.append(pin_ref)          # not in a composite — keep
-            elif comp_id not in seen_comps:
-                new_pins.append(f"B{comp_id}_center")
-                seen_comps.add(comp_id)
-            # else: duplicate composite reference — skip
+                outside_bids.add(bid)
+            else:
+                comp_pins.setdefault(comp_id, set()).add(bid)
+
+        new_pins: List[str] = []
+
+        # Keep outside pins unchanged
+        for pin_ref in net.get("pins", []):
+            bid = _parse_bid(pin_ref)
+            if bid is None or bid_to_comp.get(bid) is None:
+                new_pins.append(pin_ref)
+
+        # For each composite that this net touches, decide whether to emit a pin
+        for comp_id, member_bids_on_net in comp_pins.items():
+            is_internal = (
+                not is_power
+                and len(outside_bids) == 0
+                and len(comp_pins) == 1        # only this composite involved
+                and len(member_bids_on_net) >= 2
+            )
+            if is_internal:
+                continue  # net is local to this composite — no boundary pin
+
+            pin_name = "P0" if is_power else net_id
+            new_pins.append(f"B{comp_id}_{pin_name}")
 
         remapped.append({**net, "pins": new_pins})
 

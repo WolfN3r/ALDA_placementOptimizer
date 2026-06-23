@@ -1,18 +1,13 @@
 """
-Force-Directed Graph Drawing warm start for ILP placement.
+CORP placer — spring-embedding phase.
 
-Based on Paper B — Grus et al., "Automatic Placer for Analog Circuits
-Using ILP Warm Started by Graph Drawing", ICORES 2023.
-
-Spring-embedding simulation that produces connectivity-aware centroid
-positions.  ILPOptimizer uses the result to:
-  1. Set initial r-variable hints before solving (replaces the naive
-     row-pack hint — this is the source of the 5–15× speedup Paper B reports).
-  2. Indirectly tighten the big-M via better hint coverage (fewer wasted
-     branches in the first few B&B nodes).
+CORP (Connectivity-Ordered Row Placement) uses a spring-embedding simulation
+to determine a connectivity-aware ordering of blocks.  The resulting centroids
+are sorted by x-position and row-packed by _corp_row_pack() in ilp_optimizer.py
+to produce a DRC-clean feasible starting layout for the ILP solver.
 
 The simulation does NOT need to produce a DRC-clean layout — any coarse
-arrangement that separates connected blocks is enough to guide the solver.
+arrangement that separates connected blocks is enough to guide the ordering.
 """
 from __future__ import annotations
 
@@ -34,7 +29,7 @@ _CANVAS_FACTOR = 2.0    # canvas side = sqrt(total_block_area) × factor
 _K_ATTRACT     = 0.4    # attractive spring per unit distance per net weight
 _K_REPEL       = 3.0    # repulsive force per µm of underspacing
 _K_BOUNDARY    = 0.8    # restoring force per µm outside canvas
-_K_ORIGIN      = 0.05   # origin force per µm from (0,0) — Paper Sec. 4, force O_i
+_K_ORIGIN      = 0.05   # origin force per µm from (0,0) — pulls blocks toward bottom-left
 _DAMPING       = 0.80   # velocity damping factor applied every step
 _N_ITER        = 400    # maximum simulation steps per run
 _N_RUNS        = 3      # number of independent runs; best by connectivity cost is kept
@@ -86,7 +81,7 @@ def _run_once(
     """
     One spring-embedding run.  Returns (cx, cy, connectivity_cost).
     Forces: attractive (connected pairs), repulsive (underspaced), boundary,
-    and origin (Paper Sec. 4, O_i — attracts blocks toward (0,0)).
+    and origin (attracts blocks toward (0,0) to minimise area spread).
     """
     rng = random.Random(seed)
     n   = len(bids)
@@ -145,8 +140,7 @@ def _run_once(
             elif cy[b] > hi_y:
                 fy[b] -= _K_BOUNDARY * (cy[b] - hi_y)
 
-        # Origin force — attracts each block toward (0,0) to minimize area spread
-        # Implements Paper Sec. 4 force O_i: "attracts each rectangle to the origin"
+        # Origin force — attracts each block toward (0,0) to minimise area spread
         for b in bids:
             fx[b] -= _K_ORIGIN * cx[b]
             fy[b] -= _K_ORIGIN * cy[b]
@@ -166,7 +160,7 @@ def _run_once(
         dt *= _DT_COOL
 
         if step > 80 and max_v < _CONV_THRESH:
-            logger.debug("FDGD run seed=%d: converged at step %d (max_v=%.2e)", seed, step, max_v)
+            logger.debug("CORP spring seed=%d: converged at step %d (max_v=%.2e)", seed, step, max_v)
             break
 
     cost = _connectivity_cost(cx, cy, conn)
@@ -177,7 +171,7 @@ def _run_once(
 # PUBLIC API
 # =============================================================================
 
-def run_fdgd(
+def run_corp_spring(
     blocks: dict,
     nets:   list,
     seed:   int = 0,
@@ -188,11 +182,14 @@ def run_fdgd(
     Run spring-embedding (n_runs independent runs, keep best by connectivity cost)
     and return centroid positions {bid: (cx, cy)}.
 
+    The x-ordering of centroids is used by _corp_row_pack() in ilp_optimizer.py
+    to produce a connectivity-aware row layout as the ILP warm start.
+
     Forces applied each step:
       - Attractive  : connected blocks pulled together (spring, F ∝ distance)
       - Repulsive   : underspaced pairs pushed apart along the tighter axis
       - Boundary    : blocks outside the canvas pulled back in
-      - Origin      : all blocks attracted toward (0,0) to minimize spread
+      - Origin      : all blocks attracted toward (0,0) to minimise spread
 
     Returns centroid positions.  Convert to bottom-left corner with:
         bl_x = cx - w/2,  bl_y = cy - h/2
@@ -257,7 +254,7 @@ def run_fdgd(
             best_cy   = dict(cy)
 
     logger.debug(
-        "FDGD: %d runs  best_cost=%.2f  canvas=%.1f µm  n=%d  connections=%d",
+        "CORP spring: %d runs  best_cost=%.2f  canvas=%.1f µm  n=%d  connections=%d",
         n_runs, best_cost, canvas, n, len(conn),
     )
     assert best_cx is not None and best_cy is not None

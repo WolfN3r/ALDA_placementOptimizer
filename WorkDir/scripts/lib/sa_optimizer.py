@@ -47,6 +47,7 @@ class SAConfig:
     max_iterations:   int   = 0        # 0 → computed from epoch_size at run time
     stagnation_limit: int   = 15       # epochs without improvement before reheat
     epoch_size:       int   = 0        # 0 → computed as max(n_blocks × 8, 50)
+    timeout_sec:      float = 0.0      # 0 → no wall-clock limit
     alpha_hot:        float = _ALPHA_HOT
     alpha_normal:     float = _ALPHA_NORMAL
     alpha_cool:       float = _ALPHA_COOL
@@ -146,6 +147,7 @@ class SimulatedAnnealingOptimizer:
         stagnant_epochs = 0
         n_reheats      = 0
         iteration      = 0
+        t_start        = time.perf_counter()
 
         while iteration < max_iter and temp > cfg.final_temp:
             # Generate pre-computed random values for the epoch to cut Python overhead
@@ -198,9 +200,13 @@ class SimulatedAnnealingOptimizer:
                 n_reheats      += 1
                 stagnant_epochs = 0
 
+            if cfg.timeout_sec > 0.0 and (time.perf_counter() - t_start) >= cfg.timeout_sec:
+                break
+
         reason = (
             "temp_floor" if temp <= cfg.final_temp
             else "stagnation" if stagnant_epochs >= cfg.stagnation_limit
+            else "timeout"  if cfg.timeout_sec > 0.0 and (time.perf_counter() - t_start) >= cfg.timeout_sec
             else "max_iter"
         )
         if self._observer:

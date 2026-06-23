@@ -11,7 +11,7 @@ Key differences from the paper to fit analog IC placement:
   - Symmetry via master-slave model (paper Section 4.1): master blocks move
     freely; slave x-coordinates are mirrored about a shared symmetry axis.
     Self-symmetric blocks are placed at axis - w/2 (x fixed, y free).
-  - FDGD warm-start (paper does not use; reuses existing lib/fdgd.py) for
+  - CORP warm-start (lib/corp_placer.py spring-embedding) for
     particle 0 to give a connectivity-aware starting position.
   - Turn-around factor T (paper Section 4.2) triggers when overlap penalty
     exceeds turn_around_thresh fraction of total cost.
@@ -64,7 +64,7 @@ class PSOConfig:
     c2:                  float = 0.3    # global-best  acceleration
     canvas_factor:       float = 1.8    # canvas_side = factor × sqrt(total_block_area)
     overlap_penalty_w:   float = 200.0  # weight on the soft DRC-overlap penalty term
-    use_fdgd_init:       bool  = True   # seed particle 0 with FDGD connectivity positions
+    use_corp_init:       bool  = True   # seed particle 0 with CORP connectivity positions
     v_max_factor:        float = 0.2    # v_max = canvas_side × factor (velocity clamp)
     turn_around_thresh:  float = 0.5    # trigger T=−1 when overlap/total_cost > this
     seed:                int   = 0      # random seed for swarm initialisation
@@ -209,16 +209,16 @@ class PSOOptimizer:
                     (hi + hj) / 2.0 + sr.y_spacing,
                 )
 
-        fdgd_positions: dict[str, tuple[float, float]] = {}
-        if cfg.use_fdgd_init:
+        corp_positions: dict[str, tuple[float, float]] = {}
+        if cfg.use_corp_init:
             try:
-                from fdgd import run_fdgd
-                centroids = run_fdgd(blocks, nets, seed=0)
+                from corp_placer import run_corp_spring
+                centroids = run_corp_spring(blocks, nets, seed=0)
                 for bid, (cx, cy) in centroids.items():
                     w, h = block_dims[bid]
-                    fdgd_positions[bid] = (max(0.0, cx - w / 2.0), max(0.0, cy - h / 2.0))
+                    corp_positions[bid] = (max(0.0, cx - w / 2.0), max(0.0, cy - h / 2.0))
             except Exception as exc:
-                logger.debug("FDGD skipped (%s), using random init for particle 0", exc)
+                logger.debug("CORP skipped (%s), using random init for particle 0", exc)
 
         def _clamp(bid: str, x: float, y: float) -> tuple[float, float]:
             w, h = block_dims[bid]
@@ -283,8 +283,8 @@ class PSOOptimizer:
 
         def _init_particle(particle_idx: int) -> dict[str, tuple[float, float]]:
             pos: dict[str, tuple[float, float]] = {}
-            if particle_idx == 0 and fdgd_positions:
-                pos = dict(fdgd_positions)
+            if particle_idx == 0 and corp_positions:
+                pos = dict(corp_positions)
                 for bid in bids:
                     if bid not in pos:
                         w, h = block_dims[bid]
@@ -295,7 +295,7 @@ class PSOOptimizer:
                     pos[bid] = (rng.uniform(0.0, canvas - w), rng.uniform(0.0, canvas - h))
 
             # Clamp masters to left half; clamp free blocks to canvas.
-            # FDGD may place either type outside valid bounds — clamp before
+            # CORP may place either type outside valid bounds — clamp before
             # symmetry derivation. Slaves are skipped here; _enforce_symmetry derives them.
             for bid in bids:
                 if bid in master_set:

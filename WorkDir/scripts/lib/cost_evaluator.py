@@ -6,7 +6,8 @@ Works on any {block_id: (x, y)} dict produced by any topology.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from collections import defaultdict
+from dataclasses import dataclass
 
 
 # =============================================================================
@@ -27,10 +28,11 @@ _VSS_NET_IDS: frozenset[str] = frozenset({"VSS", "GND", "AGND", "VSSA"})
 
 @dataclass
 class CostWeights:
-    area_weight:          float = _DEFAULT_AREA_WEIGHT
-    wirelength_weight:    float = _DEFAULT_WL_WEIGHT
-    aspect_ratio_weight:  float = _DEFAULT_AR_WEIGHT
-    target_aspect_ratio:  float = _DEFAULT_TARGET_AR
+    area_weight:               float = _DEFAULT_AREA_WEIGHT
+    wirelength_weight:         float = _DEFAULT_WL_WEIGHT
+    aspect_ratio_weight:       float = _DEFAULT_AR_WEIGHT
+    target_aspect_ratio:       float = _DEFAULT_TARGET_AR
+    device_clustering_weight:  float = 0.0
 
 
 # =============================================================================
@@ -75,7 +77,10 @@ class CostEvaluator:
         cost  = self._w.area_weight * (area / self._init_area)
         if self._init_wl > 0.0:
             cost += self._w.wirelength_weight * (wl / self._init_wl)
-        cost += self._w.aspect_ratio_weight * (ar - self._w.target_aspect_ratio) ** 2
+        if self._w.aspect_ratio_weight > 0.0:
+            cost += self._w.aspect_ratio_weight * (ar - self._w.target_aspect_ratio) ** 2
+        if self._w.device_clustering_weight > 0.0:
+            cost += self._w.device_clustering_weight * self._clustering_penalty(positions)
         return cost
 
     # ------------------------------------------------------------------
@@ -167,6 +172,32 @@ class CostEvaluator:
                 return v
         variants = block.get("variants", [])
         return variants[0] if variants else {}
+
+    def _clustering_penalty(self, positions: dict[str, tuple[float, float]]) -> float:
+        """HPWL of each device-type group's bounding box, summed and normalised by init_wl.
+
+        Penalises layouts where blocks of the same type (e.g. nmos_lvt, pmos_rvt)
+        are spread far apart, driving the optimiser to cluster them spatially.
+        Single-instance types are skipped (bounding box is always zero).
+        """
+        type_xs: dict[str, list[float]] = defaultdict(list)
+        type_ys: dict[str, list[float]] = defaultdict(list)
+        for bid, (bx, by) in positions.items():
+            dt = self._blocks.get(bid, {}).get("device_type", "")
+            if not dt:
+                continue
+            variant = self._active_variant(self._blocks.get(bid, {}))
+            bw = variant.get("main_bbox", {}).get("x_max", 0.0)
+            bh = variant.get("main_bbox", {}).get("y_max", 0.0)
+            type_xs[dt].append(bx + bw / 2.0)
+            type_ys[dt].append(by + bh / 2.0)
+        total = 0.0
+        for dt in type_xs:
+            xs, ys = type_xs[dt], type_ys[dt]
+            if len(xs) < 2:
+                continue
+            total += (max(xs) - min(xs)) + (max(ys) - min(ys))
+        return total / self._init_wl if self._init_wl > 0.0 else 0.0
 
     def _build_pin_positions(
         self, positions: dict[str, tuple[float, float]]

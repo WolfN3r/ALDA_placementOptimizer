@@ -72,6 +72,13 @@ if __name__ == "__main__":
     parser.add_argument("--sym-mode", dest="sym_mode", default="aggressive",
                         choices=["none", "moderate", "aggressive"],
                         help="Symmetry constraint aggressiveness for netlist-driven runs (default: %(default)s)")
+    parser.add_argument("--warmup-strategy", dest="warmup_strategy", default="",
+                        choices=["", "corp", "contour", "spring", "spsa"],
+                        help="ILP warm-start strategy (default: use 101_placementOptimizer.py constant)")
+    parser.add_argument("--warmup-n-runs", dest="warmup_n_runs", type=int, default=-1,
+                        help="Number of parallel warmup runs (-1 → use 101_placementOptimizer.py constant)")
+    parser.add_argument("--warmup-visualize", dest="warmup_visualize", action="store_true", default=False,
+                        help="Save all warmup placements to JSON for viewer display")
     args = parser.parse_args()
 
     seed       = args.seed
@@ -98,6 +105,14 @@ if __name__ == "__main__":
     opt.RUN_MODE  = args.run_mode if args.run_mode != "user" else "exhaustive"
     opt.TOPOLOGY  = args.topology if args.run_mode == "user" else ""
     opt.OPTIMIZER = args.optimizer if args.run_mode == "user" else ""
+
+    # Warmup overrides (only when explicitly provided via CLI)
+    if args.warmup_strategy:
+        opt.WARMUP_STRATEGY = args.warmup_strategy
+    if args.warmup_n_runs >= 0:
+        opt.WARMUP_N_RUNS = args.warmup_n_runs
+    if args.warmup_visualize:
+        opt.WARMUP_VISUALIZE = True
 
     placement_data: dict = opt.run(blocks_data)
 

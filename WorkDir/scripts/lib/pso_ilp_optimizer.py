@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).parent))
-from ilp_optimizer import _solve_mip, _fdgd_row_pack, GurobiParams, ILP_LARGE_N_WARN
+from ilp_optimizer import _solve_mip, _corp_row_pack, GurobiParams, ILP_LARGE_N_WARN
 from log_setup import get_logger
 
 DEBUG = False
@@ -102,7 +102,7 @@ class PSOILPOptimizer:
         # incumbent, but keep raw PSO positions for r-var direction hints.
         # Gurobi gets a tight initial upper bound (from the DRC-clean row-pack) AND
         # better directional hints (from the 2D PSO layout).
-        pso_ordered_warm = _fdgd_row_pack(bids, blocks, pso_positions)
+        pso_ordered_warm = _corp_row_pack(bids, blocks, pso_positions)
 
         c_area = self._evaluator._w.area_weight
         c_wl   = self._evaluator._w.wirelength_weight
@@ -145,7 +145,7 @@ class PSOILPOptimizer:
 
         # Reduced iteration count: PSO only needs an approximate 2D arrangement,
         # not a fully converged result.  The ILP stage fixes remaining violations.
-        pso_cfg = self._pso_config or PSOConfig(max_iter=500, swarm_size=20, use_fdgd_init=True)
+        pso_cfg = self._pso_config or PSOConfig(max_iter=500, swarm_size=20, use_corp_init=True)
 
         topo = PSOTopology(blocks, nets, sym_groups)
         topo.seed(blocks, mode="random")

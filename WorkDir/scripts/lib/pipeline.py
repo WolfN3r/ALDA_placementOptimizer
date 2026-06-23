@@ -136,9 +136,10 @@ class PipelineResult:
     t_optimize_ms:    float           = 0.0
     t_total_ms:       float           = 0.0
     error_message:    str             = ""
+    warmup_runs:      list            = field(default_factory=list)
 
     def to_dict(self) -> dict:
-        return {
+        d: dict = {
             "run_id":    self.run_id,
             "topology":  self.topology,
             "optimizer": self.optimizer,
@@ -160,6 +161,9 @@ class PipelineResult:
             "power_rails":   self.power_rails,
             "error_message": self.error_message,
         }
+        if self.warmup_runs:
+            d["warmup_runs"] = self.warmup_runs
+        return d
 
 
 # =============================================================================
@@ -248,6 +252,31 @@ class OptimizationPipeline:
                 use_power_rails=self._use_power_rails,
             )
 
+            # Step 5b: multi-warmup start (optional — ILP only, keyed by warmup_config)
+            warmup_positions:    dict | None = None
+            warmup_variant_map:  dict        = {}
+            warmup_runs_data:    list        = []
+            warmup_cfg = self._optimizer_kwargs.get("warmup_config")
+            if warmup_cfg is not None:
+                from warmup_manager import WarmupManager
+                mgr = WarmupManager(warmup_cfg)
+                warmup_positions, warmup_results, warmup_variant_map = mgr.run(blocks, nets, init_area, init_wl)
+                if warmup_cfg.visualize:
+                    warmup_runs_data = [
+                        {
+                            "run_index":   r.run_index,
+                            "strategy":    r.strategy,
+                            "seed":        r.seed,
+                            "cost":        round(r.cost, 6),
+                            "is_selected": r.is_selected,
+                            "positions": {
+                                bid: [round(v[0], 6), round(v[1], 6), round(v[2], 6), round(v[3], 6)]
+                                for bid, v in r.positions.items()
+                            },
+                        }
+                        for r in warmup_results
+                    ]
+
             # Step 6: auto-calibrate SA initial temperature if needed
             cfg = SAConfig(**self._sa_config.__dict__)
             if self._auto_calibrate and cfg.initial_temp <= 0.0 and isinstance(topology, SAMixin):
@@ -260,20 +289,106 @@ class OptimizationPipeline:
                 cfg.max_iterations = cfg.epoch_size * 200
 
             # Step 7: run optimizer
-            optimizer = self._optimizer_cls(topology, evaluator, cfg, observer=self._observer, **self._optimizer_kwargs)
-            t_opt_start = time.perf_counter()
-            opt_result  = optimizer.run()
-            result.t_optimize_ms = (time.perf_counter() - t_opt_start) * 1000
+            # In exhaustive-ILP mode: run one ILP pass per warmup result (serial).
+            # In default mode: run one ILP pass with the selected warmup positions.
+            base_kwargs = dict(self._optimizer_kwargs)
+            base_kwargs.pop("warmup_config", None)  # consumed above; not a valid optimizer kwarg
 
-            # Step 8: restore best state and decode final positions
-            topology.restore_state(opt_result.best_state)
-            final_positions = topology.decode()
+            if (
+                warmup_cfg is not None
+                and warmup_cfg.exhaustive_ilp
+                and warmup_results
+            ):
+                # --- Exhaustive-ILP: N serial ILP runs, one per warmup result ---
+                ilp_entries: list[dict] = []
+                best_ilp_positions    = None
+                best_ilp_opt_result   = None
+                best_ilp_cost         = float("inf")
+                best_ilp_variant_map  = {}
 
-            variant_map = topology.get_variant_map()
+                for wu_r in warmup_results:
+                    wp_2d = {bid: (v[0], v[1]) for bid, v in wu_r.positions.items()}
+                    kwargs_i = {**base_kwargs, "initial_warm_positions": wp_2d,
+                                "initial_variant_map": wu_r.variant_map}
+                    opt_i = self._optimizer_cls(
+                        topology, evaluator, cfg, observer=self._observer, **kwargs_i
+                    )
+                    t_i = time.perf_counter()
+                    res_i = opt_i.run()
+                    t_i_ms = (time.perf_counter() - t_i) * 1000
 
+                    topology.restore_state(res_i.best_state)
+                    pos_i   = topology.decode()
+                    vm_i    = topology.get_variant_map()
+                    cost_i  = evaluator.evaluate(pos_i)
+
+                    # Collect block dims for viewer (same format as warmup positions)
+                    positions_with_dims = {
+                        bid: [
+                            round(pos_i[bid][0], 6), round(pos_i[bid][1], 6),
+                            round(
+                                _active_variant(blocks.get(bid, {})).get("main_bbox", {}).get("x_max", 0.0), 6
+                            ),
+                            round(
+                                _active_variant(blocks.get(bid, {})).get("main_bbox", {}).get("y_max", 0.0), 6
+                            ),
+                        ]
+                        for bid in pos_i
+                    }
+                    ilp_entries.append({
+                        "run_index":    wu_r.run_index,
+                        "strategy":     wu_r.strategy,
+                        "seed":         wu_r.seed,
+                        "cost":         round(cost_i, 6),
+                        "warmup_cost":  round(wu_r.cost, 6),
+                        "is_selected":  False,
+                        "t_optimize_ms": round(t_i_ms, 1),
+                        "positions":    positions_with_dims,
+                    })
+
+                    if cost_i < best_ilp_cost:
+                        best_ilp_cost        = cost_i
+                        best_ilp_positions   = pos_i
+                        best_ilp_opt_result  = res_i
+                        best_ilp_variant_map = vm_i
+
+                # Mark the best entry as selected
+                if ilp_entries:
+                    best_entry = min(ilp_entries, key=lambda e: e["cost"])
+                    best_entry["is_selected"] = True
+
+                if best_ilp_opt_result is None:
+                    raise RuntimeError("All exhaustive-ILP runs failed — no valid placement produced")
+
+                ilp_entries.sort(key=lambda e: e["cost"])
+                warmup_runs_data    = ilp_entries
+                opt_result          = best_ilp_opt_result
+                final_positions     = best_ilp_positions
+                variant_map         = best_ilp_variant_map
+                result.t_optimize_ms = sum(e["t_optimize_ms"] for e in ilp_entries)
+
+            else:
+                # --- Default mode: single ILP run with selected warmup positions ---
+                effective_kwargs = dict(base_kwargs)
+                if warmup_positions is not None:
+                    effective_kwargs["initial_warm_positions"] = warmup_positions
+                    effective_kwargs["initial_variant_map"]    = warmup_variant_map
+                optimizer = self._optimizer_cls(
+                    topology, evaluator, cfg, observer=self._observer, **effective_kwargs
+                )
+                t_opt_start = time.perf_counter()
+                opt_result  = optimizer.run()
+                result.t_optimize_ms = (time.perf_counter() - t_opt_start) * 1000
+
+                # Step 8: restore best state and decode final positions
+                topology.restore_state(opt_result.best_state)
+                final_positions = topology.decode()
+                variant_map     = topology.get_variant_map()
+
+            n_ilp_runs = len(warmup_runs_data) if (warmup_cfg and warmup_cfg.exhaustive_ilp) else 1
             result.status        = "success"
-            result.final_cost    = opt_result.best_cost
-            result.n_iterations  = opt_result.n_iterations
+            result.final_cost    = evaluator.evaluate(final_positions) if final_positions else 0.0
+            result.n_iterations  = n_ilp_runs
             result.positions     = final_positions
             result.variant_map   = variant_map
             placed = _compute_placed_blocks(final_positions, blocks, variant_map)
@@ -287,6 +402,7 @@ class OptimizationPipeline:
             result.hpwl_um       = _hpwl(final_positions, blocks, nets, use_power_rails=self._use_power_rails)
             result.aspect_ratio  = _aspect_ratio(final_positions, blocks)
             result.power_rails   = _compute_power_rails(final_positions, blocks)
+            result.warmup_runs   = warmup_runs_data
 
         except IncompatibleCombinationError as exc:
             result.status        = "incompatible"

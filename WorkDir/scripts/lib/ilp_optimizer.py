@@ -20,12 +20,13 @@ from __future__ import annotations
 import dataclasses
 import math
 import sys
+from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).parent))
 from spacing       import compute_block_spacing
-from fdgd          import run_fdgd
+from corp_placer   import run_corp_spring
 from log_setup     import get_logger
 from cost_evaluator import _VDD_NET_IDS, _VSS_NET_IDS
 
@@ -117,11 +118,11 @@ class GurobiParams:
     # 0.3 means a 613µm-wide strip (AR=44) pays +171 over a valid 2D layout
     # with AR≤3 — enough to strongly prefer the 2D packing.
 
-    use_fdgd_start: bool = True
-    # True → run FDGD before solving, sort blocks by FDGD x-centroid, row-pack to
-    # produce a DRC-clean feasible layout, and inject it as a complete MIP start
-    # (all binary AND continuous variables set).  This gives Gurobi a verified
-    # initial incumbent at node 0, tightening pruning from the first B&B split.
+    use_corp_start: bool = True
+    # True → run CORP spring-embedding before solving, sort blocks by x-centroid,
+    # row-pack to produce a DRC-clean feasible layout, and inject it as a complete
+    # MIP start (all binary AND continuous variables set).  This gives Gurobi a
+    # verified initial incumbent at node 0, tightening pruning from the first B&B split.
     # False → use plain row-pack as warm start (faster pre-solve, worse initial bound).
 
 
@@ -200,18 +201,18 @@ def _r_hints(
     return hints
 
 
-def _fdgd_row_pack(
-    bids:           list[str],
-    blocks:         dict,
-    fdgd_centroids: dict[str, tuple[float, float]],
+def _corp_row_pack(
+    bids:            list[str],
+    blocks:          dict,
+    corp_centroids:  dict[str, tuple[float, float]],
 ) -> dict[str, tuple[float, float]]:
     """
-    Convert FDGD centroids to a DRC-clean feasible layout.
-    Sorts blocks by FDGD x-centroid (connectivity-aware ordering), then
+    Convert CORP spring centroids to a DRC-clean feasible layout.
+    Sorts blocks by x-centroid (connectivity-aware ordering), then
     row-packs left-to-right with correct DRC spacing between each pair.
     Returns bottom-left corner positions. Always overlap-free.
     """
-    sorted_bids = sorted(bids, key=lambda b: fdgd_centroids.get(b, (0.0, 0.0))[0])
+    sorted_bids = sorted(bids, key=lambda b: corp_centroids.get(b, (0.0, 0.0))[0])
     positions: dict[str, tuple[float, float]] = {}
     x_cursor = 0.0
     prev: str | None = None
@@ -236,6 +237,8 @@ def _solve_mip_gurobi(
     params:           GurobiParams,
     hint_positions:   dict[str, tuple[float, float]] | None = None,
     use_power_rails:  bool = True,
+    cluster_weight:   float = 0.0,
+    variant_map:      dict[str, int] | None = None,
 ) -> tuple[dict[str, tuple[float, float]], dict[str, int], str]:
     """
     Build and solve the analog placement MILP with gurobipy.
@@ -485,6 +488,44 @@ def _solve_mip_gurobi(
             power_proximity_expr += y[bid]
             n_power_bids += 1
 
+    # Device-type clustering — one virtual "net" per device_type, HPWL bounding box
+    # over block centres.  Same x_lo/x_hi/y_lo/y_hi formulation as real nets.
+    # Drives blocks of the same Vt variant (nmos_lvt, pmos_rvt, …) to cluster together.
+    dt_bids: dict[str, list[str]] = defaultdict(list)
+    for bid in bids:
+        dt = blocks[bid].get("device_type", "")
+        if dt:
+            dt_bids[dt].append(bid)
+
+    cxlo: dict[str, Any] = {}
+    cxhi: dict[str, Any] = {}
+    cylo: dict[str, Any] = {}
+    cyhi: dict[str, Any] = {}
+    for dt, grp_bids in dt_bids.items():
+        if len(grp_bids) < 2:
+            continue
+        cxlo[dt] = m.addVar(lb=0.0,         name=f"cxlo_{dt}")
+        cxhi[dt] = m.addVar(lb=0.0, ub=M_x, name=f"cxhi_{dt}")
+        cylo[dt] = m.addVar(lb=0.0,         name=f"cylo_{dt}")
+        cyhi[dt] = m.addVar(lb=0.0, ub=M_y, name=f"cyhi_{dt}")
+        for bid in grp_bids:
+            dims = all_dims[bid]
+            if not s[bid]:
+                xc = x[bid] + dims[0][0] / 2.0
+                yc = y[bid] + dims[0][1] / 2.0
+            else:
+                xc = x[bid] + gp.quicksum(dims[k][0] / 2.0 * s[bid][k] for k in range(len(dims)))
+                yc = y[bid] + gp.quicksum(dims[k][1] / 2.0 * s[bid][k] for k in range(len(dims)))
+            m.addConstr(cxlo[dt] <= xc, name=f"cxlo_{dt}_{bid}")
+            m.addConstr(cxhi[dt] >= xc, name=f"cxhi_{dt}_{bid}")
+            m.addConstr(cylo[dt] <= yc, name=f"cylo_{dt}_{bid}")
+            m.addConstr(cyhi[dt] >= yc, name=f"cyhi_{dt}_{bid}")
+
+    n_cluster_types = max(len(cxlo), 1)
+    cluster_expr = gp.quicksum(
+        (cxhi[dt] - cxlo[dt]) + (cyhi[dt] - cylo[dt]) for dt in cxlo
+    ) if cxlo else 0.0
+
     # Objective
     n_nets_used = max(len(x_lo), 1)
     hpwl_expr = gp.quicksum(
@@ -495,7 +536,8 @@ def _solve_mip_gurobi(
         area_weight * (W + H)
         + (wl_weight / n_nets_used) * hpwl_expr
         + power_scale * power_proximity_expr
-        + params.ar_weight * excess_ar,
+        + params.ar_weight * excess_ar
+        + (cluster_weight / n_cluster_types) * cluster_expr,
         GRB.MINIMIZE,
     )
 
@@ -516,9 +558,11 @@ def _solve_mip_gurobi(
             for k in range(4):
                 r_vars[(bi, bj)][k].Start = 1 if k == k_best else 0
 
+    _vmap = variant_map or {}
     for bid in bids:
+        chosen_k = _vmap.get(bid, 0)
         for k, sv in enumerate(s[bid]):
-            sv.Start = 1.0 if k == 0 else 0.0   # default: variant 0
+            sv.Start = 1.0 if k == chosen_k else 0.0
 
     W_start = max(warm_positions[bid][0] + all_dims[bid][0][0] for bid in bids)
     H_start = max(warm_positions[bid][1] + all_dims[bid][0][1] for bid in bids)
@@ -576,6 +620,8 @@ def _solve_mip(
     gurobi_params:    GurobiParams | None = None,
     hint_positions:   dict[str, tuple[float, float]] | None = None,
     use_power_rails:  bool = True,
+    cluster_weight:   float = 0.0,
+    variant_map:      dict[str, int] | None = None,
 ) -> tuple[dict[str, tuple[float, float]], dict[str, int], str]:
     """Dispatch to _solve_mip_gurobi with the given (or default) parameters."""
     return _solve_mip_gurobi(
@@ -584,6 +630,8 @@ def _solve_mip(
         gurobi_params or GurobiParams(),
         hint_positions=hint_positions,
         use_power_rails=use_power_rails,
+        cluster_weight=cluster_weight,
+        variant_map=variant_map or {},
     )
 
 
@@ -596,15 +644,19 @@ class ILPOptimizer:
 
     def __init__(
         self,
-        topology:       Any,
-        evaluator:      Any,
-        config:         Any,
-        observer:       Any           = None,
-        gurobi_params:  GurobiParams | None = None,
+        topology:                Any,
+        evaluator:               Any,
+        config:                  Any,
+        observer:                Any                  = None,
+        gurobi_params:           GurobiParams | None  = None,
+        initial_warm_positions:  dict | None          = None,
+        initial_variant_map:     dict | None          = None,
     ) -> None:
-        self._topo          = topology
-        self._evaluator     = evaluator
-        self._gurobi_params = gurobi_params
+        self._topo                   = topology
+        self._evaluator              = evaluator
+        self._gurobi_params          = gurobi_params
+        self._initial_warm_positions = initial_warm_positions
+        self._initial_variant_map    = initial_variant_map or {}
 
     def run(self) -> Any:
         from sa_optimizer import SAResult
@@ -630,35 +682,49 @@ class ILPOptimizer:
             )
 
         row_pack_positions = self._topo.decode()
-        c_area = self._evaluator._w.area_weight
-        c_wl   = self._evaluator._w.wirelength_weight
+        c_area    = self._evaluator._w.area_weight
+        c_wl      = self._evaluator._w.wirelength_weight
+        c_cluster = self._evaluator._w.device_clustering_weight
 
         params = self._gurobi_params or GurobiParams()
         warm_positions = row_pack_positions
-        fdgd_hints: dict[str, tuple[float, float]] | None = None
-        if params.use_fdgd_start:
+        corp_hints: dict[str, tuple[float, float]] | None = None
+
+        if self._initial_warm_positions is not None:
+            # External warm positions provided by WarmupManager — skip internal CORP.
+            # Strip any extra dimensions (w, h) that the viewer stores; ILP needs (x, y).
+            warm_positions = {
+                bid: (v[0], v[1]) for bid, v in self._initial_warm_positions.items()
+                if bid in bids
+            }
+            logger.debug(
+                "ILP: using external warm_positions from WarmupManager (%d blocks)", len(warm_positions)
+            )
+        elif params.use_corp_start:
             try:
-                fdgd_centroids = run_fdgd(blocks, nets, seed=0)
-                if len(fdgd_centroids) == len(bids):
-                    # Sort blocks by FDGD x-centroid → row-pack → DRC-clean positions.
-                    warm_positions = _fdgd_row_pack(bids, blocks, fdgd_centroids)
-                    # Convert FDGD centroids to bottom-left corners for r-hint computation.
-                    # FDGD returns (cx, cy); _r_hints() expects bottom-left (x, y).
+                corp_centroids = run_corp_spring(blocks, nets, seed=0)
+                if len(corp_centroids) == len(bids):
+                    # Sort blocks by x-centroid → row-pack → DRC-clean positions.
+                    warm_positions = _corp_row_pack(bids, blocks, corp_centroids)
+                    # Convert centroids to bottom-left corners for r-hint computation.
+                    # run_corp_spring returns (cx, cy); _r_hints() expects bottom-left (x, y).
                     # Off-by-w/2 would occasionally flip the direction hint.
-                    fdgd_hints = {
+                    corp_hints = {
                         b: (cx - _variant_dims(blocks[b])[0][0] / 2.0,
                             cy - _variant_dims(blocks[b])[0][1] / 2.0)
-                        for b, (cx, cy) in fdgd_centroids.items()
+                        for b, (cx, cy) in corp_centroids.items()
                     }
-                    logger.debug("FDGD row-pack warm start applied (%d blocks)", len(bids))
+                    logger.debug("CORP row-pack warm start applied (%d blocks)", len(bids))
             except Exception as exc:
-                logger.warning("FDGD failed (%s) — using plain row-pack for warm start", exc)
+                logger.warning("CORP failed (%s) — using plain row-pack for warm start", exc)
 
         positions, variant_map, termination = _solve_mip(
             bids, blocks, nets, sym_groups, c_area, c_wl, warm_positions,
             params,
-            hint_positions=fdgd_hints,
+            hint_positions=corp_hints,
             use_power_rails=getattr(self._evaluator, "_use_power_rails", True),
+            cluster_weight=c_cluster,
+            variant_map=self._initial_variant_map or None,
         )
 
         self._topo.set_solution(positions, variant_map)
