@@ -51,8 +51,8 @@ SA_EPOCH_SIZE   = 0      # 0 → max(n_blocks × 8, 50)
 SA_STAGNATION   = 15     # epochs without improvement before reheating
 
 # --- Cost weights (must sum to 1.0) -----------------------------------------
-W_AREA    = 0.30
-W_WL      = 0.55
+W_AREA    = 0.55
+W_WL      = 0.3
 W_AR      = 0.05
 W_CLUSTER = 0.10         # device-type bounding-box clustering (nmos_lvt, pmos_rvt, …)
 TARGET_AR = 1.0          # target width/height ratio for the full placement

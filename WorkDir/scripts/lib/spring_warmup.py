@@ -26,8 +26,8 @@ from log_setup      import get_logger
 DEBUG = False
 
 CANVAS_FACTOR = math.sqrt(1.25)  # canvas side = sqrt(1.25 × total_block_area) — paper §4
-K_ATTRACT     = 0.3              # attractive spring coefficient per unit distance per net weight
-K_REPEL       = 5.0              # repulsive coefficient per µm of underspacing
+K_ATTRACT     = 0.5              # attractive spring coefficient per unit distance per net weight
+K_REPEL       = 2.0              # repulsive coefficient per µm of underspacing
 K_BOUNDARY    = 1.0              # restoring force per µm outside canvas
 K_ORIGIN      = 0.03             # origin pull per µm from (0, 0) — minimises area spread
 DT_INIT       = 1.0              # initial simulation step δ
