@@ -1,6 +1,6 @@
 # ALDA Placement Optimizer
 
-Analog-IC block placement engine for the `gpdk090` (90 nm) technology.
+Analog-IC block placement engine for the `gpdk090` (90 nm) like technology.
 Generates blocks (random or from a SPICE netlist), then optimizes their 2D arrangement
 (`B*-tree` / `Sequence Pair` topologies, Simulated Annealing, ILP, PSO) under symmetry constraints.
 Includes a PyQt6 viewer with DRC checking, routing via MAGICAL Anaroute, and GDS export.
