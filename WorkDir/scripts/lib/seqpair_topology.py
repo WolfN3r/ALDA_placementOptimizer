@@ -47,6 +47,12 @@ class SequencePairTopology(TopologyBase, SAMixin, GAMixin):
         self._enforce_matching: list[bool]  = []   # per-group variant-match flag
         self._build_sym_lookups()
 
+        # Composite blocks (hierarchy groups treated as atomic placement units)
+        # are identified by the "group_block_ids" key set by build_composite_blocks().
+        self._composite_bids: frozenset[str] = frozenset(
+            bid for bid, blk in self._blocks.items() if "group_block_ids" in blk
+        )
+
     # ------------------------------------------------------------------
     # Symmetry lookup tables (built once, never mutated)
     # ------------------------------------------------------------------

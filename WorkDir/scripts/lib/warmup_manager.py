@@ -50,6 +50,7 @@ class WarmupConfig:
     visualize:        bool  = False    # if True, warmup_runs saved to output JSON
     exhaustive_ilp:   bool  = False    # if True, run ILP for each warmup result
     spsa_timeout_sec: float = 10.0     # wall-clock budget per SPSA run
+    sym_groups:       list  = dataclasses.field(default_factory=list)  # axis constraints for SPSA warmup SP
 
 
 # =============================================================================
@@ -127,8 +128,9 @@ class SPSAWarmup(WarmupStrategy):
     SA exits naturally when temperature converges; timeout_sec is the hard ceiling.
     """
 
-    def __init__(self, timeout_sec: float = 10.0) -> None:
+    def __init__(self, timeout_sec: float = 10.0, sym_groups: list | None = None) -> None:
         self._timeout_sec  = timeout_sec
+        self._sym_groups   = sym_groups or []
         self._variant_map: dict[str, int] = {}
 
     def get_variant_map(self) -> dict[str, int]:
@@ -157,7 +159,7 @@ class SPSAWarmup(WarmupStrategy):
         if not valid_blocks:
             return {}
 
-        topo = SequencePairTopology(valid_blocks, nets)
+        topo = SequencePairTopology(valid_blocks, nets, sym_groups=self._sym_groups or None)
         topo.seed(valid_blocks, mode="random")
 
         # Use scale-neutral evaluator: calibration only needs relative cost deltas,
@@ -290,7 +292,10 @@ class WarmupManager:
         seeds           = [cfg.master_seed * 10_000 + i for i in range(cfg.n_runs)]
         strategy_kwargs: dict = {}
         if cfg.strategy == "spsa":
-            strategy_kwargs = {"timeout_sec": cfg.spsa_timeout_sec}
+            strategy_kwargs = {
+                "timeout_sec": cfg.spsa_timeout_sec,
+                "sym_groups":  cfg.sym_groups,
+            }
 
         logger.info(
             "WarmupManager: strategy=%s  n_runs=%d  master_seed=%d",

@@ -479,11 +479,21 @@ def optimize(data: dict) -> dict:
                     seen_ss.add(cid)
 
             if comp_pairs or comp_ss:
+                # Composite pairs that share the same topology_type have aligned
+                # matching_variants (same count, same arrangement types), so M3
+                # can keep their active variant in sync during SA optimisation.
+                comp_id_to_blk = {cb["block_id"]: cb for cb in composite_list}
+                enforce = bool(comp_pairs) and all(
+                    comp_id_to_blk.get(ca, {}).get("topology_type") ==
+                    comp_id_to_blk.get(cb_, {}).get("topology_type")
+                    for ca, cb_ in comp_pairs
+                )
                 sym_groups.append({
-                    "compound_id": cg.get("compound_id", 0),
-                    "axis": "vertical",
-                    "pairs": comp_pairs,
-                    "self_symmetric": comp_ss,
+                    "compound_id":             cg.get("compound_id", 0),
+                    "axis":                    "vertical",
+                    "pairs":                   comp_pairs,
+                    "self_symmetric":          comp_ss,
+                    "enforce_matching_variants": enforce,
                 })
         logger.info(
             "Aggressive sym_groups: %d axis group(s) with %d composite pair(s)",
@@ -540,6 +550,7 @@ def optimize(data: dict) -> dict:
             visualize        = WARMUP_VISUALIZE,
             exhaustive_ilp   = WARMUP_EXHAUSTIVE_ILP,
             spsa_timeout_sec = WARMUP_SPSA_TIMEOUT_SEC,
+            sym_groups       = sym_groups,
         )
     if ilp_kwargs:
         per_opt_kwargs["ILPOptimizer"] = ilp_kwargs
