@@ -145,14 +145,33 @@ def _variant_dims(block: dict) -> list[tuple[float, float]]:
     return dims if dims else [(0.0, 0.0)]
 
 
-def _big_m(bids: list[str], blocks: dict) -> tuple[float, float]:
+def _big_m(
+    bids:       list[str],
+    blocks:     dict,
+    sym_groups: list | None = None,
+) -> tuple[float, float]:
     """
-    Return (M_x, M_y) = sum-of-all-widths/heights + max pairwise spacing.
+    Return (M_x, M_y) = sum-of-all-widths/heights + spacing margin.
 
     The +max_spacing term is required for correctness: without it, the
     big-M constraints for an inactive r-flag (rv=0) can become binding,
     letting the LP relaxation place blocks at overlapping positions with
-    fractional r-vars.
+    fractional r-vars. One gap's worth of margin is sufficient for the
+    general (unconstrained) non-overlap case.
+
+    Self-symmetric blocks are a special case: every block in a group's
+    `self_symmetric` list is pinned to the SAME x_sym-centered x-coordinate
+    (`2*x[bid]+w[bid] == 2*x_sym`), so their x-ranges necessarily overlap and
+    non-overlap can only be satisfied by y-separation — a forced k-way
+    vertical stack needing (k-1) spacing gaps, not 1. Without this term,
+    H's upper bound (M_y) can be smaller than the true minimum stack height,
+    making every good solution — including compact-variant ones — MILP
+    infeasible while a bad, artificially flattened one remains admissible.
+    Confirmed empirically: see notes/2026-07-08_ilp-shared-axis-bug.md.
+
+    Only vertical-axis symmetry is implemented (self-symmetric blocks share
+    an x, stack in y), so the extra margin is added to M_y. If horizontal-
+    axis symmetry is ever implemented, the analogous term belongs on M_x.
     """
     M_x = sum(max(d[0] for d in _variant_dims(blocks[bid])) for bid in bids)
     M_y = sum(max(d[1] for d in _variant_dims(blocks[bid])) for bid in bids)
@@ -168,6 +187,14 @@ def _big_m(bids: list[str], blocks: dict) -> tuple[float, float]:
                         max_ay = sr.y_spacing
         M_x += max_ax
         M_y += max_ay
+
+        max_self_sym_group = max(
+            (len(g.get("self_symmetric", [])) for g in (sym_groups or [])),
+            default=0,
+        )
+        if max_self_sym_group > 1:
+            M_y += max_ay * (max_self_sym_group - 1)
+
     return max(M_x, 1.0), max(M_y, 1.0)
 
 
@@ -258,7 +285,7 @@ def _solve_mip_gurobi(
 
     n = len(bids)
     bid_set = set(bids)
-    M_x, M_y = _big_m(bids, blocks)
+    M_x, M_y = _big_m(bids, blocks, sym_groups)
 
     m = gp.Model("analog_placement")
     if params.debug:
@@ -459,34 +486,45 @@ def _solve_mip_gurobi(
             m.addConstr(y_lo[ei] <= yc, name=f"hpwl_ylo_{ei}_{nbid}")
             m.addConstr(y_hi[ei] >= yc, name=f"hpwl_yhi_{ei}_{nbid}")
 
-    # Power rail proximity — per-block linear y-penalty.
+    # Power rail proximity — per-pin linear y-penalty.
     # A bounding-box formulation would cause LP relaxation issues (all VDD/VSS
-    # blocks pulled to one fractional point). Per-block linear terms avoid this.
-    # VDD blocks: -y[bid] in objective → solver maximises y → pushes blocks to top.
-    # VSS blocks: +y[bid] → solver minimises y → pushes blocks to bottom.
-    vdd_bids_set: set[str] = set()
-    vss_bids_set: set[str] = set()
+    # pins pulled to one fractional point). Per-pin linear terms avoid this.
+    # A device's bulk *and* source may both tie to the same rail net — each is an
+    # independent physical connection, so each pin gets its own term rather than
+    # collapsing every power-tied pin on a block into one block-level pull.
+    # VDD pins: -y_pin in objective → solver maximises y_pin → pushes it to top.
+    # VSS pins: +y_pin → solver minimises y_pin → pushes it to bottom.
+    vdd_pins: list[tuple[str, str]] = []   # (bid, pin_name)
+    vss_pins: list[tuple[str, str]] = []
     if use_power_rails:
         for net in nets:
             nid = net.get("net_id", "").upper()
+            if nid not in _VDD_NET_IDS and nid not in _VSS_NET_IDS:
+                continue
             for pin in net.get("pins", []):
-                if pin.startswith("B"):
-                    bid = pin[1:].split("_", 1)[0]
-                    if bid in bid_set:
-                        if nid in _VDD_NET_IDS:
-                            vdd_bids_set.add(bid)
-                        elif nid in _VSS_NET_IDS:
-                            vss_bids_set.add(bid)
+                if not pin.startswith("B"):
+                    continue
+                bid, _, pname = pin[1:].partition("_")
+                if bid not in bid_set:
+                    continue
+                (vdd_pins if nid in _VDD_NET_IDS else vss_pins).append((bid, pname))
+
+    def _pin_y_expr(bid: str, pname: str):
+        variants = blocks[bid].get("variants", [])
+        if not s[bid]:
+            yoff = variants[0].get("pin_positions", {}).get(pname, {}).get("y", 0.0) if variants else 0.0
+            return y[bid] + yoff
+        return y[bid] + gp.quicksum(
+            variants[k].get("pin_positions", {}).get(pname, {}).get("y", 0.0) * s[bid][k]
+            for k in range(len(variants))
+        )
 
     power_proximity_expr = gp.LinExpr()
-    n_power_bids = 0
-    for bid in bids:
-        if bid in vdd_bids_set:
-            power_proximity_expr -= y[bid]
-            n_power_bids += 1
-        elif bid in vss_bids_set:
-            power_proximity_expr += y[bid]
-            n_power_bids += 1
+    for bid, pname in vdd_pins:
+        power_proximity_expr -= _pin_y_expr(bid, pname)
+    for bid, pname in vss_pins:
+        power_proximity_expr += _pin_y_expr(bid, pname)
+    n_power_bids = len(vdd_pins) + len(vss_pins)
 
     # Device-type clustering — one virtual "net" per device_type, HPWL bounding box
     # over block centres.  Same x_lo/x_hi/y_lo/y_hi formulation as real nets.
@@ -728,7 +766,7 @@ class ILPOptimizer:
         )
 
         self._topo.set_solution(positions, variant_map)
-        cost = self._evaluator.evaluate(positions)
+        cost = self._evaluator.evaluate(positions, variant_map)
         best_state = self._topo.copy_state()
 
         logger.info(

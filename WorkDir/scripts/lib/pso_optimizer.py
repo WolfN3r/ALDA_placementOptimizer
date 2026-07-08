@@ -277,7 +277,7 @@ class PSOOptimizer:
             return cfg.overlap_penalty_w * total
 
         def _total_cost(positions: dict) -> tuple[float, float]:
-            base    = self._evaluator.evaluate(positions)
+            base    = self._evaluator.evaluate(positions, variant_map)
             overlap = _overlap_penalty(positions)
             return base + overlap, overlap
 

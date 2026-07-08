@@ -242,7 +242,7 @@ def _worker(
         max(init_area, 1e-9),
         max(init_wl, 0.0),
     )
-    cost = evaluator.evaluate(positions_2d)
+    cost = evaluator.evaluate(positions_2d, variant_map)
     return positions_with_dims, cost, variant_map
 
 

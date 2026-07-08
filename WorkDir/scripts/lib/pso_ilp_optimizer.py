@@ -117,7 +117,7 @@ class PSOILPOptimizer:
         )
 
         self._topo.set_solution(positions, variant_map)
-        cost = self._evaluator.evaluate(positions)
+        cost = self._evaluator.evaluate(positions, variant_map)
         best_state = self._topo.copy_state()
 
         logger.info(

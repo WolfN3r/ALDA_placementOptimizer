@@ -11,7 +11,9 @@ When sym_groups are provided the topology enforces symmetric-feasibility
     pairs are not frozen at the front of both sequences.
   - M1/M2 are group-aware: picking a symmetric cell relocates the ENTIRE group
     as an indivisible unit in one sequence, preserving condition S by construction.
-  - decode() applies the two-pass x-sweep and forces y-equality on symmetric pairs.
+  - decode() applies the three-phase x-sweep (discover axis, sweep right,
+    sweep left — covers both real pairs and lone self-symmetric cells) and
+    forces y-equality on symmetric pairs.
   - capabilities() returns {"SA"} only (PMX crossover breaks condition S).
 """
 from __future__ import annotations
@@ -194,7 +196,7 @@ class SequencePairTopology(TopologyBase, SAMixin, GAMixin):
         x_coords = _dag_longest_path(n + 2, h_graph, SRC)
 
         if self._sym_groups:
-            x_coords = self._sym_sweep_x(x_coords, bids, pos_plus, pos_minus)
+            x_coords = self._sym_sweep_x(x_coords, bids, pos_plus, pos_minus, h_graph, n)
 
         y_coords = _dag_longest_path(n + 2, v_graph, SRC)
 
@@ -213,9 +215,28 @@ class SequencePairTopology(TopologyBase, SAMixin, GAMixin):
         bids:      list[str],
         pos_plus:  dict[str, int],
         pos_minus: dict[str, int],
+        h_graph:   dict,
+        n_blocks:  int,
     ) -> list[float]:
         """
-        Balasa-Lampaert two-pass x-sweep (§IV).
+        Balasa-Lampaert x-sweep (§IV), restructured into three phases so a
+        group's axis is fully known before any position is touched:
+
+          Phase 1 — discover the axis (read-only): each pair contributes its
+                    facing-edge midpoint, each lone self-symmetric cell
+                    contributes its own centre; sym_axis = max over all of them.
+          Phase 2 — sweep right (α order): push right-partners / self-symmetric
+                    cells that sit short of the axis, propagate downstream.
+          Phase 3 — sweep left (reverse α order): pull left-partners /
+                    self-symmetric cells that overshot the axis, propagate
+                    upstream.
+
+        Discovering the axis in its own upfront pass (rather than growing it
+        incrementally while also correcting positions, as a merged pass would)
+        matters once a group has more than one pair and/or self-symmetric
+        cell: a member visited early in α-order must not be judged against a
+        not-yet-final axis that a later member will still grow — every
+        member's correction always targets the group's true final axis.
         Operates on x_coords[0..n-1]; SRC/SNK entries are preserved unchanged.
         """
         x = list(x_coords)
@@ -242,9 +263,26 @@ class SequencePairTopology(TopologyBase, SAMixin, GAMixin):
             if not members:
                 continue
 
+            # Phase 1 — discover the axis. Order doesn't matter: nothing is
+            # written yet, so every contribution reads the same pre-sweep x.
             sym_axis = 0.0
+            seen_pairs: set[frozenset] = set()
+            for j in members:
+                k = self._sym_partner.get(j)
+                if k is None:
+                    continue
+                if k == j:
+                    sym_axis = max(sym_axis, x[idx[j]] + _w(j) / 2)
+                elif k in idx:
+                    pair_key = frozenset((j, k))
+                    if pair_key in seen_pairs:
+                        continue
+                    seen_pairs.add(pair_key)
+                    left, right = (k, j) if pos_plus[k] < pos_plus[j] else (j, k)
+                    midpoint = (x[idx[left]] + _w(left) + x[idx[right]]) / 2
+                    sym_axis = max(sym_axis, midpoint)
 
-            # Pass 1 — sweep right (α order)
+            # Phase 2 — sweep right (α order).
             for rp_i in range(n):
                 j = self._r_plus[rp_i]
                 if j not in members:
@@ -252,58 +290,67 @@ class SequencePairTopology(TopologyBase, SAMixin, GAMixin):
                 k = self._sym_partner.get(j)
                 if k is None:
                     continue
-
+                j_i = idx[j]
+                w_j = _w(j)
                 if k == j:
-                    # Self-symmetric: centre on current axis estimate
-                    j_i = idx[j]
-                    w_j = _w(j)
-                    d   = sym_axis - x[j_i] - w_j / 2
-                    if d > 0:
-                        x[j_i] += d / 2
-                        for m_i in range(n):
-                            m = self._r_plus[m_i]
-                            if (pos_plus[j] < pos_plus[m]
-                                    and pos_minus[j] < pos_minus[m]):
-                                x[idx[m]] += d / 2
-
+                    d = sym_axis - (x[j_i] + w_j / 2)
                 elif k in idx and pos_plus[k] < pos_plus[j]:
                     # j is the right partner, k is the left partner already placed
-                    j_i     = idx[j]
-                    k_i     = idx[k]
-                    w_k     = _w(k)
-                    x_j_pre = x[j_i]          # capture before push
-                    d       = 2 * sym_axis - (x[k_i] + w_k) - x_j_pre
-                    if d > 0:
-                        x[j_i] += d
-                        for m_i in range(n):
-                            m = self._r_plus[m_i]
-                            if (pos_plus[j] < pos_plus[m]
-                                    and pos_minus[j] < pos_minus[m]):
-                                x[idx[m]] += d
-                    # Axis update always uses PRE-push x_j
-                    sym_axis = max(sym_axis, (x[k_i] + w_k + x_j_pre) / 2)
+                    k_i = idx[k]
+                    d   = (2 * sym_axis - (x[k_i] + _w(k))) - x[j_i]
+                else:
+                    continue
+                if d > 0:
+                    x[j_i] += d
+                    for m_i in range(n):
+                        m = self._r_plus[m_i]
+                        if (pos_plus[j] < pos_plus[m]
+                                and pos_minus[j] < pos_minus[m]):
+                            x[idx[m]] += d
 
-            # Pass 2 — sweep left (reverse α order)
+            # Phase 3 — sweep left (reverse α order).
             for rp_i in range(n - 1, -1, -1):
                 j = self._r_plus[rp_i]
                 if j not in members:
                     continue
                 k = self._sym_partner.get(j)
-                if k is None or k == j or k not in idx:
+                if k is None:
                     continue
-                if pos_plus[k] > pos_plus[j]:
+                j_i = idx[j]
+                w_j = _w(j)
+                if k == j:
+                    d = sym_axis - (x[j_i] + w_j / 2)
+                elif k in idx and pos_plus[k] > pos_plus[j]:
                     # j is the left partner, k is to its right
-                    j_i = idx[j]
                     k_i = idx[k]
-                    w_j = _w(j)
-                    d   = 2 * sym_axis - (x[j_i] + w_j) - x[k_i]
-                    if d < 0:
-                        x[j_i] += d
-                        for m_i in range(n):
-                            m = self._r_plus[m_i]
-                            if (pos_plus[m] < pos_plus[j]
-                                    and pos_minus[m] < pos_minus[j]):
-                                x[idx[m]] += d
+                    d   = (2 * sym_axis - (x[j_i] + w_j)) - x[k_i]
+                else:
+                    continue
+                if d < 0:
+                    x[j_i] += d
+                    for m_i in range(n):
+                        m = self._r_plus[m_i]
+                        if (pos_plus[m] < pos_plus[j]
+                                and pos_minus[m] < pos_minus[j]):
+                            x[idx[m]] += d
+
+        # Final H-graph relaxation. Phase 2/3's downstream/upstream propagation
+        # only shifts blocks with a DIRECT H-relationship to the member being
+        # corrected — it does not re-check every other pairwise spacing
+        # requirement that a shift may have silently broken (e.g. two
+        # unrelated blocks that were each individually consistent with a
+        # composite's pre-sweep position can end up too close once the
+        # composite is pulled onto the axis, if only one of the two counts as
+        # "downstream" of it). h_graph already encodes every pairwise spacing
+        # requirement from decode()'s main loop, and its edges always run from
+        # a lower r_plus index to a higher one (same property _enforce_y_
+        # symmetry relies on for the V-graph), so one forward pass re-relaxes
+        # every H-constraint against the post-sweep positions and closes any
+        # such gap without perturbing blocks that need no correction.
+        for u in range(n_blocks):
+            for v, w in h_graph.get(u, []):
+                if v < n_blocks and x[u] + w > x[v]:
+                    x[v] = x[u] + w
 
         return x
 

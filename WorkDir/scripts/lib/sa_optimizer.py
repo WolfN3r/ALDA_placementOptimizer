@@ -136,7 +136,8 @@ class SimulatedAnnealingOptimizer:
             raise ValueError("SAConfig.initial_temp must be > 0. Run calibration first.")
 
         positions     = topo.decode()
-        current_cost  = self._eval.evaluate(positions)
+        variant_map   = topo.get_variant_map()
+        current_cost  = self._eval.evaluate(positions, variant_map)
         best_cost     = current_cost
         best_state    = topo.copy_state()
         best_positions = positions
@@ -159,7 +160,8 @@ class SimulatedAnnealingOptimizer:
             for r in randoms:
                 undo = topo.perturb(t_norm)
                 new_positions = topo.decode()
-                new_cost = self._eval.evaluate(new_positions)
+                new_variant_map = topo.get_variant_map()
+                new_cost = self._eval.evaluate(new_positions, new_variant_map)
 
                 delta = new_cost - current_cost
                 if delta < 0 or r < math.exp(-delta / temp):
@@ -235,13 +237,15 @@ def calibrate_initial_temperature(
     The survey does not count toward the optimization iteration budget.
     """
     ref_positions = topology.decode()
-    ref_cost      = evaluator.evaluate(ref_positions)
+    ref_variant_map = topology.get_variant_map()
+    ref_cost      = evaluator.evaluate(ref_positions, ref_variant_map)
 
     deltas: list[float] = []
     for _ in range(_CALIBRATION_RUNS):
         undo         = topology.perturb(temperature=1e9)
         new_pos      = topology.decode()
-        new_cost     = evaluator.evaluate(new_pos)
+        new_variant_map = topology.get_variant_map()
+        new_cost     = evaluator.evaluate(new_pos, new_variant_map)
         deltas.append(abs(new_cost - ref_cost))
         undo()
 

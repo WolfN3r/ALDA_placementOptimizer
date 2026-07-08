@@ -13,7 +13,10 @@ from dataclasses import dataclass, field
 from typing import Any, Type
 
 from topology_base import TopologyBase, SAMixin, GAMixin
-from cost_evaluator import CostEvaluator, CostWeights, _VDD_NET_IDS, _VSS_NET_IDS
+from cost_evaluator import (
+    CostEvaluator, CostWeights, _VDD_NET_IDS, _VSS_NET_IDS,
+    resolve_variant as _active_variant,
+)
 from sa_optimizer import (
     SimulatedAnnealingOptimizer, SAConfig, SAResult, NullObserver,
     calibrate_initial_temperature,
@@ -239,10 +242,14 @@ class OptimizationPipeline:
             # Step 4: first decode to capture reference values
             t_decode_start = time.perf_counter()
             ref_positions  = topology.decode()
+            ref_variant_map = topology.get_variant_map()
             result.t_first_decode_ms = (time.perf_counter() - t_decode_start) * 1000
 
-            init_area = _bbox_area(ref_positions, blocks)
-            init_wl   = _hpwl(ref_positions, blocks, nets, use_power_rails=self._use_power_rails)
+            init_area = _bbox_area(ref_positions, blocks, ref_variant_map)
+            init_wl   = _hpwl(
+                ref_positions, blocks, nets,
+                use_power_rails=self._use_power_rails, variant_map=ref_variant_map,
+            )
 
             # Step 5: construct evaluator
             evaluator = CostEvaluator(
@@ -320,17 +327,17 @@ class OptimizationPipeline:
                     topology.restore_state(res_i.best_state)
                     pos_i   = topology.decode()
                     vm_i    = topology.get_variant_map()
-                    cost_i  = evaluator.evaluate(pos_i)
+                    cost_i  = evaluator.evaluate(pos_i, vm_i)
 
                     # Collect block dims for viewer (same format as warmup positions)
                     positions_with_dims = {
                         bid: [
                             round(pos_i[bid][0], 6), round(pos_i[bid][1], 6),
                             round(
-                                _active_variant(blocks.get(bid, {})).get("main_bbox", {}).get("x_max", 0.0), 6
+                                _active_variant(blocks.get(bid, {}), bid, vm_i).get("main_bbox", {}).get("x_max", 0.0), 6
                             ),
                             round(
-                                _active_variant(blocks.get(bid, {})).get("main_bbox", {}).get("y_max", 0.0), 6
+                                _active_variant(blocks.get(bid, {}), bid, vm_i).get("main_bbox", {}).get("y_max", 0.0), 6
                             ),
                         ]
                         for bid in pos_i
@@ -385,10 +392,15 @@ class OptimizationPipeline:
                 final_positions = topology.decode()
                 variant_map     = topology.get_variant_map()
 
+            final_positions = _normalize_to_origin(final_positions)
+
             n_ilp_runs = len(warmup_runs_data) if (warmup_cfg and warmup_cfg.exhaustive_ilp) else 1
             result.status        = "success"
-            result.final_cost    = evaluator.evaluate(final_positions) if final_positions else 0.0
-            result.n_iterations  = n_ilp_runs
+            result.final_cost    = evaluator.evaluate(final_positions, variant_map) if final_positions else 0.0
+            if warmup_cfg and warmup_cfg.exhaustive_ilp:
+                result.n_iterations = n_ilp_runs
+            else:
+                result.n_iterations = getattr(opt_result, "n_iterations", n_ilp_runs)
             result.positions     = final_positions
             result.variant_map   = variant_map
             placed = _compute_placed_blocks(final_positions, blocks, variant_map)
@@ -398,10 +410,13 @@ class OptimizationPipeline:
             except Exception as _pin_exc:
                 warnings.warn(f"pin_optimizer skipped: {_pin_exc}")
             result.placed_blocks = placed
-            result.area_um2      = _bbox_area(final_positions, blocks)
-            result.hpwl_um       = _hpwl(final_positions, blocks, nets, use_power_rails=self._use_power_rails)
-            result.aspect_ratio  = _aspect_ratio(final_positions, blocks)
-            result.power_rails   = _compute_power_rails(final_positions, blocks)
+            result.area_um2      = _bbox_area(final_positions, blocks, variant_map)
+            result.hpwl_um       = _hpwl(
+                final_positions, blocks, nets,
+                use_power_rails=self._use_power_rails, variant_map=variant_map,
+            )
+            result.aspect_ratio  = _aspect_ratio(final_positions, blocks, variant_map)
+            result.power_rails   = _compute_power_rails(final_positions, blocks, variant_map)
             result.warmup_runs   = warmup_runs_data
 
         except IncompatibleCombinationError as exc:
@@ -416,23 +431,35 @@ class OptimizationPipeline:
 
 
 # =============================================================================
-# GEOMETRY HELPERS (duplicated from CostEvaluator for pipeline-level use)
+# GEOMETRY HELPERS (variant resolution shared with CostEvaluator via
+# cost_evaluator.resolve_variant, imported above as _active_variant)
 # =============================================================================
 
-def _active_variant(block: dict) -> dict:
-    for v in block.get("variants", []):
-        if v.get("is_used"):
-            return v
-    variants = block.get("variants", [])
-    return variants[0] if variants else {}
+def _normalize_to_origin(positions: dict) -> dict:
+    """Rigidly shift a placement so its bounding-box bottom-left corner sits at (0, 0).
+
+    Free-floating topologies (e.g. PSO, which searches within an oversized
+    canvas) have no guarantee that the packed layout touches the origin.
+    A uniform translation doesn't change area/HPWL/aspect-ratio (all
+    translation-invariant), so it's applied once here for every topology,
+    after the optimizer's final positions are decoded.
+    """
+    if not positions:
+        return positions
+    x_min = min(x for x, _ in positions.values())
+    y_min = min(y for _, y in positions.values())
+    if x_min == 0.0 and y_min == 0.0:
+        return positions
+    return {bid: (round(x - x_min, 6), round(y - y_min, 6)) for bid, (x, y) in positions.items()}
 
 
-def _bbox_area(positions: dict, blocks: dict) -> float:
+def _bbox_area(positions: dict, blocks: dict, variant_map: dict[str, int] | None = None) -> float:
     if not positions:
         return 0.0
+    vm = variant_map or {}
     xs, ys, xe, ye = [], [], [], []
     for bid, (bx, by) in positions.items():
-        v = _active_variant(blocks.get(bid, {}))
+        v = _active_variant(blocks.get(bid, {}), bid, vm)
         w = v.get("main_bbox", {}).get("x_max", 0.0)
         h = v.get("main_bbox", {}).get("y_max", 0.0)
         xs.append(bx);      ys.append(by)
@@ -440,15 +467,22 @@ def _bbox_area(positions: dict, blocks: dict) -> float:
     return max(0.0, max(xe) - min(xs)) * max(0.0, max(ye) - min(ys))
 
 
-def _hpwl(positions: dict, blocks: dict, nets: list, use_power_rails: bool = False) -> float:
+def _hpwl(
+    positions: dict,
+    blocks: dict,
+    nets: list,
+    use_power_rails: bool = False,
+    variant_map: dict[str, int] | None = None,
+) -> float:
+    vm = variant_map or {}
     pin_pos: dict[str, tuple[float, float]] = {}
     for bid, (bx, by) in positions.items():
-        v = _active_variant(blocks.get(bid, {}))
+        v = _active_variant(blocks.get(bid, {}), bid, vm)
         for pname, pcoord in v.get("pin_positions", {}).items():
             pin_pos[f"B{bid}_{pname}"] = (bx + pcoord["x"], by + pcoord["y"])
     if use_power_rails and positions:
         y_top = max(
-            by + _active_variant(blocks.get(bid, {})).get("main_bbox", {}).get("y_max", 0.0)
+            by + _active_variant(blocks.get(bid, {}), bid, vm).get("main_bbox", {}).get("y_max", 0.0)
             for bid, (_, by) in positions.items()
         )
         y_bot = min(by for _, (_, by) in positions.items())
@@ -457,23 +491,29 @@ def _hpwl(positions: dict, blocks: dict, nets: list, use_power_rails: bool = Fal
         pins = net.get("pins", [])
         xs = [pin_pos[p][0] for p in pins if p in pin_pos]
         ys = [pin_pos[p][1] for p in pins if p in pin_pos]
-        if use_power_rails and xs:
+        if use_power_rails and ys:
             nid = net.get("net_id", "").upper()
             if nid in _VDD_NET_IDS:
-                ys.append(y_top)
+                # Each pin on the net drops independently to the full-width rail
+                # at its own x, so it contributes its own vertical distance
+                # (e.g. a device's bulk *and* source, both tied to VDD, each count).
+                total += sum(y_top - py for py in ys)
+                continue
             elif nid in _VSS_NET_IDS:
-                ys.append(y_bot)
+                total += sum(py - y_bot for py in ys)
+                continue
         if len(xs) >= 2:
             total += (max(xs) - min(xs)) + (max(ys) - min(ys))
     return total
 
 
-def _compute_power_rails(positions: dict, blocks: dict) -> dict:
+def _compute_power_rails(positions: dict, blocks: dict, variant_map: dict[str, int] | None = None) -> dict:
     if not positions:
         return {}
+    vm = variant_map or {}
     xs_all, y_tops, y_bots = [], [], []
     for bid, (bx, by) in positions.items():
-        v = _active_variant(blocks.get(bid, {}))
+        v = _active_variant(blocks.get(bid, {}), bid, vm)
         h = v.get("main_bbox", {}).get("y_max", 0.0)
         w = v.get("main_bbox", {}).get("x_max", 0.0)
         y_tops.append(by + h)
@@ -485,12 +525,13 @@ def _compute_power_rails(positions: dict, blocks: dict) -> dict:
     }
 
 
-def _aspect_ratio(positions: dict, blocks: dict) -> float:
+def _aspect_ratio(positions: dict, blocks: dict, variant_map: dict[str, int] | None = None) -> float:
     if not positions:
         return 1.0
+    vm = variant_map or {}
     xs, ys, xe, ye = [], [], [], []
     for bid, (bx, by) in positions.items():
-        v = _active_variant(blocks.get(bid, {}))
+        v = _active_variant(blocks.get(bid, {}), bid, vm)
         w = v.get("main_bbox", {}).get("x_max", 0.0)
         h = v.get("main_bbox", {}).get("y_max", 0.0)
         xs.append(bx);      ys.append(by)
@@ -530,6 +571,7 @@ def _compute_placed_blocks(
                 "x_max": round(bx + w, 6),
                 "y_max": round(by + h, 6),
             },
+            "variant_index": vidx,
             "pins": abs_pins,
         }
     return placed

@@ -57,6 +57,7 @@ class PlacedBlockInfo:
     topology_type: str = ""
     matching_variant: dict = field(default_factory=dict)
     sub_blocks: dict = field(default_factory=dict)   # str(member_bid) -> PlacedBlockInfo
+    variant_index: int | None = None   # actual variant chosen by the optimizer, if present
 
 
 @dataclass
@@ -152,6 +153,8 @@ def _parse_placed_blocks(pb_raw: dict) -> dict[int, PlacedBlockInfo]:
             continue
         bbox = _parse_bbox(pb["main_bbox"])
         pins = _parse_pins(pb.get("pins", {}))
+        vidx = pb.get("variant_index")
+        vidx = int(vidx) if vidx is not None else None
 
         if bid >= _COMPOSITE_ID_BASE:
             # Composite group block — parse sub_blocks and group metadata
@@ -176,9 +179,10 @@ def _parse_placed_blocks(pb_raw: dict) -> dict[int, PlacedBlockInfo]:
                 topology_type=str(pb.get("topology_type", "")),
                 matching_variant=dict(pb.get("matching_variant", {})),
                 sub_blocks=sub,
+                variant_index=vidx,
             )
         else:
-            placed_blocks[bid] = PlacedBlockInfo(block_id=bid, main_bbox=bbox, pins=pins)
+            placed_blocks[bid] = PlacedBlockInfo(block_id=bid, main_bbox=bbox, pins=pins, variant_index=vidx)
     return placed_blocks
 
 
@@ -301,6 +305,16 @@ def load(path: str | Path) -> PlacementData:
                 chip_power_rails=_extract_chip_rails(_pb_raw2),
                 warmup_runs=list(raw_placement.get("warmup_runs", [])),
             )
+
+    # Surface the optimizer's actual per-block variant choice onto Block.placed,
+    # so active_variant()'s existing preference for "placed" variant_index (over
+    # the generation-time is_used flag) has real data to read.
+    if placement_result:
+        for b in blocks:
+            pbi = placement_result.placed_blocks.get(b.block_id)
+            if pbi is not None and pbi.variant_index is not None:
+                b.placed = dict(b.placed or {})
+                b.placed["variant_index"] = pbi.variant_index
 
     has_placement = bool(
         (placement_result and placement_result.placed_blocks)
