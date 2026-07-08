@@ -35,6 +35,9 @@ __pycache__/
 # Claude Code local config
 .claude/
 
+# Symlink to .claude/CLAUDE.md — real content lives in the private repo
+/CLAUDE.md
+
 # OS junk
 .DS_Store
 Thumbs.db
