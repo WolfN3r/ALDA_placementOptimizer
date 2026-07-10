@@ -37,8 +37,20 @@ _SYM_MODE_NONE       = "none"
 _SYM_MODE_MODERATE   = "moderate"
 _SYM_MODE_AGGRESSIVE = "aggressive"
 
-# Topology tags that are included in "moderate" symmetry mode
-_MODERATE_TAGS = frozenset({"diff_pair", "current_mirror", "tail_cm_pair"})
+# Minimum sub-group size (post W/L/Nf split) eligible for the axis-mirrored
+# two-halves split — N=1/N=2 keep today's single-composite/simple-pair path.
+_MIRROR_SPLIT_MIN_N = 3
+
+# Topology tags that always get full matching/clustering treatment (composite
+# macro-block: common-centroid / same-variant / proximity), in every mode
+# except "none". Cascode is a current-mirror variant (same SSFG behavior as a
+# simple mirror) and a tail transistor's current ratio depends on matching
+# its Vbias mirror reference, so both are included alongside the two literal
+# building blocks.
+_CLUSTER_TAGS = frozenset({
+    "diff_pair", "current_mirror", "cascode_current_mirror", "tail_cm_pair",
+    "cross_coupled", "load_pair",
+})
 
 # =============================================================================
 # 3. LOGGING
@@ -63,11 +75,12 @@ def _build_active_group(
     block_ids:      List[int],
     block_by_id:    dict,
     enable_matching: bool,
+    axis_partner_group_id: int | None = None,
 ) -> dict:
     rules   = get_topology_rules(topology_tag)
     members = [block_by_id[bid] for bid in block_ids if bid in block_by_id]
     variants = compute_matching_variants(members, rules) if enable_matching and members else []
-    return {
+    group = {
         "group_id":          group_id,
         "topology_type":     topology_tag,
         "block_ids":         block_ids,
@@ -78,6 +91,9 @@ def _build_active_group(
         },
         "ungroup": False,
     }
+    if axis_partner_group_id is not None:
+        group["axis_partner_group_id"] = axis_partner_group_id
+    return group
 
 
 def _collect_block_ids(compound_group: dict) -> List[int]:
@@ -119,6 +135,61 @@ def _split_by_device_characteristics(bids: list, block_by_id: dict) -> list:
     return list(sub_groups.values())
 
 
+def _axis_compound_touched_ids(compound: dict) -> set[int]:
+    ids: set[int] = set()
+    for a, b in compound.get("pairs", []):
+        ids.update((a, b))
+    ids.update(compound.get("self_symmetric", []))
+    return ids
+
+
+def _block_to_axis_compound(sym_groups: list) -> dict[int, int]:
+    """Map block_id -> index into sym_groups (Union-Find compound list)."""
+    mapping: dict[int, int] = {}
+    for idx, compound in enumerate(sym_groups):
+        for bid in _axis_compound_touched_ids(compound):
+            mapping[bid] = idx
+    return mapping
+
+
+def _has_genuine_axis_partner(
+    sub_bids:           list,
+    block_to_compound:  dict[int, int],
+    sym_groups:         list,
+) -> bool:
+    """
+    True iff the Union-Find compound(s) touching sub_bids reach at least one
+    block_id outside sub_bids itself — i.e. this mirror sub-group has a real
+    external axis partner (a diff pair, another mirror family, a passive),
+    not just its own Phase-5 sequential-pairing artifact.
+    """
+    compound_idxs = {block_to_compound[b] for b in sub_bids if b in block_to_compound}
+    if not compound_idxs:
+        return False
+    touched: set[int] = set()
+    for idx in compound_idxs:
+        touched |= _axis_compound_touched_ids(sym_groups[idx])
+    return bool(touched - set(sub_bids))
+
+
+def _split_mirror_halves(sub_bids: list) -> tuple[list, list, int | None]:
+    """
+    Ordinal halving of an even-N list into two equal halves. Odd N: the last
+    element becomes the leftover (caller centers it self-symmetric on the
+    axis by leaving it out of both group's block_ids, same as any other
+    self-symmetric single — see 101_placementOptimizer.py's existing
+    aggressive-mode composite remapping).
+    """
+    n = len(sub_bids)
+    leftover: int | None = None
+    even_bids = sub_bids
+    if n % 2 == 1:
+        even_bids = sub_bids[:-1]
+        leftover = sub_bids[-1]
+    half = len(even_bids) // 2
+    return even_bids[:half], even_bids[half:], leftover
+
+
 def build_groups(
     sym_constraints: dict,
     all_blocks:      list,
@@ -142,8 +213,11 @@ def build_groups(
     enable_matching  = placement_config.get("enable_matching", True)
     enable_passive   = placement_config.get("enable_passive_splitting", True)
     max_split        = placement_config.get("passive_max_split", 8)
+    sym_mode         = placement_config.get("symmetry_mode", _SYM_MODE_AGGRESSIVE)
 
     block_by_id: dict = {b["block_id"]: b for b in all_blocks if "error" not in b}
+    sym_groups: list  = sym_constraints.get("groups", [])
+    block_to_axis_compound = _block_to_axis_compound(sym_groups)
 
     groups:      List[dict] = []
     grouped_bids: set[int]  = set()
@@ -165,6 +239,39 @@ def build_groups(
         # Split by (W, L, Nf) so the matching engine only sees compatible devices.
         # M may differ within a sub-group; compute_matching_variants() sums M_i.
         for sub_bids in _split_by_device_characteristics(all_bids, block_by_id):
+            # Axis-mirrored two-halves split (aggressive mode, current_mirror
+            # sub-groups only, N>=3, genuine external axis partner required —
+            # see mirror_and_passive_axis_split.md §1-2). N=2/N=1 and every
+            # other topology keep today's single-composite path.
+            if (
+                sym_mode == _SYM_MODE_AGGRESSIVE
+                and tag == "current_mirror"
+                and len(sub_bids) >= _MIRROR_SPLIT_MIN_N
+                and _has_genuine_axis_partner(sub_bids, block_to_axis_compound, sym_groups)
+            ):
+                half_a, half_b, leftover = _split_mirror_halves(sub_bids)
+                gid_a, gid_b = group_id, group_id + 1
+                groups.append(_build_active_group(
+                    gid_a, tag, half_a, block_by_id, enable_matching,
+                    axis_partner_group_id=gid_b,
+                ))
+                groups.append(_build_active_group(
+                    gid_b, tag, half_b, block_by_id, enable_matching,
+                    axis_partner_group_id=gid_a,
+                ))
+                grouped_bids.update(half_a)
+                grouped_bids.update(half_b)
+                logger.info(
+                    "Axis-split mirror groups %d/%d: %s | %s (leftover=%s)",
+                    gid_a, gid_b, half_a, half_b, leftover,
+                )
+                group_id += 2
+                # leftover (odd N) is deliberately left ungrouped — it's a
+                # self-symmetric single, centered on the axis by the existing
+                # 101_placementOptimizer.py aggressive-mode remapping, same
+                # as any other self-symmetric device not in compound_blocks.
+                continue
+
             groups.append(_build_active_group(group_id, tag, sub_bids, block_by_id, enable_matching))
             grouped_bids.update(sub_bids)
             logger.info("Active group %d: %s  blocks=%s", group_id, tag, sub_bids)
@@ -192,6 +299,56 @@ def build_groups(
         claimed_in_tail_cm.update(bids)
         logger.info("Tail-CM group %d: blocks=%s", group_id, bids)
         group_id += 1
+
+    # ── Paired-symmetric leftover groups ──────────────────────────────────────
+    # Devices the Union-Find symmetry compounds (sym_constraints["groups"],
+    # i.e. the axis-only compounds from symmetry_detector.py) paired via a
+    # shared axis, but that Phase-1 building-block recognition never bucketed
+    # into diff_pair/current_mirror/cascode/tail_cm (typically passive pairs,
+    # occasionally a MOS pair Phase-1 missed). These get their own small
+    # matching group (same-size expectation) without being merged into any
+    # DP/CM/cascode composite. Deliberately does NOT touch leftover
+    # self_symmetric singles — a lone self-symmetric device has no partner to
+    # match against, so it stays ungrouped here; it only gets axis treatment
+    # via the existing aggressive-mode composite-remapping in
+    # 101_placementOptimizer.py.
+    #
+    # MUST run before the passive_free loop below: that loop claims every
+    # still-ungrouped passive block as its own independent singleton, so if it
+    # ran first, a passive pair's members would already be claimed
+    # individually and this pass would never see them.
+    for cg in sym_constraints.get("groups", []):
+        for pair in cg.get("pairs", []):
+            if not isinstance(pair, (list, tuple)) or len(pair) < 2:
+                continue
+            a, b = pair[0], pair[1]
+            if a == b or a in grouped_bids or b in grouped_bids:
+                continue
+            if a not in block_by_id or b not in block_by_id:
+                continue  # defensive: dangling id not present in this JSON's blocks[]
+
+            sub_groups = _split_by_device_characteristics([a, b], block_by_id)
+            if len(sub_groups) != 1:
+                # W/L/Nf mismatch would split this into two singleton
+                # sub-groups; compute_matching_variants() returns [] for a
+                # lone device, so build_composite_blocks() would silently
+                # drop both — and passive_free can't rescue them since
+                # they're already in grouped_bids. Leave both fully
+                # ungrouped instead of emitting a group that vanishes
+                # without a trace.
+                logger.info(
+                    "Leftover pair (%d, %d) has mismatched W/L/Nf — leaving ungrouped",
+                    a, b,
+                )
+                continue
+
+            bids = sorted((a, b))
+            groups.append(
+                _build_active_group(group_id, "paired_symmetric", bids, block_by_id, enable_matching)
+            )
+            grouped_bids.update(bids)
+            logger.info("Paired-symmetric group %d: blocks=%s", group_id, bids)
+            group_id += 1
 
     # ── Passive free groups ───────────────────────────────────────────────────
     if enable_passive:
@@ -231,36 +388,32 @@ def filter_groups_for_sym_mode(groups: List[dict], sym_mode: str) -> List[dict]:
     requested symmetry mode.
 
     none       — return empty list (no group constraints passed to placer)
-    moderate   — return only diff-pair, current-mirror, and tail-CM groups
-    aggressive — return all groups unchanged
+    moderate   — cluster building blocks (_CLUSTER_TAGS), passive splits, and
+                 paired_symmetric leftovers; no cross-group axis constraints
+                 are ever added in this mode (101_placementOptimizer.py only
+                 builds those in aggressive mode), so moderate is naturally
+                 "matching only, no symmetry axis" — matching MS/MB outranks
+                 symmetry S, same priority order the source paper uses.
+    aggressive — cluster everything EXCEPT paired_symmetric groups, which
+                 stay raw/uncomposited so 101_placementOptimizer.py's existing
+                 bid_to_comp.get(a, a) fallback picks them up as a genuine
+                 mirrored pair instead of a composite (MAGICAL-style
+                 full-axis symmetry: grouped devices, self-symmetric singles,
+                 and symmetric pairs all coexist on one shared axis).
     """
     if sym_mode == _SYM_MODE_NONE:
         return []
     if sym_mode == _SYM_MODE_MODERATE:
-        return [g for g in groups if g.get("topology_type") in _MODERATE_TAGS]
-    # aggressive (default)
-    return list(groups)
-
-
-def filter_sym_constraints_for_mode(
-    sym_constraints: dict,
-    sym_mode: str,
-) -> dict:
-    """
-    Return an effective symmetry_constraints dict filtered to the given mode.
-
-    The returned dict has the same schema as the original but with 'groups'
-    filtered to only the topologies relevant for sym_mode.
-    """
-    if sym_mode == _SYM_MODE_AGGRESSIVE:
-        return sym_constraints
-
-    effective_tags = set() if sym_mode == _SYM_MODE_NONE else _MODERATE_TAGS
-    filtered_groups = [
-        g for g in sym_constraints.get("groups", [])
-        if g.get("topology_tag", "") in effective_tags
-    ]
-    return {**sym_constraints, "groups": filtered_groups}
+        return [
+            g for g in groups
+            if g.get("topology_type") in _CLUSTER_TAGS
+            or g.get("topology_type") in ("paired_symmetric", "passive_free")
+        ]
+    # aggressive: a denylist of exactly one tag, not an allowlist — preserves
+    # the pre-existing "return list(groups) unchanged" permissiveness for
+    # every OTHER topology_type (including any future addition), rather than
+    # silently narrowing to "only tags we remembered to list".
+    return [g for g in groups if g.get("topology_type") != "paired_symmetric"]
 
 
 # =============================================================================
@@ -427,7 +580,7 @@ def build_composite_blocks(
             })
 
         composite_id = COMPOSITE_ID_BASE + group_id
-        composite_list.append({
+        composite_entry = {
             "block_id":        composite_id,
             "device_type":     device_type,
             "variants":        variants,
@@ -437,7 +590,10 @@ def build_composite_blocks(
             # Standard block fields expected by pipeline components
             "num_pins":   len(boundary_pins),
             "power_rail": power_rail,
-        })
+        }
+        if "axis_partner_group_id" in group:
+            composite_entry["axis_partner_group_id"] = group["axis_partner_group_id"]
+        composite_list.append(composite_entry)
         excluded_ids.update(member_bids)
         logger.info(
             "Composite block %d ← group %d (%s)  members=%s  %d variant(s)",

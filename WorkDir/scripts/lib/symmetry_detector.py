@@ -99,9 +99,10 @@ def _recognize_building_blocks(devices: list, power_nets: set) -> dict:
     for d in mosfets:
         by_type[d["pdk_type"]].append(d)
 
-    diff_pairs:     List[Tuple[dict, dict]]             = []
-    mirror_groups:  List[List[dict]]                    = []
-    cascode_groups: List[Tuple[dict, dict, dict, dict]] = []
+    diff_pairs:      List[Tuple[dict, dict]]             = []
+    mirror_groups:   List[List[dict]]                    = []
+    cascode_groups:  List[Tuple[dict, dict, dict, dict]] = []
+    cross_coupled:   List[Tuple[dict, dict]]             = []
     used: Set[int] = set()
 
     # Cascodes first (consume 4 devices each)
@@ -197,15 +198,53 @@ def _recognize_building_blocks(devices: list, power_nets: set) -> dict:
             free = [d for d in members if d["block_id"] not in used]
             if len(free) < 2:
                 continue
+            if not any(_drain(d) == gate_net for d in free):
+                # No diode-connected reference (drain == gate) among the
+                # group — devices merely share a gate net (e.g. two switches
+                # both driven by the same clock/bias signal), not a genuine
+                # current-ratioed mirror. Leave them unclaimed so they fall
+                # through to SSFG/Union-Find symmetry detection instead of
+                # being mis-tagged as a matching building block.
+                continue
             mirror_groups.append(free)
             for d in free:
                 used.add(d["block_id"])
             logger.info("Mirror group: gate=%s, n=%d", gate_net, len(free))
 
+    # Cross-coupled latch pairs (remaining, same pdk_type, regenerative pair):
+    # M_a.gate == M_b.drain AND M_b.gate == M_a.drain, neither gate/drain a
+    # power net. Runs last so it only picks up devices cascode/diff-pair/
+    # mirror recognition left unclaimed.
+    for pdk_type, group in by_type.items():
+        free = [d for d in group if d["block_id"] not in used]
+        for i in range(len(free)):
+            da = free[i]
+            if da["block_id"] in used:
+                continue
+            ga, dra = _gate(da), _drain(da)
+            if not ga or not dra or ga in power_nets or dra in power_nets:
+                continue
+            for j in range(i + 1, len(free)):
+                db = free[j]
+                if db["block_id"] in used:
+                    continue
+                gb, drb = _gate(db), _drain(db)
+                if not gb or not drb or gb in power_nets or drb in power_nets:
+                    continue
+                if ga == drb and gb == dra:
+                    cross_coupled.append((da, db))
+                    used.update((da["block_id"], db["block_id"]))
+                    logger.info(
+                        "Cross-coupled latch pair: %s/%s (gate/drain cross)",
+                        da["inst"], db["inst"],
+                    )
+                    break
+
     return {
         "diff_pairs":     diff_pairs,
         "mirror_groups":  mirror_groups,
         "cascode_groups": cascode_groups,
+        "cross_coupled":  cross_coupled,
     }
 
 
@@ -251,6 +290,16 @@ def _build_ssfg(building_blocks: dict) -> Tuple[set, List[_SsfgEdge]]:
         _add(gate_l, _drain(l1), (bbt, "a", "b"))
         _add(_drain(l0), _source(u0), (f"{_polarity(u0)}-ccm", "b", "c"))
         _add(_drain(l1), _source(u1), (f"{_polarity(u1)}-ccm", "b", "c"))
+
+    for da, db in building_blocks.get("cross_coupled", []):
+        bbt = f"{_polarity(da)}-xcpl"
+        _add(_gate(da),   _drain(da), (bbt, "a", "b"))
+        _add(_gate(db),   _drain(db), (bbt, "a", "b"))
+        # Source→drain edges (mirrors diff_pair) let BFS propagate symmetry
+        # from a known net pair feeding the latch's sources (e.g. a diff
+        # pair's drains) out to the cross-coupled drains themselves.
+        _add(_source(da), _drain(da), (bbt, "c", "b"))
+        _add(_source(db), _drain(db), (bbt, "c", "b"))
 
     logger.debug("SSFG: %d nodes, %d edges", len(nodes), len(edges))
     return nodes, edges
@@ -352,13 +401,25 @@ def _build_sym_net_registry(
 def _find_self_sym_source_nets(
     ssfg_edges:        List[_SsfgEdge],
     sym_net_registry:  Dict[str, str],
-) -> List[str]:
+) -> Tuple[List[str], List[Tuple[str, str]]]:
+    """
+    Returns (new_self_sym_nets, new_sym_net_pairs).
+
+    When exactly two distinct, not-yet-paired source nets share fan-in into
+    the same symmetric net pair via a matching attr, they are mirror
+    partners OF EACH OTHER (e.g. two different diff pairs' tail nodes that
+    both feed the same pair of drains) — not two independent nets that each
+    happen to sit on the axis. Only fall back to marking each independently
+    self-symmetric when the shared-fanin count isn't exactly two (0, 1, or
+    3+), where pairing isn't well-defined from this evidence alone.
+    """
     # Index incoming edges by destination net
     by_dst: Dict[str, List[_SsfgEdge]] = defaultdict(list)
     for e in ssfg_edges:
         by_dst[e.dst].append(e)
 
-    new_self_sym: List[str] = []
+    new_self_sym:  List[str] = []
+    new_sym_pairs: List[Tuple[str, str]] = []
     checked: Set[Tuple[str, str]] = set()
 
     for net_a, net_b in list(sym_net_registry.items()):
@@ -379,14 +440,23 @@ def _find_self_sym_source_nets(
 
         for attr in set(srcs_by_attr_a) & set(srcs_by_attr_b):
             shared = srcs_by_attr_a[attr] & srcs_by_attr_b[attr]
-            for src in shared:
-                # Only mark as self-symmetric if not already a member of a known pair
-                already_paired = (src in sym_net_registry and sym_net_registry[src] != src)
-                if not already_paired and src not in new_self_sym:
-                    new_self_sym.append(src)
-                    logger.info("Self-sym source net via reverse scan: %s", src)
+            # Only consider sources not already a member of a known pair
+            unpaired = [
+                src for src in shared
+                if not (src in sym_net_registry and sym_net_registry[src] != src)
+            ]
+            if len(unpaired) == 2:
+                s0, s1 = sorted(unpaired)
+                if (s0, s1) not in new_sym_pairs:
+                    new_sym_pairs.append((s0, s1))
+                    logger.info("Self-sym source nets paired via reverse scan: %s <-> %s", s0, s1)
+            else:
+                for src in unpaired:
+                    if src not in new_self_sym:
+                        new_self_sym.append(src)
+                        logger.info("Self-sym source net via reverse scan: %s", src)
 
-    return new_self_sym
+    return new_self_sym, new_sym_pairs
 
 
 # ── Phase 4 — Map symmetric nets to device pairs ──────────────────────────────
@@ -415,6 +485,100 @@ def _nets_to_device_pairs(
             new_used.update((a, b))
 
     return device_pairs, new_used
+
+
+# ── Phase 1c — Gate/source net-registry rescue ────────────────────────────────
+
+def _nets_to_device_pairs_by_terminal(
+    sym_net_pairs: List[Tuple[str, str]],
+    devices:       list,
+    already_used:  Set[int],
+    terminal_fn,
+) -> Tuple[List[Tuple[int, int]], Set[int]]:
+    """
+    Generalization of _nets_to_device_pairs() to an arbitrary terminal
+    accessor (gate or source instead of drain) — rescues devices whose only
+    informative terminal is gate or source (e.g. drain/source tied to a
+    power net), which the drain-only Phase 4 pass can never see.
+    """
+    term_map: Dict[str, List[int]] = defaultdict(list)
+    for d in devices:
+        if d["block_id"] not in already_used:
+            net = terminal_fn(d)
+            if net:
+                term_map[net].append(d["block_id"])
+
+    device_pairs: List[Tuple[int, int]] = []
+    new_used: Set[int] = set()
+
+    for net_a, net_b in sym_net_pairs:
+        avail_a = [bid for bid in term_map.get(net_a, [])
+                   if bid not in already_used and bid not in new_used]
+        avail_b = [bid for bid in term_map.get(net_b, [])
+                   if bid not in already_used and bid not in new_used]
+        for bid_a, bid_b in zip(avail_a, avail_b):
+            a, b = sorted((bid_a, bid_b))
+            device_pairs.append((a, b))
+            new_used.update((a, b))
+
+    return device_pairs, new_used
+
+
+# ── Phase 1b — Load-pair rescue (post-Phase-3, queries sym_net_registry) ──────
+
+def _find_load_pairs(
+    devices:          list,
+    power_nets:        set,
+    sym_net_registry:  Dict[str, str],
+    already_used:      Set[int],
+) -> Tuple[List[Tuple[int, int]], Set[int]]:
+    """
+    Structural mirror image of a diff pair: shared-rail source + a gate that
+    sits on an already-known symmetric net pair (instead of diff pair's
+    shared source + differing gate). Cannot be found by local device-to-
+    device inspection alone — the gate net must already be a registered
+    symmetric pair, which only exists after Phase 3/3b BFS propagation.
+    """
+    mosfets = [d for d in devices if _is_mosfet(d) and d["block_id"] not in already_used]
+    by_type: Dict[str, list] = defaultdict(list)
+    for d in mosfets:
+        by_type[d["pdk_type"]].append(d)
+
+    load_pairs: List[Tuple[int, int]] = []
+    used: Set[int] = set()
+
+    for pdk_type, group in by_type.items():
+        # index free devices by (source_net, canonical_gate_partner) so that
+        # two devices whose gates are a known symmetric pair and whose
+        # sources share the same rail land in the same bucket
+        by_key: Dict[tuple, list] = defaultdict(list)
+        for d in group:
+            if d["block_id"] in used:
+                continue
+            gate, src = _gate(d), _source(d)
+            if not gate or not src or src not in power_nets:
+                continue
+            partner = sym_net_registry.get(gate)
+            if not partner or partner == gate:
+                continue  # gate not on a genuine (non-self-sym) symmetric pair
+            canonical_gate = tuple(sorted((gate, partner)))
+            by_key[(src, canonical_gate)].append(d)
+
+        for (src, canonical_gate), members in by_key.items():
+            free = [d for d in members if d["block_id"] not in used]
+            gate_a, gate_b = canonical_gate
+            side_a = [d for d in free if _gate(d) == gate_a]
+            side_b = [d for d in free if _gate(d) == gate_b]
+            for da, db in zip(side_a, side_b):
+                a, b = sorted((da["block_id"], db["block_id"]))
+                load_pairs.append((a, b))
+                used.update((a, b))
+                logger.info(
+                    "Load pair: %s/%s (gate=%s/%s, source=%s)",
+                    da["inst"], db["inst"], gate_a, gate_b, src,
+                )
+
+    return load_pairs, used
 
 
 # ── Phase 5b — Enhanced passive detection with net registry ───────────────────
@@ -630,9 +794,11 @@ def _assign_compound_ids(
 
 # Priority for choosing the dominant topology tag when a compound mixes types.
 _TAG_PRIORITY: Dict[str, int] = {
-    "diff_pair":              5,
+    "diff_pair":              6,
+    "cross_coupled":          5,
     "cascode_current_mirror": 4,
     "current_mirror":         3,
+    "load_pair":              3,
     "passive":                2,
     "tail_transistor":        1,
 }
@@ -713,6 +879,9 @@ def _build_compound_clusters(
     mirror_groups:  List[List[dict]],
     cascode_groups: List[Tuple[dict, dict, dict, dict]],
     self_sym_ids:   List[int],
+    cross_coupled:  List[Tuple[dict, dict]] = (),
+    load_pairs:     List[Tuple[int, int]]   = (),
+    mirror_excluded_ids: Set[int]           = frozenset(),
 ) -> list:
     clusters: list = []
     cid = 0
@@ -728,8 +897,41 @@ def _build_compound_clusters(
         })
         cid += 1
 
+    for da, db in cross_coupled:
+        child_ids = sorted({da["block_id"], db["block_id"]})
+        self_ids  = [s for s in self_sym_ids if s in child_ids]
+        clusters.append({
+            "compound_id":        cid,
+            "child_block_ids":    child_ids,
+            "group_type":         "cross_coupled",
+            "self_symmetric_ids": self_ids,
+        })
+        cid += 1
+
+    for a, b in load_pairs:
+        child_ids = sorted({a, b})
+        self_ids  = [s for s in self_sym_ids if s in child_ids]
+        clusters.append({
+            "compound_id":        cid,
+            "child_block_ids":    child_ids,
+            "group_type":         "load_pair",
+            "self_symmetric_ids": self_ids,
+        })
+        cid += 1
+
     for group in mirror_groups:
-        all_ids  = sorted(d["block_id"] for d in group)
+        # Exclude devices already claimed by an SSFG-propagated pairing
+        # (e.g. a mirror-group device whose drain landed on a diff pair's
+        # symmetric net) so this record's membership matches what Phase 5
+        # (sym_constraints["groups"]) actually operates on — otherwise the
+        # two structures silently disagree on which compound a device
+        # belongs to. See mirror_and_passive_axis_split.md §4.
+        all_ids  = sorted(
+            d["block_id"] for d in group
+            if d["block_id"] not in mirror_excluded_ids
+        )
+        if not all_ids:
+            continue
         self_ids = [s for s in self_sym_ids if s in all_ids]
         clusters.append({
             "compound_id":        cid,
@@ -782,18 +984,37 @@ def detect_symmetries(devices: list, port_nets: set, power_nets: set) -> dict:
     sym_net_registry = _build_sym_net_registry(sym_net_pairs, self_sym_nets)
 
     # ── Phase 3b: reverse scan for self-symmetric tail/source nets ────────────
-    extra_self_sym_nets = _find_self_sym_source_nets(ssfg_edges, sym_net_registry)
+    extra_self_sym_nets, extra_sym_pairs = _find_self_sym_source_nets(ssfg_edges, sym_net_registry)
+    newly_paired: Set[str] = set()
+    for net_a, net_b in extra_sym_pairs:
+        if (net_a, net_b) not in sym_net_pairs and (net_b, net_a) not in sym_net_pairs:
+            sym_net_pairs.append((net_a, net_b))
+        sym_net_registry[net_a] = net_b
+        sym_net_registry[net_b] = net_a
+        newly_paired.update((net_a, net_b))
     for net in extra_self_sym_nets:
+        if net in newly_paired:
+            # Same reverse-scan call already paired this net with a partner
+            # (it feeds into more than one symmetric net pair) — a real pair
+            # takes precedence over marking it self-symmetric on its own.
+            continue
         if net not in self_sym_nets:
             self_sym_nets.append(net)
         sym_net_registry[net] = net
 
     # ── Phase 4 ───────────────────────────────────────────────────────────────
     diff_ids: Set[int] = {d["block_id"] for pair in bbs["diff_pairs"] for d in pair}
-    ssfg_device_pairs, ssfg_used = _nets_to_device_pairs(sym_net_pairs, devices, diff_ids)
+    cross_coupled_pairs = [(da["block_id"], db["block_id"]) for da, db in bbs.get("cross_coupled", [])]
+    cross_coupled_ids: Set[int] = {bid for pair in cross_coupled_pairs for bid in pair}
+    ssfg_seed_used = diff_ids | cross_coupled_ids
+    ssfg_device_pairs, ssfg_used = _nets_to_device_pairs(sym_net_pairs, devices, ssfg_seed_used)
+
+    # ── Phase 1b: load-pair rescue (gate on known symmetric net) ──────────────
+    load_used_so_far = diff_ids | cross_coupled_ids | ssfg_used
+    load_pairs, load_used = _find_load_pairs(devices, power_nets, sym_net_registry, load_used_so_far)
 
     # ── Phase 5: residual mirror pairing ──────────────────────────────────────
-    all_used_so_far = diff_ids | ssfg_used
+    all_used_so_far = diff_ids | cross_coupled_ids | ssfg_used | load_used
     mirror_pairs:  List[Tuple[int, int]] = []
     mos_self_syms: List[int]             = []
     mirror_used:   Set[int]              = set()
@@ -822,6 +1043,24 @@ def detect_symmetries(devices: list, port_nets: set, power_nets: set) -> dict:
         cascode_prox.append([u0["block_id"], l0["block_id"]])
         cascode_prox.append([u1["block_id"], l1["block_id"]])
 
+    # ── Phase 1c: gate/source net-registry rescue ─────────────────────────────
+    # Devices whose only informative terminal is gate or source (drain tied
+    # to a power net) are invisible to the drain-only Phase 4 rescue above.
+    # Only devices not already matched via drain (or any earlier phase) are
+    # eligible — a drain-matched device (e.g. a mirror member) must not be
+    # re-processed here, to avoid double-counting.
+    gate_source_used_so_far = all_used_so_far | mirror_used | set(a for a, _ in cascode_pairs) \
+                               | set(b for _, b in cascode_pairs)
+    gate_pairs, gate_used = _nets_to_device_pairs_by_terminal(
+        sym_net_pairs, devices, gate_source_used_so_far, _gate
+    )
+    gate_source_used_so_far = gate_source_used_so_far | gate_used
+    source_pairs, source_used = _nets_to_device_pairs_by_terminal(
+        sym_net_pairs, devices, gate_source_used_so_far, _source
+    )
+    gate_source_pairs = gate_pairs + source_pairs
+    gate_source_used  = gate_used | source_used
+
     # Shared-drain self-symmetric net heuristic
     id_to_dev: Dict[int, dict] = {d["block_id"]: d for d in devices}
     direct_dp_pairs = [(da["block_id"], db["block_id"]) for da, db in bbs["diff_pairs"]]
@@ -841,8 +1080,9 @@ def detect_symmetries(devices: list, port_nets: set, power_nets: set) -> dict:
         if _drain(d):
             drain_map[_drain(d)].append(d["block_id"])
 
-    all_mos_used = diff_ids | ssfg_used | mirror_used | set(b for _, b in cascode_pairs) \
-                   | set(a for a, _ in cascode_pairs)
+    all_mos_used = diff_ids | cross_coupled_ids | ssfg_used | load_used | mirror_used \
+                   | set(b for _, b in cascode_pairs) | set(a for a, _ in cascode_pairs) \
+                   | gate_source_used
     for net, partner in sym_net_registry.items():
         if partner != net:
             continue
@@ -857,17 +1097,24 @@ def detect_symmetries(devices: list, port_nets: set, power_nets: set) -> dict:
     )
 
     # ── Phase 6: compound assignment ──────────────────────────────────────────
-    all_mos_pairs = direct_dp_pairs + ssfg_device_pairs + mirror_pairs + cascode_pairs
+    all_mos_pairs = (
+        direct_dp_pairs + cross_coupled_pairs + ssfg_device_pairs
+        + load_pairs + mirror_pairs + cascode_pairs + gate_source_pairs
+    )
     all_pairs     = all_mos_pairs + passive_pairs
     all_self_syms = mos_self_syms + passive_self_syms
 
     # Build per-pair topology type tags for Phase 7 compound labelling.
-    # ssfg_device_pairs are SSFG-propagated pairs (usually load mirrors for a DP).
+    # ssfg_device_pairs/gate_source_pairs are SSFG-propagated rescues (usually
+    # load mirrors or gate/source-tied-to-power devices for a DP).
     pair_types: List[str] = (
-        ["diff_pair"]              * len(direct_dp_pairs)   +
-        ["current_mirror"]         * len(ssfg_device_pairs) +
-        ["current_mirror"]         * len(mirror_pairs)      +
-        ["cascode_current_mirror"] * len(cascode_pairs)     +
+        ["diff_pair"]              * len(direct_dp_pairs)      +
+        ["cross_coupled"]          * len(cross_coupled_pairs)  +
+        ["current_mirror"]         * len(ssfg_device_pairs)    +
+        ["load_pair"]              * len(load_pairs)           +
+        ["current_mirror"]         * len(mirror_pairs)         +
+        ["cascode_current_mirror"] * len(cascode_pairs)        +
+        ["current_mirror"]         * len(gate_source_pairs)    +
         ["passive"]                * len(passive_pairs)
     )
 
@@ -924,5 +1171,13 @@ def detect_symmetries(devices: list, port_nets: set, power_nets: set) -> dict:
         "tail_cm_pairs":           tail_cm_pairs,
         "compound_blocks":         _build_compound_clusters(
             bbs["diff_pairs"], bbs["mirror_groups"], bbs["cascode_groups"], mos_self_syms,
+            cross_coupled=bbs.get("cross_coupled", []),
+            load_pairs=load_pairs,
+            # Same filtered set Phase 5 (mirror_pairs) actually operates on —
+            # diff_ids | cross_coupled_ids | ssfg_used | load_used — so
+            # compound_blocks and sym_constraints["groups"] agree on which
+            # devices belong to the raw mirror group vs. an SSFG-propagated
+            # pairing elsewhere on the axis.
+            mirror_excluded_ids=diff_ids | cross_coupled_ids | ssfg_used | load_used,
         ),
     }

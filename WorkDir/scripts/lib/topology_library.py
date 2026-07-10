@@ -19,9 +19,11 @@ from __future__ import annotations
 # Priority used when a compound group contains mixed topology pairs.
 # Higher number = takes precedence when tagging the whole group.
 _TYPE_PRIORITY: dict[str, int] = {
-    "diff_pair":             5,
+    "diff_pair":             6,
+    "cross_coupled":         5,
     "cascode_current_mirror": 4,
     "current_mirror":        3,
+    "load_pair":             3,
     "tail_cm_pair":          2,
     "passive":               1,
     "tail_transistor":       0,
@@ -74,6 +76,33 @@ TOPOLOGY_RULES: dict[str, dict] = {
         "intra_spacing_y":         0.0,
         "common_centroid":         True,
     },
+    "cross_coupled": {
+        # Regenerative latch pair — same "two symmetric halves" geometry as
+        # diff_pair; mismatch-sensitive, so common-centroid is required.
+        "allowed_multipliers":    [2, 4, 8],
+        "rows_range":             (1, 4),
+        "cols_range":             (1, 8),
+        "dummy_cols_per_side":    1,
+        "dummy_rows_top_bottom":  1,
+        "dummy_gate_policy":      "connected",
+        "intra_spacing_x":        -0.24,
+        "intra_spacing_y":         0.0,
+        "common_centroid":         True,
+    },
+    "load_pair": {
+        # Gate on a known symmetric net, drain to output, source on a power
+        # rail — proximity/size-matched like current_mirror but not
+        # interdigitated (not a current-ratio structure).
+        "allowed_multipliers":    [2, 4, 6, 8, 10, 12, 16],
+        "rows_range":             (1, 4),
+        "cols_range":             (1, 8),
+        "dummy_cols_per_side":    1,
+        "dummy_rows_top_bottom":  1,
+        "dummy_gate_policy":      "connected",
+        "intra_spacing_x":        -0.24,
+        "intra_spacing_y":         0.0,
+        "common_centroid":         False,
+    },
     "tail_transistor": {
         # Self-symmetric; placed alone — no matching needed
         "allowed_multipliers":    [1, 2, 4, 8],
@@ -97,6 +126,22 @@ TOPOLOGY_RULES: dict[str, dict] = {
         "intra_spacing_x":        -0.24,
         "intra_spacing_y":         0.0,
         "common_centroid":         True,
+    },
+    "paired_symmetric": {
+        # Catch-all for symmetric pairs the Union-Find compound found that
+        # aren't part of a recognized building block (typically passives;
+        # occasionally a MOS pair Phase-1 missed). hierarchy_builder only
+        # creates this group when both members share (W, L, Nf), so no
+        # forced interdigitation is needed — just proximity + matched sizing.
+        "allowed_multipliers":    [1, 2, 4, 8],
+        "rows_range":             (1, 4),
+        "cols_range":             (1, 8),
+        "dummy_cols_per_side":    0,
+        "dummy_rows_top_bottom":  0,
+        "dummy_gate_policy":      "connected",
+        "intra_spacing_x":         0.0,
+        "intra_spacing_y":         0.0,
+        "common_centroid":         False,
     },
 }
 

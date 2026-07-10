@@ -495,6 +495,47 @@ def optimize(data: dict) -> dict:
                     "self_symmetric":          comp_ss,
                     "enforce_matching_variants": enforce,
                 })
+        # Axis-mirrored mirror-family split (mirror_and_passive_axis_split.md §3):
+        # composites carrying axis_partner_group_id (both current_mirror halves
+        # hierarchy_builder split from one N>=3 sub-group) are resolved via
+        # group_id, bypassing bid_to_comp/raw-block-id-pair resolution entirely
+        # — this mechanism does not depend on Phase-5 pairing data at all.
+        group_id_to_comp: dict = {
+            cb["group_id"]: cb["block_id"] for cb in composite_list if "group_id" in cb
+        }
+        axis_split_pairs: list = []
+        seen_axis_pairs: set = set()
+        for cb in composite_list:
+            partner_gid = cb.get("axis_partner_group_id")
+            if partner_gid is None:
+                continue
+            # Guard: build_composite_blocks() silently drops a group whose
+            # matching_variants is empty (e.g. an odd-split half with
+            # total_M <= 1) — the partner composite may not exist.
+            partner_comp_id = group_id_to_comp.get(partner_gid)
+            if partner_comp_id is None:
+                logger.warning(
+                    "Axis-split composite %d: partner group %d missing "
+                    "(dropped — empty matching_variants?), skipping axis pair",
+                    cb["block_id"], partner_gid,
+                )
+                continue
+            key = (min(cb["block_id"], partner_comp_id), max(cb["block_id"], partner_comp_id))
+            if key in seen_axis_pairs:
+                continue
+            seen_axis_pairs.add(key)
+            axis_split_pairs.append([key[0], key[1]])
+
+        if axis_split_pairs:
+            sym_groups.append({
+                "compound_id":               -1,
+                "axis":                      "vertical",
+                "pairs":                     axis_split_pairs,
+                "self_symmetric":            [],
+                "enforce_matching_variants": True,
+            })
+            logger.info("Axis-split mirror pairs: %d", len(axis_split_pairs))
+
         logger.info(
             "Aggressive sym_groups: %d axis group(s) with %d composite pair(s)",
             len(sym_groups),
