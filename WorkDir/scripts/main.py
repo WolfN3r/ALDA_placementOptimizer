@@ -72,6 +72,8 @@ if __name__ == "__main__":
     parser.add_argument("--sym-mode", dest="sym_mode", default="aggressive",
                         choices=["none", "moderate", "aggressive"],
                         help="Symmetry constraint aggressiveness for netlist-driven runs (default: %(default)s)")
+    parser.add_argument("--random-sizes", dest="random_sizes", action="store_true", default=False,
+                        help="With --netlist: randomize device sizes instead of using real netlist values (default: use real sizes)")
     parser.add_argument("--warmup-strategy", dest="warmup_strategy", default="",
                         choices=["", "corp", "contour", "spring", "spsa"],
                         help="ILP warm-start strategy (default: use 101_placementOptimizer.py constant)")
@@ -88,7 +90,8 @@ if __name__ == "__main__":
     # --- Stage 1: block generation ---
     if args.netlist:
         gen = _load_script("011_netlisBlocksGenerator.py")
-        blocks_data: dict = gen.run(args.netlist, seed, sym_mode=args.sym_mode)
+        blocks_data: dict = gen.run(args.netlist, seed, sym_mode=args.sym_mode,
+                                     random_sizes=args.random_sizes)
         script_id_gen = "011"
     else:
         gen = _load_script("001_L1blocksGenerator.py")

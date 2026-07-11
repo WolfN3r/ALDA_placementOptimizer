@@ -51,11 +51,10 @@ SA_EPOCH_SIZE   = 0      # 0 → max(n_blocks × 8, 50)
 SA_STAGNATION   = 15     # epochs without improvement before reheating
 
 # --- Cost weights (must sum to 1.0) -----------------------------------------
-W_AREA    = 0.55
-W_WL      = 0.3
-W_AR      = 0.05
-W_CLUSTER = 0.10         # device-type bounding-box clustering (nmos_lvt, pmos_rvt, …)
-TARGET_AR = 1.0          # target width/height ratio for the full placement
+W_AREA    = 0.2
+W_WL      = 0.2
+W_AR      = 0.6
+TARGET_AR = 2.0        # target width/height ratio for the full placement
 
 # --- Power rails -------------------------------------------------------------
 USE_POWER_RAILS = True   # VDD net pulled to canvas top, VSS net pulled to canvas bottom via HPWL
@@ -560,11 +559,10 @@ def optimize(data: dict) -> dict:
     )
 
     weights = CostWeights(
-        area_weight              = W_AREA,
-        wirelength_weight        = W_WL,
-        aspect_ratio_weight      = W_AR,
-        target_aspect_ratio      = TARGET_AR,
-        device_clustering_weight = W_CLUSTER,
+        area_weight         = W_AREA,
+        wirelength_weight   = W_WL,
+        aspect_ratio_weight = W_AR,
+        target_aspect_ratio = TARGET_AR,
     )
     sa_cfg = SAConfig(
         initial_temp     = SA_INITIAL_TEMP,
