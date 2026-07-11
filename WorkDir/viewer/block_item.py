@@ -170,7 +170,8 @@ def build_block_items(
             label_str += f"\n({', '.join(sorted(set(other_blocks)))})"
 
         lbl = QGraphicsTextItem(label_str)
-        lf = QFont("Monospace")
+        lf = QFont("Courier New")
+        lf.setStyleHint(QFont.StyleHint.Monospace)
         lf.setPointSizeF(max(FONT_SZ * 0.85, 0.14))
         lbl.setFont(lf)
         lbl.setDefaultTextColor(color)

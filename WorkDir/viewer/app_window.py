@@ -21,7 +21,7 @@ from PyQt6.QtGui import (
     QAction, QKeySequence, QWheelEvent, QMouseEvent, QPainter,
     QColor, QPixmap, QIcon, QPen, QCursor, QBrush,
 )
-from PyQt6.QtCore import Qt, QPointF, QLineF, pyqtSignal
+from PyQt6.QtCore import Qt, QPointF, QLineF, pyqtSignal, QSettings
 
 import json_loader
 from layer_manager import LayerManager, LayerDef
@@ -128,7 +128,9 @@ def _get_block_symmetry_info(block_id: int, sc: dict) -> str:
 class CanvasView(QGraphicsView):
     """
     Pan/zoom canvas.
-    - Scroll wheel: zoom centered on cursor
+    - Scroll wheel (no modifier): zoom centered on cursor
+    - Ctrl + scroll wheel: pan vertically
+    - Shift + scroll wheel: pan horizontally
     - Middle-click or right-click drag: pan
     - Right-click without drag: emits right_clicked(scene_pos)
     - No Qt item selection (no white selection rectangles)
@@ -137,13 +139,24 @@ class CanvasView(QGraphicsView):
     mouse_moved   = pyqtSignal(float, float)
     right_clicked = pyqtSignal(QPointF)   # right-click with no drag
 
-    _ZOOM = 1.15
+    # Defaults, overridable per-view via set_scroll_settings(); a fresh view
+    # picks up whatever the user last saved in Options > Scroll & Zoom Settings.
+    _ZOOM_DEFAULT = 1.12   # zoom factor per full wheel notch (120 angle-delta units)
+    _PAN_DEFAULT  = 60.0   # pixels panned per full wheel notch, with Ctrl/Shift held
 
     def __init__(self, scene, parent=None) -> None:
         super().__init__(scene, parent)
         self._panning = False
         self._pan_start = QPointF()
         self._pan_dist  = 0.0   # accumulated drag distance for right-button
+
+        # Scroll/zoom sensitivity — read from QSettings so every newly created
+        # view (main tabs, exhaustive tabs, block detail windows) reflects the
+        # last value the user chose, without having to thread it through every
+        # call site. Live updates go through set_scroll_settings().
+        settings = QSettings()
+        self._zoom_speed = float(settings.value("scroll/zoom_speed", self._ZOOM_DEFAULT))
+        self._pan_speed  = float(settings.value("scroll/pan_speed",  self._PAN_DEFAULT))
 
         # Grid settings (scene units = µm)
         self._grid_visible = True
@@ -175,6 +188,11 @@ class CanvasView(QGraphicsView):
         self._grid_main = max(main, 0.0)
         self._grid_visible = visible
         self.viewport().update()
+
+    def set_scroll_settings(self, zoom_speed: float, pan_speed: float) -> None:
+        """Update zoom-per-notch factor and pan-per-notch pixel distance."""
+        self._zoom_speed = max(zoom_speed, 1.01)
+        self._pan_speed  = max(pan_speed, 1.0)
 
     def drawBackground(self, painter: QPainter, rect) -> None:
         super().drawBackground(painter, rect)
@@ -237,8 +255,29 @@ class CanvasView(QGraphicsView):
             self.fitInView(r, Qt.AspectRatioMode.KeepAspectRatio)
 
     def wheelEvent(self, event: QWheelEvent) -> None:
-        f = self._ZOOM if event.angleDelta().y() > 0 else 1 / self._ZOOM
-        self.scale(f, f)
+        delta = event.angleDelta()
+        dy, dx = delta.y(), delta.x()
+        primary = dy if dy != 0 else dx
+        if primary == 0:
+            return
+        # Normalize to "notches" (a real mouse wheel reports 120 per click;
+        # trackpads report many small deltas per gesture) so behavior scales
+        # with actual scroll distance instead of firing a full zoom/pan step
+        # per event — that mismatch is what made trackpad scrolling feel
+        # much faster than a notched mouse wheel.
+        steps = primary / 120.0
+        mods = event.modifiers()
+
+        if mods & Qt.KeyboardModifier.ControlModifier:
+            vbar = self.verticalScrollBar()
+            vbar.setValue(int(vbar.value() - steps * self._pan_speed))
+        elif mods & Qt.KeyboardModifier.ShiftModifier:
+            hbar = self.horizontalScrollBar()
+            hbar.setValue(int(hbar.value() - steps * self._pan_speed))
+        else:
+            f = self._zoom_speed ** steps
+            self.scale(f, f)
+        event.accept()
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
         if event.button() in (Qt.MouseButton.MiddleButton, Qt.MouseButton.RightButton):
@@ -438,6 +477,89 @@ class GridSettingsDialog(QDialog):
 
     def _values(self) -> tuple[float, float, bool]:
         return self._small.value(), self._main.value(), self._vis.isChecked()
+
+    def _apply(self) -> None:
+        v = self._values()
+        self._saved = v
+        self.applied.emit(*v)
+
+    def _ok(self) -> None:
+        self._apply()
+        self.accept()
+
+    def _cancel(self) -> None:
+        self.applied.emit(*self._saved)   # restore original
+        self.reject()
+
+
+# -----------------------------------------------------------------------
+# Scroll / zoom settings dialog  (Options > Scroll && Zoom Settings…)
+# -----------------------------------------------------------------------
+class ScrollSettingsDialog(QDialog):
+    """Standalone dialog for wheel zoom/pan sensitivity with Cancel / Apply / OK."""
+
+    applied = pyqtSignal(float, float)   # zoom_speed, pan_speed
+
+    def __init__(self, zoom_speed: float, pan_speed: float, parent=None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("Scroll & Zoom Settings")
+        self.setFixedWidth(340)
+        self.setWindowFlags(
+            self.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint
+        )
+        self._saved = (zoom_speed, pan_speed)
+        self._build_ui(zoom_speed, pan_speed)
+
+    def _build_ui(self, zoom_speed: float, pan_speed: float) -> None:
+        layout = QVBoxLayout(self)
+        layout.setSpacing(8)
+
+        info = QLabel(
+            "Plain scroll zooms in/out. Hold Ctrl to pan vertically,\n"
+            "hold Shift to pan horizontally."
+        )
+        info.setWordWrap(True)
+        layout.addWidget(info)
+
+        form = QGridLayout()
+        form.setContentsMargins(0, 0, 0, 0)
+        form.setSpacing(6)
+
+        form.addWidget(QLabel("Zoom speed:"), 0, 0)
+        self._zoom = QDoubleSpinBox()
+        self._zoom.setRange(1.01, 2.00)
+        self._zoom.setSingleStep(0.01)
+        self._zoom.setDecimals(2)
+        self._zoom.setValue(zoom_speed)
+        form.addWidget(self._zoom, 0, 1)
+
+        form.addWidget(QLabel("Scroll (pan) speed:"), 1, 0)
+        self._pan = QDoubleSpinBox()
+        self._pan.setRange(5.0, 500.0)
+        self._pan.setSingleStep(5.0)
+        self._pan.setDecimals(0)
+        self._pan.setValue(pan_speed)
+        form.addWidget(self._pan, 1, 1)
+
+        layout.addLayout(form)
+        layout.addWidget(_separator())
+
+        btns = QHBoxLayout()
+        btns.addStretch()
+        apply_btn = QPushButton("Apply")
+        apply_btn.clicked.connect(self._apply)
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.clicked.connect(self._cancel)
+        ok_btn = QPushButton("OK")
+        ok_btn.setDefault(True)
+        ok_btn.clicked.connect(self._ok)
+        btns.addWidget(apply_btn)
+        btns.addWidget(cancel_btn)
+        btns.addWidget(ok_btn)
+        layout.addLayout(btns)
+
+    def _values(self) -> tuple[float, float]:
+        return self._zoom.value(), self._pan.value()
 
     def _apply(self) -> None:
         v = self._values()
@@ -2142,6 +2264,16 @@ class MainWindow(QMainWindow):
         self._grid_main:    float = 5.0
         self._grid_visible: bool  = True
 
+        # Scroll/zoom settings (backing values — updated by ScrollSettingsDialog,
+        # persisted via QSettings so they survive app restarts)
+        settings = QSettings()
+        self._zoom_speed: float = float(
+            settings.value("scroll/zoom_speed", CanvasView._ZOOM_DEFAULT)
+        )
+        self._pan_speed: float = float(
+            settings.value("scroll/pan_speed", CanvasView._PAN_DEFAULT)
+        )
+
         # Exhaustive mode state
         self._exhaustive_mode: bool = False
         self._exhaustive_scenes: list[PlacementScene] = []
@@ -2253,6 +2385,10 @@ class MainWindow(QMainWindow):
         render_act = QAction("&Block Rendering…", self)
         render_act.triggered.connect(self._open_block_rendering)
         om.addAction(render_act)
+
+        scroll_act = QAction("&Scroll && Zoom Settings…", self)
+        scroll_act.triggered.connect(self._open_scroll_dialog)
+        om.addAction(scroll_act)
 
         # ---- Tools ----------------------------------------------------------
         tm = mb.addMenu("&Tools")
@@ -2525,6 +2661,19 @@ class MainWindow(QMainWindow):
         if not self._exhaustive_mode and self._placement_view:
             self._placement_view.set_grid(small, main, visible)
 
+    def _on_scroll_settings_changed(self, zoom_speed: float, pan_speed: float) -> None:
+        self._zoom_speed = zoom_speed
+        self._pan_speed  = pan_speed
+        settings = QSettings()
+        settings.setValue("scroll/zoom_speed", zoom_speed)
+        settings.setValue("scroll/pan_speed", pan_speed)
+        for view in self._views:
+            view.set_scroll_settings(zoom_speed, pan_speed)
+        for view in self._exhaustive_views:
+            view.set_scroll_settings(zoom_speed, pan_speed)
+        if not self._exhaustive_mode and self._placement_view:
+            self._placement_view.set_scroll_settings(zoom_speed, pan_speed)
+
     def _on_nets_toggled(self, visible: bool) -> None:
         targets = (
             self._exhaustive_scenes if self._exhaustive_mode
@@ -2660,6 +2809,11 @@ class MainWindow(QMainWindow):
 
     def _open_block_rendering(self) -> None:
         dlg = BlockRenderingDialog(self.lm, parent=self)
+        dlg.exec()
+
+    def _open_scroll_dialog(self) -> None:
+        dlg = ScrollSettingsDialog(self._zoom_speed, self._pan_speed, parent=self)
+        dlg.applied.connect(self._on_scroll_settings_changed)
         dlg.exec()
 
     def _open_gds_window(self) -> None:

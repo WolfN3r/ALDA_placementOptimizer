@@ -156,7 +156,8 @@ class PlacementScene(QGraphicsScene):
         self._block_rects[bid] = rect
 
         lbl = QGraphicsTextItem(f"B{bid}")
-        f = QFont("Monospace")
+        f = QFont("Courier New")
+        f.setStyleHint(QFont.StyleHint.Monospace)
         f.setPointSizeF(max(min(w, h) * 0.18, 1.0))
         lbl.setFont(f)
         lbl.setDefaultTextColor(QColor(220, 220, 220))
@@ -192,7 +193,8 @@ class PlacementScene(QGraphicsScene):
 
         # Topology type label in the top-left corner of the composite
         lbl = QGraphicsTextItem(ttype.replace("_", " "))
-        f = QFont("Monospace")
+        f = QFont("Courier New")
+        f.setStyleHint(QFont.StyleHint.Monospace)
         f.setPointSizeF(max(min(w, h) * 0.10, 1.0))
         lbl.setFont(f)
         lbl.setDefaultTextColor(border_color)
@@ -219,7 +221,8 @@ class PlacementScene(QGraphicsScene):
             self._block_rects[mbid] = sub_rect
 
             mlbl = QGraphicsTextItem(f"B{mbid}")
-            mf = QFont("Monospace")
+            mf = QFont("Courier New")
+            mf.setStyleHint(QFont.StyleHint.Monospace)
             mf.setPointSizeF(max(min(mw, mh) * 0.18, 1.0))
             mlbl.setFont(mf)
             mlbl.setDefaultTextColor(QColor(220, 220, 220))
@@ -325,7 +328,8 @@ class PlacementScene(QGraphicsScene):
             # Topology tag label on the axis line
             if tag:
                 lbl = QGraphicsTextItem(tag.replace("_", " "))
-                f = QFont("Monospace")
+                f = QFont("Courier New")
+                f.setStyleHint(QFont.StyleHint.Monospace)
                 f.setPointSizeF(1.0)
                 lbl.setFont(f)
                 lbl.setDefaultTextColor(color)
@@ -432,7 +436,8 @@ class PlacementScene(QGraphicsScene):
             line.setZValue(51)
             self._add(line, "sym_tail_cm")
             lbl = QGraphicsTextItem("T")
-            f = QFont("Monospace")
+            f = QFont("Courier New")
+            f.setStyleHint(QFont.StyleHint.Monospace)
             f.setPointSizeF(1.0)
             f.setBold(True)
             lbl.setFont(f)

@@ -233,6 +233,18 @@ class SimulationWindow(QMainWindow):
         netlist_row.addWidget(self._netlist_combo, stretch=1)
         vbox.addLayout(netlist_row)
 
+        random_sizes_row = QHBoxLayout()
+        random_sizes_row.addSpacing(20)
+        self._cb_random_sizes = QCheckBox("Randomize device sizes")
+        self._cb_random_sizes.setEnabled(False)
+        self._cb_random_sizes.setToolTip(
+            "Off (default): use the real W/L/M/Nf values from the netlist.\n"
+            "On: ignore netlist sizes, generate random ones (seeded) instead —\n"
+            "the behavior netlist-driven runs had before real sizing was added."
+        )
+        random_sizes_row.addWidget(self._cb_random_sizes)
+        vbox.addLayout(random_sizes_row)
+
         self._rb_src_netlist.toggled.connect(self._on_source_toggled)
 
         return box
@@ -400,6 +412,7 @@ class SimulationWindow(QMainWindow):
         self._netlist_combo.setEnabled(netlist_active)
         self._blocks_spin.setEnabled(not netlist_active)
         self._sym_mode_combo.setEnabled(netlist_active)
+        self._cb_random_sizes.setEnabled(netlist_active)
 
     def _on_run(self) -> None:
         self._log.clear()
@@ -439,6 +452,8 @@ class SimulationWindow(QMainWindow):
             sym_mode = self._sym_mode_combo.currentData() or "aggressive"
             args += ["--netlist", str(_NETLISTS_DIR / netlist_name),
                      "--sym-mode", sym_mode]
+            if self._cb_random_sizes.isChecked():
+                args.append("--random-sizes")
             self._netlist_mode = True
         else:
             args += ["--num-blocks", str(num_blocks)]

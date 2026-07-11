@@ -1,6 +1,10 @@
 {
   "enabled_pairs": [
     [
+      "BStarTopology",
+      "SimulatedAnnealingOptimizer"
+    ],
+    [
       "SequencePairTopology",
       "SimulatedAnnealingOptimizer"
     ],
