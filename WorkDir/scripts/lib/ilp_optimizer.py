@@ -20,7 +20,6 @@ from __future__ import annotations
 import dataclasses
 import math
 import sys
-from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
@@ -47,14 +46,14 @@ class GurobiParams:
       mip_focus, symmetry, cuts, heuristics
     """
 
-    threads: int = 16
+    threads: int = 15
     # Parallel B&B threads. Scales well to physical core count.
     # More threads → faster wall-clock; no benefit beyond physical cores.
 
-    time_limit: float = 500.0
+    time_limit: float = 20.0
     # Hard wall-clock limit in seconds. Solver returns best incumbent found so far.
 
-    mip_gap: float = 0.03
+    mip_gap: float = 0.1
     # Stop when gap between best incumbent and LP bound ≤ this fraction.
     # Tighter → longer solve but finds better solutions; 3% is a good trade-off.
 
@@ -63,11 +62,11 @@ class GurobiParams:
     # Small/easy netlists: use 2 (prove optimum fast).
     # Large/hard netlists: use 1 (find any feasible solution first).
 
-    cuts: int = 2
+    cuts: int = 1
     # Global cut aggressiveness: -1=auto, 0=none, 1=moderate, 2=aggressive, 3=very.
     # Big-M non-overlap constraints benefit from 2–3; sparse netlists often 0–1.
 
-    mir_cuts: int = 2
+    mir_cuts: int = -1
     # Mixed-Integer Rounding cuts. Especially effective with big-M formulations.
     # -1=auto, 0=off, 1=moderate, 2=aggressive.
 
@@ -79,7 +78,7 @@ class GurobiParams:
     # Symmetry detection aggressiveness: 0=none, 1=conservative, 2=aggressive.
     # Strongly correlated with number of symmetry groups in the netlist.
 
-    heuristics: float = 0.05
+    heuristics: float = 0.0
     # Fraction of B&B time spent on MIP heuristics (0.0–1.0).
     # Tightly-coupled netlists: higher value finds a good incumbent earlier.
 
@@ -90,33 +89,23 @@ class GurobiParams:
     improve_start_gap: float = 0.05
     # Switch from heuristic improvement to B&B when gap falls below this fraction.
 
-    verbose: bool = False
+    verbose: bool = True
     # True → print Gurobi B&B log to console. Use for diagnostics.
     # Key lines to read: "Root relaxation" (LP gap), "MIP gap" at time limit,
     # "Explored N nodes" (large N = loose LP relaxation, not a thread problem).
 
-    log_file: str = ""
+    log_file: str = "gurobi_ilp.log"
     # Write full Gurobi log to this path (e.g. "logs/gurobi_ilp.log").
     # Non-empty value also sets verbose=True automatically inside Gurobi.
     # Use m.write("model.lp") (add temporarily in _solve_mip_gurobi) to export
     # the LP for inspection in Gurobi's interactive shell.
 
-    debug: bool = False
+    debug: bool = True
     # True → write full Gurobi B&B log to WorkDir/logs/gurobi_ilp_<timestamp>.log
     # and force verbose output. Use to diagnose slow solves:
     #   "Root relaxation" line shows LP gap at root node.
     #   "Explored N nodes" line shows B&B effort (large N = loose LP relaxation).
     #   "Found heuristic solution" at t=0 confirms MIP warm start was accepted.
-
-    ar_limit: float = 3.0
-    # Aspect-ratio dead-band: no penalty when W/H ≤ this value.
-    # Penalty = ar_weight * (W - ar_limit * H) when W > ar_limit * H.
-    # Set > 1 to allow rectangular (non-square) layouts while banning flat strips.
-
-    ar_weight: float = 0.3
-    # Weight of the AR penalty term relative to area_weight * (W + H).
-    # 0.3 means a 613µm-wide strip (AR=44) pays +171 over a valid 2D layout
-    # with AR≤3 — enough to strongly prefer the 2D packing.
 
     use_corp_start: bool = True
     # True → run CORP spring-embedding before solving, sort blocks by x-centroid,
@@ -260,15 +249,21 @@ def _solve_mip_gurobi(
     sym_groups:       list,
     area_weight:      float,
     wl_weight:        float,
+    ar_weight:        float,
+    target_ar:        float,
     warm_positions:   dict[str, tuple[float, float]],
     params:           GurobiParams,
     hint_positions:   dict[str, tuple[float, float]] | None = None,
     use_power_rails:  bool = True,
-    cluster_weight:   float = 0.0,
     variant_map:      dict[str, int] | None = None,
 ) -> tuple[dict[str, tuple[float, float]], dict[str, int], str]:
     """
     Build and solve the analog placement MILP with gurobipy.
+
+    area_weight/wl_weight/ar_weight/target_ar all come from the same
+    CostWeights instance the CostEvaluator scores with (single source of
+    truth: 101_placementOptimizer.py) — no cost-function values are
+    hardcoded here or in GurobiParams.
     Returns (positions, variant_map, termination) where termination is
     "optimal", "feasible", or "infeasible".
     Falls back to warm_positions when the solver finds no feasible point.
@@ -316,10 +311,13 @@ def _solve_mip_gurobi(
     W = m.addVar(lb=0.0, ub=M_x, name="W")
     H = m.addVar(lb=0.0, ub=M_y, name="H")
 
-    # AR dead-band penalty: cost = ar_weight * max(0, W - ar_limit * H).
-    # Linearised via auxiliary variable excess_ar ≥ 0.
+    # Symmetric AR dead-band penalty: cost = ar_weight * max(0, W - target_ar*H, H - target_ar*W).
+    # AR = max(W,H)/min(W,H) <= target_ar  <=>  W <= target_ar*H  AND  H <= target_ar*W,
+    # so violating either side (too wide OR too tall) is captured by the same
+    # auxiliary variable excess_ar >= 0 via two linear inequalities.
     excess_ar = m.addVar(lb=0.0, name="excess_ar")
-    m.addConstr(excess_ar >= W - params.ar_limit * H, name="ar_deadband")
+    m.addConstr(excess_ar >= W - target_ar * H, name="ar_deadband_wide")
+    m.addConstr(excess_ar >= H - target_ar * W, name="ar_deadband_tall")
 
     # Variant dimensions — computed early so position variable bounds can use them
     all_dims: dict[str, list[tuple[float, float]]] = {bid: _variant_dims(blocks[bid]) for bid in bids}
@@ -526,44 +524,6 @@ def _solve_mip_gurobi(
         power_proximity_expr += _pin_y_expr(bid, pname)
     n_power_bids = len(vdd_pins) + len(vss_pins)
 
-    # Device-type clustering — one virtual "net" per device_type, HPWL bounding box
-    # over block centres.  Same x_lo/x_hi/y_lo/y_hi formulation as real nets.
-    # Drives blocks of the same Vt variant (nmos_lvt, pmos_rvt, …) to cluster together.
-    dt_bids: dict[str, list[str]] = defaultdict(list)
-    for bid in bids:
-        dt = blocks[bid].get("device_type", "")
-        if dt:
-            dt_bids[dt].append(bid)
-
-    cxlo: dict[str, Any] = {}
-    cxhi: dict[str, Any] = {}
-    cylo: dict[str, Any] = {}
-    cyhi: dict[str, Any] = {}
-    for dt, grp_bids in dt_bids.items():
-        if len(grp_bids) < 2:
-            continue
-        cxlo[dt] = m.addVar(lb=0.0,         name=f"cxlo_{dt}")
-        cxhi[dt] = m.addVar(lb=0.0, ub=M_x, name=f"cxhi_{dt}")
-        cylo[dt] = m.addVar(lb=0.0,         name=f"cylo_{dt}")
-        cyhi[dt] = m.addVar(lb=0.0, ub=M_y, name=f"cyhi_{dt}")
-        for bid in grp_bids:
-            dims = all_dims[bid]
-            if not s[bid]:
-                xc = x[bid] + dims[0][0] / 2.0
-                yc = y[bid] + dims[0][1] / 2.0
-            else:
-                xc = x[bid] + gp.quicksum(dims[k][0] / 2.0 * s[bid][k] for k in range(len(dims)))
-                yc = y[bid] + gp.quicksum(dims[k][1] / 2.0 * s[bid][k] for k in range(len(dims)))
-            m.addConstr(cxlo[dt] <= xc, name=f"cxlo_{dt}_{bid}")
-            m.addConstr(cxhi[dt] >= xc, name=f"cxhi_{dt}_{bid}")
-            m.addConstr(cylo[dt] <= yc, name=f"cylo_{dt}_{bid}")
-            m.addConstr(cyhi[dt] >= yc, name=f"cyhi_{dt}_{bid}")
-
-    n_cluster_types = max(len(cxlo), 1)
-    cluster_expr = gp.quicksum(
-        (cxhi[dt] - cxlo[dt]) + (cyhi[dt] - cylo[dt]) for dt in cxlo
-    ) if cxlo else 0.0
-
     # Objective
     n_nets_used = max(len(x_lo), 1)
     hpwl_expr = gp.quicksum(
@@ -574,8 +534,7 @@ def _solve_mip_gurobi(
         area_weight * (W + H)
         + (wl_weight / n_nets_used) * hpwl_expr
         + power_scale * power_proximity_expr
-        + params.ar_weight * excess_ar
-        + (cluster_weight / n_cluster_types) * cluster_expr,
+        + ar_weight * excess_ar,
         GRB.MINIMIZE,
     )
 
@@ -654,21 +613,21 @@ def _solve_mip(
     sym_groups:       list,
     area_weight:      float,
     wl_weight:        float,
+    ar_weight:        float,
+    target_ar:        float,
     warm_positions:   dict[str, tuple[float, float]],
     gurobi_params:    GurobiParams | None = None,
     hint_positions:   dict[str, tuple[float, float]] | None = None,
     use_power_rails:  bool = True,
-    cluster_weight:   float = 0.0,
     variant_map:      dict[str, int] | None = None,
 ) -> tuple[dict[str, tuple[float, float]], dict[str, int], str]:
     """Dispatch to _solve_mip_gurobi with the given (or default) parameters."""
     return _solve_mip_gurobi(
         bids, blocks, nets, sym_groups,
-        area_weight, wl_weight, warm_positions,
+        area_weight, wl_weight, ar_weight, target_ar, warm_positions,
         gurobi_params or GurobiParams(),
         hint_positions=hint_positions,
         use_power_rails=use_power_rails,
-        cluster_weight=cluster_weight,
         variant_map=variant_map or {},
     )
 
@@ -722,7 +681,8 @@ class ILPOptimizer:
         row_pack_positions = self._topo.decode()
         c_area    = self._evaluator._w.area_weight
         c_wl      = self._evaluator._w.wirelength_weight
-        c_cluster = self._evaluator._w.device_clustering_weight
+        c_ar      = self._evaluator._w.aspect_ratio_weight
+        target_ar = self._evaluator._w.target_aspect_ratio
 
         params = self._gurobi_params or GurobiParams()
         warm_positions = row_pack_positions
@@ -757,11 +717,10 @@ class ILPOptimizer:
                 logger.warning("CORP failed (%s) — using plain row-pack for warm start", exc)
 
         positions, variant_map, termination = _solve_mip(
-            bids, blocks, nets, sym_groups, c_area, c_wl, warm_positions,
+            bids, blocks, nets, sym_groups, c_area, c_wl, c_ar, target_ar, warm_positions,
             params,
             hint_positions=corp_hints,
             use_power_rails=getattr(self._evaluator, "_use_power_rails", True),
-            cluster_weight=c_cluster,
             variant_map=self._initial_variant_map or None,
         )
 

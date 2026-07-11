@@ -102,13 +102,15 @@ class BStarILPOptimizer:
         # cost bound, while the raw 2D positions feed the r-var direction hints.
         bstar_ordered_warm = _corp_row_pack(bids, blocks, bstar_positions)
 
-        c_area = self._evaluator._w.area_weight
-        c_wl   = self._evaluator._w.wirelength_weight
+        c_area    = self._evaluator._w.area_weight
+        c_wl      = self._evaluator._w.wirelength_weight
+        c_ar      = self._evaluator._w.aspect_ratio_weight
+        target_ar = self._evaluator._w.target_aspect_ratio
         params = self._gurobi_params or GurobiParams()
 
         positions, variant_map, termination = _solve_mip(
             bids, blocks, nets, sym_groups,
-            c_area, c_wl,
+            c_area, c_wl, c_ar, target_ar,
             bstar_ordered_warm,               # B*-tree-ordered row-pack → Gurobi incumbent
             params,
             hint_positions=bstar_positions,   # raw B*-tree 2D layout → r-var direction hints

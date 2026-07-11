@@ -104,13 +104,15 @@ class PSOILPOptimizer:
         # better directional hints (from the 2D PSO layout).
         pso_ordered_warm = _corp_row_pack(bids, blocks, pso_positions)
 
-        c_area = self._evaluator._w.area_weight
-        c_wl   = self._evaluator._w.wirelength_weight
+        c_area    = self._evaluator._w.area_weight
+        c_wl      = self._evaluator._w.wirelength_weight
+        c_ar      = self._evaluator._w.aspect_ratio_weight
+        target_ar = self._evaluator._w.target_aspect_ratio
         params = self._gurobi_params or GurobiParams()
 
         positions, variant_map, termination = _solve_mip(
             bids, blocks, nets, sym_groups,
-            c_area, c_wl,
+            c_area, c_wl, c_ar, target_ar,
             pso_ordered_warm,            # DRC-clean PSO-ordered row-pack → Gurobi incumbent
             params,
             hint_positions=pso_positions,  # raw PSO 2D layout → r-var direction hints
