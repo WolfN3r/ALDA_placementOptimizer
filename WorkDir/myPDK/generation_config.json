@@ -16,17 +16,10 @@
       "max": 8,
       "comment": "Even numbers only, range: [min, max]"
     },
-    "num_fingers_range": {
-      "min": 2,
-      "max": 4,
-      "comment": "Number of fingers per transistor"
-    },
-    "aspect_ratio": {
-      "min_aspect_min": 0.2,
-      "min_aspect_max": 0.8,
-      "max_aspect_min": 1.2,
-      "max_aspect_max": 2.0,
-      "comment": "Random ranges for min and max aspect ratios"
+    "mosfet_variant_aspect_ratio": {
+      "min": 0.5,
+      "max": 2.0,
+      "comment": "Target raw W/H band for the MOSFET layout-finger search (wmi_search_transistor_shape / wmi_search_group_transistor_shape). Applies to both the real-sizes and random-sizes generation paths. num_fingers is no longer read from the netlist or randomized — it is derived by the search within this band, up to the PDK's active.min_width fabrication floor."
     }
   },
   "rotation_variants": {

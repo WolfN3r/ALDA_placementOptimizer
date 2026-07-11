@@ -32,7 +32,7 @@ SEED_MODE = "random"      # "random" | "ordered" — initial topology seed strat
 # Set TOPOLOGY + OPTIMIZER to run exactly one combination.
 # Leave both empty to fall back to RUN_MODE (exhaustive or random).
 TOPOLOGY  = "ILPTopology"      # "" | "BStarTopology" | "SequencePairTopology" | "ILPTopology" | "PSOTopology"
-OPTIMIZER = "ILPOptimizer"  # "" | "SimulatedAnnealingOptimizer" | "ILPOptimizer" | "PSOOptimizer" | "PSOILPOptimizer" | "BStarILPOptimizer"
+OPTIMIZER = "ILPOptimizer"  # "" | "SimulatedAnnealingOptimizer" | "ILPOptimizer" | "PSOOptimizer"
 
 # Used only when TOPOLOGY/OPTIMIZER are empty:
 RUN_MODE  = ""  # "exhaustive" → all supported pairs | "random" → one random pair
@@ -51,10 +51,10 @@ SA_EPOCH_SIZE   = 0      # 0 → max(n_blocks × 8, 50)
 SA_STAGNATION   = 15     # epochs without improvement before reheating
 
 # --- Cost weights (must sum to 1.0) -----------------------------------------
-W_AREA    = 0.2
+W_AREA    = 0.6
 W_WL      = 0.2
-W_AR      = 0.6
-TARGET_AR = 2.0        # target width/height ratio for the full placement
+W_AR      = 0.2
+TARGET_AR = 1.0        # target width/height ratio for the full placement
 
 # --- Power rails -------------------------------------------------------------
 USE_POWER_RAILS = True   # VDD net pulled to canvas top, VSS net pulled to canvas bottom via HPWL
@@ -88,31 +88,14 @@ PSO_CONFIG = PSOConfig(
     use_corp_init     = True,
 )
 
-# --- B*-tree+ILP hybrid tuning ----------------------------------------------
-# BSTAR_ILP_SA_CONFIG:    controls the B*-tree SA warm-start inside BStarILPOptimizer.
-#   max_iterations=0 → auto-computed as epoch_size × 60 (~30 % of a full SA budget);
-#   epoch_size=0      → auto-computed as max(n_blocks × 8, 50).
-#   Pass explicit values here to override.  initial_temp is always auto-calibrated.
-# BSTAR_ILP_GUROBI_PARAMS: same fields as ILP_GUROBI_PARAMS.
-#   use_corp_start is False: B*-tree SA already provides a 2D warm start, so CORP
-#   row-pack would overwrite it with a less informative 1D layout.
-BSTAR_ILP_SA_CONFIG = SAConfig(
-    max_iterations    = 0,       # 0 → epoch_size × 60 (set in BStarILPOptimizer)
-    epoch_size        = 0,       # 0 → max(n_blocks × 8, 50)
-)
-BSTAR_ILP_GUROBI_PARAMS = GurobiParams(
-    verbose           = False,
-    use_corp_start    = False,   # B*-tree SA provides the ordering; no CORP needed
-    time_limit        = 120.0,
-    mip_gap           = 0.03,
-    no_rel_heur_time  = 5,
-)
-
 # --- Warmup multi-start (ILP only) ------------------------------------------
 # WARMUP_STRATEGY selects which warm-start heuristic to run N times in parallel.
 #   "corp"    — spring-embedding connectivity-ordered row placement
 #   "contour" — greedy skyline placer with random block-ordering diversity
+#   "spring"  — paper-faithful FDGD spring embedding
 #   "spsa"    — SequencePairTopology+SA warm start
+#   "pso"     — short PSOTopology+PSOOptimizer warm start
+#   "bstar"   — short BStarTopology+SA warm start
 # WARMUP_N_RUNS: number of parallel warmup sessions; 0 disables the system
 #   and falls back to the single-run CORP inside ILPOptimizer.
 # WARMUP_MASTER_SEED: base seed; child seeds are master_seed × 10000 + run_index.
@@ -123,7 +106,10 @@ BSTAR_ILP_GUROBI_PARAMS = GurobiParams(
 #   result and N ILP placements are stored for comparison (serial — one Gurobi
 #   instance at a time due to license constraints).
 # WARMUP_SPSA_TIMEOUT_SEC: wall-clock budget per SPSA run (ignored for other strategies).
-WARMUP_STRATEGY         = "spsa"  # "corp" | "contour" | "spsa"
+# Note: RUN_MODE == "exhaustive" ignores WARMUP_STRATEGY/WARMUP_EXHAUSTIVE_ILP for
+# the ILP pair and instead tries every strategy above once each, keeping the best
+# (see WarmupConfig.all_strategies / WarmupManager.run_all_strategies()).
+WARMUP_STRATEGY         = "spsa"  # "corp" | "contour" | "spring" | "spsa" | "pso" | "bstar"
 WARMUP_N_RUNS           = 8       # 0 → disabled (use single-run CORP inside ILPOptimizer)
 WARMUP_MASTER_SEED      = 42
 WARMUP_VISUALIZE        = False
@@ -281,8 +267,6 @@ def _resolve_combination():
     from ilp_optimizer     import ILPOptimizer
     from pso_topology      import PSOTopology
     from pso_optimizer     import PSOOptimizer
-    from pso_ilp_optimizer   import PSOILPOptimizer
-    from bstar_ilp_optimizer import BStarILPOptimizer
 
     topo_map = {
         "BStarTopology":        BStarTopology,
@@ -294,8 +278,6 @@ def _resolve_combination():
         "SimulatedAnnealingOptimizer": SimulatedAnnealingOptimizer,
         "ILPOptimizer":               ILPOptimizer,
         "PSOOptimizer":               PSOOptimizer,
-        "PSOILPOptimizer":            PSOILPOptimizer,
-        "BStarILPOptimizer":          BStarILPOptimizer,
     }
     t_cls = topo_map.get(TOPOLOGY)
     o_cls = opt_map.get(OPTIMIZER)
@@ -325,6 +307,42 @@ def _build_run_entry(result) -> dict:
         "placed_blocks": result.placed_blocks,
         "error":         result.error_message or None,
     }
+
+
+def _build_warmup_run_entries(result) -> list[dict]:
+    """
+    Expand one ILP PipelineResult's warmup_runs into one full run-entry dict
+    per warmup-strategy candidate, so exhaustive mode shows every strategy
+    (CORP+ILP, SPSA+ILP, PSO+ILP, ...) as its own tab instead of collapsing
+    them into a single ambiguous 'ILPTopology+ILPOptimizer' entry.
+    """
+    strategies = [w.get("strategy", "") for w in result.warmup_runs]
+    dup = {s for s in strategies if strategies.count(s) > 1}
+
+    entries: list[dict] = []
+    for w in result.warmup_runs:
+        strategy = w.get("strategy", "?")
+        suffix   = strategy if strategy not in dup else f"{strategy}_s{w.get('seed', 0)}"
+        t_opt    = round(w.get("t_optimize_ms", 0.0), 2)
+        entries.append({
+            "run_id":          f"{result.topology}+{result.optimizer}::{suffix}",
+            "topology":        result.topology,
+            "optimizer":       result.optimizer,
+            "warmup_strategy": strategy,
+            "status":          "success",
+            "is_best":         False,
+            "final_cost":      round(w.get("cost", 0.0), 6),
+            "area_um2":        round(w.get("area_um2", 0.0), 4),
+            "hpwl_um":         round(w.get("hpwl_um", 0.0), 4),
+            "aspect_ratio":    round(w.get("aspect_ratio", 1.0), 4),
+            "n_iterations":    1,
+            "t_seed_ms":       0.0,
+            "t_optimize_ms":   t_opt,
+            "t_total_ms":      t_opt,
+            "placed_blocks":   w.get("placed_blocks", {}),
+            "error":           None,
+        })
+    return entries
 
 
 def _renormalize_costs(entries: list, weights) -> None:
@@ -588,16 +606,13 @@ def optimize(data: dict) -> dict:
             master_seed      = WARMUP_MASTER_SEED,
             visualize        = WARMUP_VISUALIZE,
             exhaustive_ilp   = WARMUP_EXHAUSTIVE_ILP,
+            all_strategies   = RUN_MODE == "exhaustive",  # try every warmup strategy, keep best
             spsa_timeout_sec = WARMUP_SPSA_TIMEOUT_SEC,
             sym_groups       = sym_groups,
         )
     if ilp_kwargs:
         per_opt_kwargs["ILPOptimizer"] = ilp_kwargs
     per_opt_kwargs["PSOOptimizer"]      = {"pso_config": PSO_CONFIG}
-    per_opt_kwargs["BStarILPOptimizer"] = {
-        "bstar_sa_config": BSTAR_ILP_SA_CONFIG,
-        "gurobi_params":   BSTAR_ILP_GUROBI_PARAMS,
-    }
 
     if fixed_combo is not None:
         # Single combination selected via TOPOLOGY + OPTIMIZER constants
@@ -676,22 +691,41 @@ def optimize(data: dict) -> dict:
                     composite_list, r.placed_blocks, block_by_id, r.variant_map
                 )
                 r.placed_blocks.update(exp)
+            # Each warmup-strategy candidate carries its own placed_blocks — expand those too.
+            for w in r.warmup_runs:
+                if w.get("placed_blocks"):
+                    exp_w = _expand_composite_placements(
+                        composite_list, w["placed_blocks"], block_by_id, w.get("variant_map", {})
+                    )
+                    w["placed_blocks"].update(exp_w)
 
     placement_meta: dict = {}
     is_exhaustive = RUN_MODE == "exhaustive" and len(all_results) > 1
 
     if is_exhaustive:
         # --- Exhaustive mode: one full entry per run, all with placed_blocks ---
-        run_entries = [_build_run_entry(r) for r in all_results]
+        # ILP results carrying warmup_runs are expanded into one entry per
+        # warmup strategy (CORP+ILP, SPSA+ILP, ...) instead of one merged entry,
+        # so every strategy that was actually run is visible, not just the winner.
+        run_entries: list[dict] = []
+        for r in all_results:
+            if r.optimizer == "ILPOptimizer" and r.warmup_runs:
+                run_entries.extend(_build_warmup_run_entries(r))
+            else:
+                run_entries.append(_build_run_entry(r))
+
         if RENORMALIZE:
             _renormalize_costs(run_entries, weights)
             # After renorm the winner is the entry with renorm_cost == 1.0
             best_run_id = next(
                 (e["run_id"] for e in run_entries if e.get("renorm_cost") == 1.0),
-                best.run_id if best else "",
+                "",
             )
         else:
-            best_run_id = best.run_id if best else ""
+            successful = [e for e in run_entries if e["status"] == "success"]
+            best_run_id = min(successful, key=lambda e: e["final_cost"])["run_id"] if successful else ""
+        if not best_run_id and run_entries:
+            best_run_id = run_entries[0]["run_id"]
         for e in run_entries:
             e["is_best"] = (e["run_id"] == best_run_id)
         placement_meta = {

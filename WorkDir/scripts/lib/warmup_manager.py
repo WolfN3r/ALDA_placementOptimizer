@@ -44,13 +44,14 @@ class WarmupResult:
 
 @dataclasses.dataclass
 class WarmupConfig:
-    strategy:         str   = "corp"   # "corp" | "contour" | "spsa"
+    strategy:         str   = "corp"   # "corp" | "contour" | "spring" | "spsa" | "pso" | "bstar"
     n_runs:           int   = 3
     master_seed:      int   = 42
     visualize:        bool  = False    # if True, warmup_runs saved to output JSON
-    exhaustive_ilp:   bool  = False    # if True, run ILP for each warmup result
+    exhaustive_ilp:   bool  = False    # if True, run ILP for each warmup result (same strategy, N seeds)
+    all_strategies:   bool  = False    # if True, run every registered strategy once and ILP-solve each (RUN_MODE=="exhaustive")
     spsa_timeout_sec: float = 10.0     # wall-clock budget per SPSA run
-    sym_groups:       list  = dataclasses.field(default_factory=list)  # axis constraints for SPSA warmup SP
+    sym_groups:       list  = dataclasses.field(default_factory=list)  # axis constraints for SPSA/PSO/B*-tree warmup topologies
 
 
 # =============================================================================
@@ -196,12 +197,18 @@ class SPSAWarmup(WarmupStrategy):
 _STRATEGY_MAP: dict[str, type] = {
     "corp": CORPWarmup,
     "spsa": SPSAWarmup,
-    # "contour" is registered lazily by contour_warmup.py via register_strategy()
+    # "contour", "spring", "pso", "bstar" are registered lazily by their own
+    # modules via register_strategy() — see WarmupManager._resolve_strategy().
 }
+
+# Canonical list of every strategy tried by WarmupManager.run_all_strategies()
+# (RUN_MODE == "exhaustive"). Kept in one place so adding a strategy module
+# only requires one edit here plus the lazy-import branch below.
+ALL_STRATEGY_NAMES: tuple[str, ...] = ("corp", "spsa", "contour", "spring", "pso", "bstar")
 
 
 def register_strategy(name: str, cls: type) -> None:
-    """Allow external modules (contour_warmup.py) to register additional strategies."""
+    """Allow external modules (contour_warmup.py, pso_warmup.py, ...) to register additional strategies."""
     _STRATEGY_MAP[name] = cls
 
 
@@ -265,6 +272,12 @@ class WarmupManager:
         if name == "spring":
             # Lazy import — spring_warmup registers itself on import
             from spring_warmup import SpringWarmup  # noqa: F401
+        if name == "pso":
+            # Lazy import — pso_warmup registers itself on import
+            from pso_warmup import PSOWarmup  # noqa: F401
+        if name == "bstar":
+            # Lazy import — bstar_warmup registers itself on import
+            from bstar_warmup import BStarWarmup  # noqa: F401
         cls = _STRATEGY_MAP.get(name)
         if cls is None:
             raise ValueError(
@@ -296,6 +309,8 @@ class WarmupManager:
                 "timeout_sec": cfg.spsa_timeout_sec,
                 "sym_groups":  cfg.sym_groups,
             }
+        elif cfg.strategy in ("pso", "bstar"):
+            strategy_kwargs = {"sym_groups": cfg.sym_groups}
 
         logger.info(
             "WarmupManager: strategy=%s  n_runs=%d  master_seed=%d",
@@ -361,6 +376,38 @@ class WarmupManager:
             bid: (v[0], v[1]) for bid, v in selected.positions.items()
         }
         return selected_positions_2d, sorted_results, selected.variant_map
+
+    def run_all_strategies(
+        self,
+        blocks:    dict,
+        nets:      list,
+        init_area: float,
+        init_wl:   float,
+    ) -> list[WarmupResult]:
+        """
+        Run every strategy in ALL_STRATEGY_NAMES (each doing its own n_runs
+        seeds internally, median-selected), and return one selected
+        WarmupResult per strategy. Used when RUN_MODE == "exhaustive" so ILP
+        tries every warm-start heuristic once and keeps the best.
+        A strategy that fails entirely (e.g. an optional dependency missing)
+        is logged and skipped rather than aborting the whole batch.
+        """
+        results: list[WarmupResult] = []
+        for name in ALL_STRATEGY_NAMES:
+            per_strategy_cfg = dataclasses.replace(self._cfg, strategy=name, all_strategies=False)
+            try:
+                mgr = WarmupManager(per_strategy_cfg)
+                _, strategy_results, _ = mgr.run(blocks, nets, init_area, init_wl)
+                selected = next(r for r in strategy_results if r.is_selected)
+                results.append(selected)
+            except Exception as exc:
+                logger.warning("WarmupManager: strategy %r failed, skipping: %s", name, exc)
+
+        if not results:
+            raise RuntimeError(
+                "All warmup strategies failed — cannot provide warm start to ILP"
+            )
+        return results
 
     @staticmethod
     def _select_median(results: list[WarmupResult]) -> WarmupResult:

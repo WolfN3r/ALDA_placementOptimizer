@@ -32,6 +32,16 @@ DEVICE_TYPES = ["nmos_rvt", "nmos_lvt", "nmos_hvt", "pmos_rvt", "pmos_lvt", "pmo
 # 0.5 um pin square + 0.12 um M1 min_spacing (gpdk090 DRM).
 _PIN_MIN_PITCH = 0.62
 
+# wmi_search_transistor_shape: representative-variant selection.
+# _MOSFET_SQUARE_VARIANT_COUNT near-square shapes (closest to AR=1, deduped by
+# _MOSFET_AR_ROUNDNESS_DEDUP_EPS so they aren't near-duplicates of each other),
+# plus 4 more anchored across the full configured AR interval (closest to
+# ar_min, closest to ar_max, and the two geometric midpoints between 1.0 and
+# each bound) — see _select_representative_shapes. Total up to 8, so the
+# placer sees the whole band, not just a cluster of near-square options.
+_MOSFET_SQUARE_VARIANT_COUNT = 4
+_MOSFET_AR_ROUNDNESS_DEDUP_EPS = 0.05
+
 # =============================================================================
 # 3. LOGGING
 # =============================================================================
@@ -91,23 +101,22 @@ def append_rotation_90(variants: list, rotation_cfg: dict, grid: float) -> None:
             variants.append(rotate_variant_90cw(base, grid))
 
 
-def wmi_generate_transistor_block(
-    tech_file: dict,
-    width: float, length: float,
-    multiplier: int, num_fingers: int,
-    min_aspect: float, max_aspect: float,
-    device_type: str,
-    num_pins: int,
-) -> dict:
-    """Generate all valid layout variants for one transistor block."""
-    grid = tech_file["technology_info"]["manufacturing_grid"]
+def _max_layout_fingers(tech_file: dict, width: float) -> int:
+    """Largest num_fingers before a single finger would need to be narrower
+    than the PDK's minimum active width — the fabrication floor on folding.
+    num_fingers is a pure layout choice (splitting a finger further never
+    changes W/L or electrical behavior), so this is the only real bound."""
+    active_min_width = tech_file["physical_design_rules"]["active"]["min_width"]
+    return max(1, int(width / active_min_width))
 
-    device = tech_file["device_constraints"][device_type]
-    assert device["L"]["min"] <= length <= device["L"]["max"], \
-        f"Length {length} outside [{device['L']['min']}, {device['L']['max']}]"
-    assert device["W"]["min"] <= width <= device["W"]["max"], \
-        f"Width {width} outside [{device['W']['min']}, {device['W']['max']}]"
 
+def _finger_grid_bbox(
+    tech_file: dict, width: float, num_fingers: int, n_rows: int, n_cols: int, grid: float
+) -> tuple[float, float]:
+    """block_W, block_H for folding a width-wide device (num_fingers sets the
+    per-finger pitch) into an n_rows x n_cols grid. n_cols need not equal
+    num_fingers — it is multiplier * num_fingers for a single device, or a
+    group's combined column count when several matched devices share a grid."""
     rules          = tech_file["physical_design_rules"]
     poly_width     = rules["poly"]["min_width"]
     poly_spacing   = rules["poly"]["min_spacing"]
@@ -119,72 +128,178 @@ def wmi_generate_transistor_block(
     finger_wc = w_finger + 2 * (contact_enc + contact_size)
     f_pitch   = finger_wc + poly_width + poly_spacing
 
-    total_fingers = multiplier * num_fingers
+    block_W = snap_to_grid(n_cols * f_pitch - poly_spacing, grid)
+    block_H = snap_to_grid(n_rows * (w_finger + active_spacing) - active_spacing, grid)
+    return block_W, block_H
+
+
+def _select_representative_shapes(
+    in_band_pool: list, ar_min: float, ar_max: float, square_count: int, dedup_eps: float,
+) -> list:
+    """Pick up to `square_count` near-square shapes (closest to AR=1, each at
+    least `dedup_eps` roundness apart from the others already kept), plus up
+    to 4 more anchored across the full [ar_min, ar_max] interval: closest to
+    ar_min, closest to ar_max, and the geometric midpoints between 1.0 and
+    each bound (sqrt(ar_min), sqrt(ar_max)). Geometric (not arithmetic) mean
+    because aspect ratio is a multiplicative quantity — AR=0.5 and AR=2.0 are
+    equally far from square, not equally far in a linear sense — so this
+    keeps the picks roughly log-uniform across the band instead of clustering
+    them near 1.0. `in_band_pool` must already be filtered to [ar_min, ar_max]
+    by the caller; returns kept[0] == the single closest-to-square candidate
+    (needed by the caller to mark is_used)."""
+    if not in_band_pool:
+        return []
+
+    def _key(c: dict) -> tuple:
+        return (c["nf_layout"], c["rows"], c["cols"])
+
+    used: set = set()
+    kept:  list = []
+
+    def _take(cand: dict | None) -> None:
+        if cand is None:
+            return
+        k = _key(cand)
+        if k in used:
+            return
+        used.add(k)
+        kept.append(cand)
+
+    by_round = sorted(in_band_pool, key=lambda c: c["ar_round"])
+    for cand in by_round:
+        if len(kept) >= square_count:
+            break
+        if any(abs(cand["ar_round"] - k["ar_round"]) < dedup_eps for k in kept):
+            continue
+        _take(cand)
+
+    targets = [ar_min, (ar_min * 1.0) ** 0.5, (1.0 * ar_max) ** 0.5, ar_max]
+    for target in targets:
+        remaining = [c for c in in_band_pool if _key(c) not in used]
+        if not remaining:
+            break
+        _take(min(remaining, key=lambda c: abs(c["ar"] - target)))
+
+    return kept
+
+
+def _search_finger_grid_candidates(
+    tech_file: dict, width: float, total_multiplier: int, grid: float,
+    nf_values: list | None = None,
+) -> list:
+    """Sweep num_fingers (layout choice, not the netlist value) — over
+    `nf_values` if given, else every value from 1 up to the fabrication
+    floor — and every (rows, cols) folding of total_multiplier * num_fingers,
+    returning every resulting shape with its raw W/H (`ar`) and
+    orientation-independent roundness (`ar_round`, >= 1)."""
+    if nf_values is None:
+        nf_values = range(1, _max_layout_fingers(tech_file, width) + 1)
+    candidates: list = []
+    for nf_layout in nf_values:
+        total_fingers = total_multiplier * nf_layout
+        for n_rows in range(1, total_fingers + 1):
+            if total_fingers % n_rows != 0:
+                continue
+            n_cols = total_fingers // n_rows
+            block_W, block_H = _finger_grid_bbox(tech_file, width, nf_layout, n_rows, n_cols, grid)
+            if block_W <= 0 or block_H <= 0:
+                continue
+            candidates.append({
+                "nf_layout": nf_layout, "rows": n_rows, "cols": n_cols,
+                "block_W": block_W, "block_H": block_H,
+                "ar":       block_W / block_H,
+                "ar_round": max(block_W, block_H) / min(block_W, block_H),
+            })
+    return candidates
+
+
+def wmi_search_transistor_shape(
+    tech_file: dict,
+    width: float, length: float,
+    multiplier: int,
+    ar_min: float, ar_max: float,
+    device_type: str,
+    num_pins: int,
+) -> dict:
+    """Free-num_fingers replacement for wmi_generate_transistor_block: search
+    layout finger counts and row/col foldings (instead of using the netlist's
+    num_fingers) for shapes with raw W/H inside [ar_min, ar_max], ranked by
+    closeness to square. variants[0] (is_used) is the closest-to-square
+    in-band shape; falls back to the closest-to-square shape overall if none
+    are in-band.
+
+    This is the shape used when a block is placed on its own (not folded into
+    a matching_engine composite array) — see wmi_search_unit_cell for the
+    separate, multiplier-independent search that feeds composited groups."""
+    grid   = tech_file["technology_info"]["manufacturing_grid"]
+    device = tech_file["device_constraints"][device_type]
+    assert device["L"]["min"] <= length <= device["L"]["max"], \
+        f"Length {length} outside [{device['L']['min']}, {device['L']['max']}]"
+    assert device["W"]["min"] <= width <= device["W"]["max"], \
+        f"Width {width} outside [{device['W']['min']}, {device['W']['max']}]"
+
+    candidates = _search_finger_grid_candidates(tech_file, width, multiplier, grid)
+    in_band    = [c for c in candidates if ar_min <= c["ar"] <= ar_max]
+    if in_band:
+        kept = _select_representative_shapes(
+            in_band, ar_min, ar_max, _MOSFET_SQUARE_VARIANT_COUNT, _MOSFET_AR_ROUNDNESS_DEDUP_EPS)
+    else:
+        # Nothing achievable inside the band at all (only possible for a
+        # device too small to fold further) — fall back to the single
+        # closest-to-square shape overall, same as before this interval
+        # anchoring existed.
+        kept = [min(candidates, key=lambda c: c["ar_round"])] if candidates else []
+
     variants: list = []
-
-    for n_rows in range(1, total_fingers + 1):
-        if total_fingers % n_rows != 0:
-            continue
-        n_cols = total_fingers // n_rows
-
-        block_W = snap_to_grid(n_cols * f_pitch - poly_spacing, grid)
-        block_H = snap_to_grid(n_rows * (w_finger + active_spacing) - active_spacing, grid)
-
-        if block_H == 0:
-            continue
-        ar = block_W / block_H
-        if not (min_aspect <= ar <= max_aspect):
-            continue
-
+    for i, c in enumerate(kept):
         variants.append({
-            "layout": {"rows": n_rows, "cols": n_cols, "aspect_ratio": round(ar, 3)},
-            "main_bbox": {"x_min": 0.0, "y_min": 0.0, "x_max": block_W, "y_max": block_H},
-            "pin_positions": center_pin_positions(num_pins, block_W, block_H, grid),
-            "is_used": False,
+            "layout": {"rows": c["rows"], "cols": c["cols"], "num_fingers": c["nf_layout"],
+                       "aspect_ratio": round(c["ar"], 3)},
+            "main_bbox": {"x_min": 0.0, "y_min": 0.0, "x_max": c["block_W"], "y_max": c["block_H"]},
+            "pin_positions": center_pin_positions(num_pins, c["block_W"], c["block_H"], grid),
+            "is_used": (i == 0),
             "rotation_deg": 0,
         })
 
+    chosen_nf = kept[0]["nf_layout"] if kept else 1
     return {
         "device_type": device_type,
-        "parameters": {
-            "width": width, "length": length,
-            "multiplier": multiplier, "num_fingers": num_fingers,
-            "total_fingers": total_fingers,
-        },
+        "parameters": {"width": width, "length": length, "multiplier": multiplier,
+                        "num_fingers": chosen_nf},
         "variants": variants,
     }
 
 
-def compute_unit_cell_bbox(
+def wmi_search_unit_cell(
     tech_file: dict,
-    width: float,
-    length: float,
-    num_fingers: int,
-) -> tuple[float, float]:
-    """
-    Return (width_µm, height_µm) for a single M=1 transistor with num_fingers in 1 row.
+    width: float, length: float,
+    ar_min: float, ar_max: float,
+    device_type: str,
+) -> tuple:
+    """Search for the best-shaped M=1 unit cell (num_fingers + row/col
+    folding, same formulas as wmi_search_transistor_shape but always
+    multiplier=1), for feeding matching_engine.compute_matching_variants().
 
-    Uses the same PDK formula as wmi_generate_transistor_block with n_rows=1 and
-    n_cols=num_fingers — no aspect ratio constraint.  unit_h includes one
-    active_spacing so matched-array rows stack flush when spacing_y=0.
-    """
-    rules          = tech_file["physical_design_rules"]
-    poly_width     = rules["poly"]["min_width"]
-    poly_spacing   = rules["poly"]["min_spacing"]
-    active_spacing = rules["active"]["min_spacing"]
-    contact_size   = rules["contact"]["size"]
-    contact_enc    = rules["contact"]["enclosure_by_active"]
-    grid           = tech_file["technology_info"]["manufacturing_grid"]
+    This is a PURE function of (device_type, width, length) — it does not
+    depend on this device's own multiplier or on which symmetry family it
+    belongs to. compute_matching_variants() takes one unit_cell_w/h for an
+    entire matched group and arrays it via its own (rows, cols)-of-total_M
+    search; feeding it a device-specific or family-specific unit cell isn't
+    needed — any two devices sharing (device_type, width, length) naturally
+    get an identical unit cell this way, matched or not, with no extra
+    coordination. Returns (unit_w, unit_h, chosen_num_fingers)."""
+    grid   = tech_file["technology_info"]["manufacturing_grid"]
+    device = tech_file["device_constraints"][device_type]
+    assert device["L"]["min"] <= length <= device["L"]["max"], \
+        f"Length {length} outside [{device['L']['min']}, {device['L']['max']}]"
+    assert device["W"]["min"] <= width <= device["W"]["max"], \
+        f"Width {width} outside [{device['W']['min']}, {device['W']['max']}]"
 
-    w_finger  = width / num_fingers
-    finger_wc = w_finger + 2.0 * (contact_enc + contact_size)
-    f_pitch   = finger_wc + poly_width + poly_spacing
-
-    unit_w = snap_to_grid(num_fingers * f_pitch - poly_spacing, grid)
-    unit_h = snap_to_grid(w_finger + active_spacing, grid)
-    if unit_h <= 0.0:
-        unit_h = snap_to_grid(w_finger, grid)
-    return unit_w, unit_h
+    candidates = _search_finger_grid_candidates(tech_file, width, 1, grid)
+    in_band    = [c for c in candidates if ar_min <= c["ar"] <= ar_max]
+    pool       = in_band if in_band else candidates
+    best       = min(pool, key=lambda c: c["ar_round"])
+    return best["block_W"], best["block_H"], best["nf_layout"]
 
 
 def _shift_power_pin(pins: dict, moved_key: str, W: float, H: float, grid: float) -> None:

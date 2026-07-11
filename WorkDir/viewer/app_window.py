@@ -51,8 +51,6 @@ def _swatch(color: QColor, size: int = 14) -> QIcon:
 
 _RUN_ID_OVERRIDES: dict[str, str] = {
     "BStarTopology+SimulatedAnnealingOptimizer": "B* SA",
-    "ILPTopology+PSOILPOptimizer":              "PSO+ILP",
-    "ILPTopology+BStarILPOptimizer":            "B*+ILP",
 }
 
 
@@ -75,6 +73,31 @@ def _abbrev_run_id(run_id: str) -> str:
         if not dedup or p != dedup[-1]:
             dedup.append(p)
     return "+".join(dedup)
+
+
+_WARMUP_STRATEGY_LABELS: dict[str, str] = {
+    "corp":    "CORP",
+    "spsa":    "SPSA",
+    "contour": "CONTOUR",
+    "spring":  "SPRING",
+    "pso":     "PSO",
+    "bstar":   "BTSA",
+}
+
+
+def _display_label(pr) -> str:
+    """
+    Tab/list label for one placement result.
+
+    Exhaustive-mode ILP runs are exploded into one entry per warmup strategy
+    (see 101_placementOptimizer.py::_build_warmup_run_entries) — label those
+    as e.g. 'BTSA+ILP' / 'SPSA+ILP' instead of the generic '_abbrev_run_id'
+    output, which would collapse every strategy to the same ambiguous 'ILP'.
+    """
+    if pr.warmup_strategy:
+        base = _WARMUP_STRATEGY_LABELS.get(pr.warmup_strategy, pr.warmup_strategy.upper())
+        return f"{base}+ILP"
+    return _abbrev_run_id(pr.run_id)
 
 
 def _get_block_symmetry_info(block_id: int, sc: dict) -> str:
@@ -2183,7 +2206,7 @@ class ExhaustiveComparePanel(QWidget):
         self._table.setRowCount(len(results))
         for row, pr in enumerate(results):
             vals = [
-                _abbrev_run_id(pr.run_id),
+                _display_label(pr),
                 f"{pr.renorm_cost:.4f}",
                 f"{pr.area_um2:.1f}",
                 f"{pr.hpwl_um:.1f}",
@@ -2525,7 +2548,7 @@ class MainWindow(QMainWindow):
                 self._exhaustive_scenes.append(ps)
                 self._exhaustive_views.append(pv)
                 self._exhaustive_data.append(run_data)
-                self._tabs.addTab(pv, _abbrev_run_id(pr.run_id))
+                self._tabs.addTab(pv, _display_label(pr))
             # First tab = lowest renorm_cost
             self._placement_scene = self._exhaustive_scenes[0]
             self._placement_view = self._exhaustive_views[0]

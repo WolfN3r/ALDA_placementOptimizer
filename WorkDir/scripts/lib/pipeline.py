@@ -71,8 +71,6 @@ class CompatibilityRegistry:
         from ilp_optimizer     import ILPOptimizer
         from pso_topology      import PSOTopology
         from pso_optimizer     import PSOOptimizer
-        from pso_ilp_optimizer   import PSOILPOptimizer
-        from bstar_ilp_optimizer import BStarILPOptimizer
         cls_map = {
             "BStarTopology":               BStarTopology,
             "SequencePairTopology":        SequencePairTopology,
@@ -81,8 +79,6 @@ class CompatibilityRegistry:
             "ILPOptimizer":                ILPOptimizer,
             "PSOTopology":                 PSOTopology,
             "PSOOptimizer":                PSOOptimizer,
-            "PSOILPOptimizer":             PSOILPOptimizer,
-            "BStarILPOptimizer":           BStarILPOptimizer,
         }
         pairs = []
         for (t_name, o_name), st in self._table.items():
@@ -99,16 +95,12 @@ def build_default_registry() -> CompatibilityRegistry:
     from ilp_optimizer     import ILPOptimizer
     from pso_topology      import PSOTopology
     from pso_optimizer     import PSOOptimizer
-    from pso_ilp_optimizer   import PSOILPOptimizer
-    from bstar_ilp_optimizer import BStarILPOptimizer
 
     reg = CompatibilityRegistry()
     reg.register(BStarTopology,          SimulatedAnnealingOptimizer, _SUPPORTED)
     reg.register(SequencePairTopology,   SimulatedAnnealingOptimizer, _SUPPORTED)
     reg.register(ILPTopology,            ILPOptimizer,                _SUPPORTED)
     reg.register(PSOTopology,            PSOOptimizer,                _SUPPORTED)
-    reg.register(ILPTopology,            PSOILPOptimizer,             _SUPPORTED)
-    reg.register(ILPTopology,            BStarILPOptimizer,           _SUPPORTED)
     # GeneticOptimizer not yet implemented — stubs only
     # reg.register(SequencePairTopology, GeneticOptimizer, _SUPPORTED)
     # reg.register(BStarTopology,        GeneticOptimizer, _EXPERIMENTAL)
@@ -267,7 +259,16 @@ class OptimizationPipeline:
             if warmup_cfg is not None:
                 from warmup_manager import WarmupManager
                 mgr = WarmupManager(warmup_cfg)
-                warmup_positions, warmup_results, warmup_variant_map = mgr.run(blocks, nets, init_area, init_wl)
+                if warmup_cfg.all_strategies:
+                    # RUN_MODE == "exhaustive": try every registered warmup
+                    # strategy once (median-selected internally per strategy)
+                    # and let the exhaustive-ILP loop below pick the best.
+                    warmup_results = mgr.run_all_strategies(blocks, nets, init_area, init_wl)
+                    best_wu = min(warmup_results, key=lambda r: r.cost)
+                    warmup_positions   = {bid: (v[0], v[1]) for bid, v in best_wu.positions.items()}
+                    warmup_variant_map = best_wu.variant_map
+                else:
+                    warmup_positions, warmup_results, warmup_variant_map = mgr.run(blocks, nets, init_area, init_wl)
                 if warmup_cfg.visualize:
                     warmup_runs_data = [
                         {
@@ -303,10 +304,12 @@ class OptimizationPipeline:
 
             if (
                 warmup_cfg is not None
-                and warmup_cfg.exhaustive_ilp
+                and (warmup_cfg.exhaustive_ilp or warmup_cfg.all_strategies)
                 and warmup_results
             ):
                 # --- Exhaustive-ILP: N serial ILP runs, one per warmup result ---
+                # (one per seed of one strategy for exhaustive_ilp; one per
+                # strategy, already median-selected, for all_strategies)
                 ilp_entries: list[dict] = []
                 best_ilp_positions    = None
                 best_ilp_opt_result   = None
@@ -329,7 +332,7 @@ class OptimizationPipeline:
                     vm_i    = topology.get_variant_map()
                     cost_i  = evaluator.evaluate(pos_i, vm_i)
 
-                    # Collect block dims for viewer (same format as warmup positions)
+                    # Collect block dims for the lightweight warmup-compare view
                     positions_with_dims = {
                         bid: [
                             round(pos_i[bid][0], 6), round(pos_i[bid][1], 6),
@@ -342,6 +345,13 @@ class OptimizationPipeline:
                         ]
                         for bid in pos_i
                     }
+                    pos_i_norm = _normalize_to_origin(pos_i)
+                    placed_i = _compute_placed_blocks(pos_i_norm, blocks, vm_i)
+                    try:
+                        from pin_optimizer import optimize_pin_positions
+                        placed_i = optimize_pin_positions(placed_i, nets, blocks)
+                    except Exception as _pin_exc:
+                        warnings.warn(f"pin_optimizer skipped for warmup entry: {_pin_exc}")
                     ilp_entries.append({
                         "run_index":    wu_r.run_index,
                         "strategy":     wu_r.strategy,
@@ -351,6 +361,11 @@ class OptimizationPipeline:
                         "is_selected":  False,
                         "t_optimize_ms": round(t_i_ms, 1),
                         "positions":    positions_with_dims,
+                        "area_um2":     _bbox_area(pos_i_norm, blocks, vm_i),
+                        "hpwl_um":      _hpwl(pos_i_norm, blocks, nets, use_power_rails=self._use_power_rails, variant_map=vm_i),
+                        "aspect_ratio": _aspect_ratio(pos_i_norm, blocks, vm_i),
+                        "placed_blocks": placed_i,
+                        "variant_map":   vm_i,
                     })
 
                     if cost_i < best_ilp_cost:
@@ -394,10 +409,11 @@ class OptimizationPipeline:
 
             final_positions = _normalize_to_origin(final_positions)
 
-            n_ilp_runs = len(warmup_runs_data) if (warmup_cfg and warmup_cfg.exhaustive_ilp) else 1
+            _multi_ilp = bool(warmup_cfg and (warmup_cfg.exhaustive_ilp or warmup_cfg.all_strategies))
+            n_ilp_runs = len(warmup_runs_data) if _multi_ilp else 1
             result.status        = "success"
             result.final_cost    = evaluator.evaluate(final_positions, variant_map) if final_positions else 0.0
-            if warmup_cfg and warmup_cfg.exhaustive_ilp:
+            if _multi_ilp:
                 result.n_iterations = n_ilp_runs
             else:
                 result.n_iterations = getattr(opt_result, "n_iterations", n_ilp_runs)

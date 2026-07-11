@@ -127,8 +127,6 @@ def test_known_mismatches_from_original_bug_report_are_resolved():
         "BStarTopology+SimulatedAnnealingOptimizer":   946.404,
         "SequencePairTopology+SimulatedAnnealingOptimizer": 946.404,
         "ILPTopology+ILPOptimizer":                    457.0128,
-        "ILPTopology+PSOILPOptimizer":                 457.0128,
-        "ILPTopology+BStarILPOptimizer":               457.0128,
         "PSOTopology+PSOOptimizer":                    580.19464676,
     }
     for run in raw["placement"]["runs"]:

@@ -11,6 +11,10 @@
     [
       "ILPTopology",
       "ILPOptimizer"
+    ],
+    [
+      "PSOTopology",
+      "PSOOptimizer"
     ]
   ]
 }

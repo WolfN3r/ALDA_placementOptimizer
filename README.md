@@ -48,7 +48,7 @@ python main.py --no-routing
 | `--netlist PATH` | — | Path to a SPICE `.sp` netlist; activates netlist-driven block generation (stage 011) instead of random generation (stage 001) |
 | `--run-mode` | `exhaustive` | `random` — one random combo; `exhaustive` — all combos ranked; `user` — specify topology + optimizer explicitly |
 | `--topology CLASS` | — | Required when `--run-mode user`. Available: `BStarTopology`, `SequencePairTopology`, `ILPTopology`, `PSOTopology` |
-| `--optimizer CLASS` | — | Required when `--run-mode user`. Available: `SimulatedAnnealingOptimizer`, `ILPOptimizer`, `PSOOptimizer`, `BStarILPOptimizer`, `PSOILPOptimizer` |
+| `--optimizer CLASS` | — | Required when `--run-mode user`. Available: `SimulatedAnnealingOptimizer`, `ILPOptimizer`, `PSOOptimizer` |
 | `--version TAG` | `v01` | Version suffix appended to all output JSON filenames |
 | `--no-routing` | false | Skip stage 201 (Anaroute) even when `RUN_ROUTING = True` in the config block |
 

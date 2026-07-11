@@ -77,6 +77,7 @@ class PlacementResult:
     t_optimize_ms: float = 0.0
     chip_power_rails: list[dict] = field(default_factory=list)  # VDD/VSS M1 chip rails
     warmup_runs: list[dict] = field(default_factory=list)       # warmup multi-start results
+    warmup_strategy: str = ""   # set when this run is one exploded ILP-warmup-strategy candidate
 
 
 @dataclass
@@ -281,8 +282,10 @@ def load(path: str | Path) -> PlacementData:
                     renorm_cost=float(run_raw.get("renorm_cost", 0.0)),
                     t_optimize_ms=float(run_raw.get("t_optimize_ms", 0.0)),
                     chip_power_rails=_extract_chip_rails(_pb_raw),
+                    warmup_strategy=str(run_raw.get("warmup_strategy", "")),
                 ))
-            parsed_runs.sort(key=lambda r: r.renorm_cost)
+            # Ties (e.g. ILP warmup variants converging to the same cost) break on speed.
+            parsed_runs.sort(key=lambda r: (r.renorm_cost, r.t_total_ms))
             all_placement_results = parsed_runs
             best_id = raw_placement.get("best_run_id", "")
             placement_result = next((r for r in parsed_runs if r.run_id == best_id), None)

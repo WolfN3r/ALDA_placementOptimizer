@@ -14,7 +14,6 @@ Output file: s{seed}_n{N}_py011_v01.json  (written by main.py)
 # =============================================================================
 # 1. IMPORTS
 # =============================================================================
-import copy
 import importlib.util
 import json
 import random
@@ -90,8 +89,9 @@ _SPICE_SUFFIXES: dict = {
 }
 
 # --- MOSFET generation ----------------------------------------------------
-_REAL_MOSFET_ASPECT_MIN = 0.2   # dedicated constant, not reused from generation_config.json
-_REAL_MOSFET_ASPECT_MAX = 2.0
+# mosfet_variant_aspect_ratio.min/max (WorkDir/myPDK/generation_config.json)
+# is the single source of truth for both real- and random-sizes paths — read
+# at the top of wmi_generate_netlist_blocks(), not hardcoded here.
 
 # --- Resistor serpentine cutter --------------------------------------------
 _RESISTOR_SPLIT_TARGET_N_COUNT = 4    # distinct N values per resistor (x2 for the 0/90 twin
@@ -663,6 +663,49 @@ def _pin_assignment_for(dev: dict) -> dict:
     return pa
 
 
+# --- 4l2. MOSFET shape search --------------------------------------------------
+#
+# Two independent searches per MOSFET block:
+#   - variants (this device's own full, multiplier-scaled shape) — used when
+#     the block is placed on its own.
+#   - unit_cell_w/h (the M=1 basis) — used by hierarchy_builder.build_groups()
+#     / matching_engine.compute_matching_variants() when this block ends up
+#     composited into a matched array with others. wmi_search_unit_cell() is a
+#     pure function of (device_type, width, length), so any two devices that
+#     share those (matched or not) get an identical unit cell "for free",
+#     with no need to track which symmetry family a device belongs to.
+
+def _generate_mosfet_shapes(
+    dev_by_id: dict,
+    mosfet_ids: set,
+    wlm_of:    dict,
+    tech_file: dict,
+    ar_min:    float,
+    ar_max:    float,
+) -> dict:
+    g01 = _get_gen001()
+    results: dict = {}
+    unit_cell_cache: dict = {}
+
+    for bid in mosfet_ids:
+        dev      = dev_by_id[bid]
+        pdk_type = dev["pdk_type"]
+        W, L, M  = wlm_of[bid]
+        try:
+            res = g01.wmi_search_transistor_shape(tech_file, W, L, M, ar_min, ar_max, pdk_type, 4)
+            cache_key = (pdk_type, round(W, 6), round(L, 6))
+            if cache_key not in unit_cell_cache:
+                unit_cell_cache[cache_key] = g01.wmi_search_unit_cell(
+                    tech_file, W, L, ar_min, ar_max, pdk_type)
+            uw, uh, _ = unit_cell_cache[cache_key]
+            res["unit_cell_w"], res["unit_cell_h"] = uw, uh
+            results[bid] = res
+        except Exception as exc:
+            results[bid] = {"error": str(exc)}
+
+    return results
+
+
 # --- 4m. Main block generator ------------------------------------------------
 
 def _generate_blocks_random_sizes(
@@ -673,11 +716,12 @@ def _generate_blocks_random_sizes(
     hierarchy_map: dict,
     inst_to_mult: dict,
 ) -> list:
-    """Legacy path: random W/L/M/Nf per device, seeded via the caller's
-    random.seed(), with pair_b2a forced-copy for detected symmetric pairs.
-    This is wmi_generate_netlist_blocks()'s original device loop, restored
-    verbatim (opt-in via --random-sizes) once real netlist sizing became
-    the default."""
+    """Legacy path: random W/L/M per device (num_fingers is a searched layout
+    choice, see _generate_mosfet_shapes), seeded via the caller's
+    random.seed(). Symmetric pairs share one random (W, L, M) draw — reusing
+    the partner's draw rather than the block-generation result itself, since
+    wmi_search_transistor_shape is a pure function of its inputs, identical
+    inputs already guarantee identical shapes without any explicit copy."""
     g01 = _get_gen001()
 
     grid    = tech_file["technology_info"]["manufacturing_grid"]
@@ -686,9 +730,7 @@ def _generate_blocks_random_sizes(
     W_step  = gen_p["width_range"]["step"]
     M_min   = gen_p["multiplier_range"]["min"]
     M_max   = gen_p["multiplier_range"]["max"]
-    NF_min  = gen_p["num_fingers_range"]["min"]
-    NF_max  = gen_p["num_fingers_range"]["max"]
-    ar_cfg  = gen_p["aspect_ratio"]
+    ar_cfg  = gen_p["mosfet_variant_aspect_ratio"]
     dc      = config["design_constraints"]
     max_att = config["validation"]["max_generation_attempts"]
     rot_cfg = config.get("rotation_variants")
@@ -701,8 +743,25 @@ def _generate_blocks_random_sizes(
 
     res_L_min = tech_file["device_constraints"].get("res_poly", {}).get("L", {}).get("min", 1.0)
 
-    blocks: list    = []
-    gen_cache: dict = {}
+    dev_by_id  = {d["block_id"]: d for d in collapsed}
+    mosfet_ids = {d["block_id"] for d in collapsed if d["device_group"] != "passive"}
+
+    wlm_of: dict = {}
+    for bid in sorted(mosfet_ids):
+        if bid in pair_b2a and pair_b2a[bid] in wlm_of:
+            wlm_of[bid] = wlm_of[pair_b2a[bid]]
+            continue
+        pdk_type    = dev_by_id[bid]["pdk_type"]
+        constraints = dc.get(pdk_type, dc.get("nmos_rvt"))
+        L = g01.snap_to_step(random.uniform(constraints["L"]["min"], constraints["L"]["max"]), L_step)
+        W = g01.snap_to_step(random.uniform(constraints["W"]["min"], constraints["W"]["max"]), W_step)
+        M = random.randrange(M_min, M_max + 1, 2)
+        wlm_of[bid] = (W, L, M)
+
+    mosfet_results = _generate_mosfet_shapes(
+        dev_by_id, mosfet_ids, wlm_of, tech_file, ar_cfg["min"], ar_cfg["max"])
+
+    blocks: list = []
 
     for dev in collapsed:
         bid      = dev["block_id"]
@@ -711,29 +770,7 @@ def _generate_blocks_random_sizes(
         num_pins = len(dev["terminals"]) if is_pass else 4
         m_mult   = inst_to_mult.get(dev["inst"], 1)
 
-        if bid in pair_b2a:
-            ab = gen_cache.get(pair_b2a[bid])
-            if ab and "error" not in ab:
-                block = {
-                    "device_type":         ab["device_type"],
-                    "block_id":            bid,
-                    "inst":                dev["inst"],
-                    "hierarchy_path":      hierarchy_map.get(dev["inst"], ""),
-                    "parameters":          copy.deepcopy(ab["parameters"]),
-                    "variants":            copy.deepcopy(ab["variants"]),
-                    "num_pins":            ab["num_pins"],
-                    "generation_attempts": 1,
-                    "unit_cell_w":         ab.get("unit_cell_w", 0.0),
-                    "unit_cell_h":         ab.get("unit_cell_h", 0.0),
-                }
-            else:
-                block = {
-                    "block_id": bid, "inst": dev["inst"],
-                    "error": f"Pair partner {pair_b2a[bid]} failed",
-                    "generation_attempts": 0,
-                }
-
-        elif is_pass:
+        if is_pass:
             constraints = dc.get(pdk_type, {"W": {"min": 0.5, "max": 10.0},
                                              "L": {"min": 1.0, "max": 50.0}})
             block = None
@@ -766,48 +803,27 @@ def _generate_blocks_random_sizes(
                          "error": "No variants", "generation_attempts": max_att}
 
         else:  # MOSFET
-            constraints = dc.get(pdk_type, dc.get("nmos_rvt"))
-            block = None
-            for attempt in range(max_att):
-                try:
-                    L  = g01.snap_to_step(
-                        random.uniform(constraints["L"]["min"], constraints["L"]["max"]), L_step)
-                    W  = g01.snap_to_step(
-                        random.uniform(constraints["W"]["min"], constraints["W"]["max"]), W_step)
-                    M  = random.randrange(M_min, M_max + 1, 2)
-                    NF = random.randint(NF_min, NF_max)
-                    min_ar = round(random.uniform(ar_cfg["min_aspect_min"],
-                                                  ar_cfg["min_aspect_max"]), 2)
-                    max_ar = round(random.uniform(ar_cfg["max_aspect_min"],
-                                                  ar_cfg["max_aspect_max"]), 2)
-                    tb = g01.wmi_generate_transistor_block(
-                        tech_file, W, L, M, NF, min_ar, max_ar, pdk_type, num_pins
-                    )
-                    if tb["variants"]:
-                        g01.append_rotation_90(tb["variants"], rot_cfg, grid)
-                        uw, uh = g01.compute_unit_cell_bbox(tech_file, W, L, NF)
-                        block = {
-                            "device_type":         tb["device_type"],
-                            "block_id":            bid,
-                            "inst":                dev["inst"],
-                            "hierarchy_path":      hierarchy_map.get(dev["inst"], ""),
-                            "parameters":          tb["parameters"],
-                            "variants":            tb["variants"],
-                            "num_pins":            num_pins,
-                            "generation_attempts": attempt + 1,
-                            "unit_cell_w":         uw,
-                            "unit_cell_h":         uh,
-                        }
-                        logger.debug("Block %d (%s): %d variant(s)  unit_cell=%.3f×%.3f",
-                                     bid, pdk_type, len(block["variants"]), uw, uh)
-                        break
-                except Exception as exc:
-                    logger.debug("Block %d attempt %d: %s", bid, attempt, exc)
-
-            if block is None:
+            res = mosfet_results[bid]
+            if "error" in res:
                 block = {"block_id": bid, "inst": dev["inst"],
-                         "error": "No valid variants", "generation_attempts": max_att}
-                logger.warning("Block %d (%s): failed after %d attempts", bid, pdk_type, max_att)
+                          "error": res["error"], "generation_attempts": 1}
+                logger.warning("Block %d (%s): generation failed: %s", bid, pdk_type, res["error"])
+            else:
+                g01.append_rotation_90(res["variants"], rot_cfg, grid)
+                block = {
+                    "device_type":         res["device_type"],
+                    "block_id":            bid,
+                    "inst":                dev["inst"],
+                    "hierarchy_path":      hierarchy_map.get(dev["inst"], ""),
+                    "parameters":          res["parameters"],
+                    "variants":            res["variants"],
+                    "num_pins":            num_pins,
+                    "generation_attempts": 1,
+                    "unit_cell_w":         res["unit_cell_w"],
+                    "unit_cell_h":         res["unit_cell_h"],
+                }
+                logger.debug("Block %d (%s): %d variant(s)  unit_cell=%.3f×%.3f",
+                             bid, pdk_type, len(block["variants"]), res["unit_cell_w"], res["unit_cell_h"])
 
         if bid in self_sym_set and "error" not in block:
             block["variants"] = [v for v in block["variants"] if v.get("rotation_deg", 0) == 0]
@@ -827,7 +843,6 @@ def _generate_blocks_random_sizes(
                 block["power_rail"] = "VDD" if "vdd" in bulk_net.lower() else "VSS"
 
         blocks.append(block)
-        gen_cache[bid] = block
 
     return blocks
 
@@ -840,17 +855,38 @@ def _generate_blocks_real_sizes(
     hierarchy_map: dict,
     inst_to_mult: dict,
 ) -> list:
-    """Real-sizing path: parsed W/L/M/Nf from the netlist's own .param
-    cascade, resistor serpentine splitter, no pair_b2a forced-copy (real
-    sizes make detected symmetric pairs match without it)."""
+    """Real-sizing path: parsed W/L/M from the netlist's own .param cascade
+    (num_fingers is a searched layout choice, not read from the netlist),
+    resistor serpentine splitter, no pair_b2a forced-copy (real W/L already
+    make detected symmetric pairs match without it)."""
     g01 = _get_gen001()
 
     grid               = tech_file["technology_info"]["manufacturing_grid"]
     rot_cfg            = config.get("rotation_variants")
     device_constraints = tech_file["device_constraints"]
     res_L_min          = device_constraints.get("res_poly", {}).get("L", {}).get("min", 1.0)
+    ar_cfg             = config["generation_params"]["mosfet_variant_aspect_ratio"]
 
     self_sym_set = {bid for g in sym_result["groups"] for bid in g["self_symmetric"]}
+
+    dev_by_id  = {d["block_id"]: d for d in collapsed}
+    mosfet_ids = {d["block_id"] for d in collapsed if d["device_group"] != "passive"}
+
+    def _resolve_real_wlm(dev: dict) -> tuple:
+        pdk_type = dev["pdk_type"]
+        pp       = dev["parsed_params"]
+        pdk_dc   = device_constraints.get(pdk_type, device_constraints.get("nmos_rvt"))
+        W = pp["width"]  if pp["width"]  is not None else pdk_dc["W"]["default"]
+        L = pp["length"] if pp["length"] is not None else pdk_dc["L"]["default"]
+        if pp["width"] is None or pp["length"] is None:
+            logger.warning("Block %d (%s): missing W or L on device line, using PDK default (%s/%s)",
+                            dev["block_id"], pdk_type, W, L)
+        M = int(round(pp["multiplier"]))
+        return W, L, M
+
+    wlm_of         = {bid: _resolve_real_wlm(dev_by_id[bid]) for bid in mosfet_ids}
+    mosfet_results = _generate_mosfet_shapes(
+        dev_by_id, mosfet_ids, wlm_of, tech_file, ar_cfg["min"], ar_cfg["max"])
 
     blocks: list = []
 
@@ -904,52 +940,27 @@ def _generate_blocks_real_sizes(
                              "error": "no variants", "generation_attempts": 1}
 
         else:  # MOSFET
-            pdk_dc = device_constraints.get(pdk_type, device_constraints.get("nmos_rvt"))
-            W = pp["width"]  if pp["width"]  is not None else pdk_dc["W"]["default"]
-            L = pp["length"] if pp["length"] is not None else pdk_dc["L"]["default"]
-            if pp["width"] is None or pp["length"] is None:
-                logger.warning("Block %d (%s): missing W or L on device line, using PDK default (%s/%s)",
-                                bid, pdk_type, W, L)
-            # multiplier/num_fingers already include any cumulative_m from subckt
-            # replication; cast to int — wmi_generate_transistor_block enumerates
-            # divisor pairs of total_fingers via range(), which requires an int.
-            M  = int(round(pp["multiplier"]))
-            Nf = int(round(pp["num_fingers"]))
-
-            try:
-                tb = g01.wmi_generate_transistor_block(
-                    tech_file, W, L, M, Nf, _REAL_MOSFET_ASPECT_MIN, _REAL_MOSFET_ASPECT_MAX,
-                    pdk_type, num_pins)
-                if not tb["variants"]:
-                    logger.warning(
-                        "Block %d (%s): no variant within aspect [%.1f,%.1f], retrying unrestricted",
-                        bid, pdk_type, _REAL_MOSFET_ASPECT_MIN, _REAL_MOSFET_ASPECT_MAX)
-                    tb = g01.wmi_generate_transistor_block(
-                        tech_file, W, L, M, Nf, 0.0, float("inf"), pdk_type, num_pins)
-                if tb["variants"]:
-                    g01.append_rotation_90(tb["variants"], rot_cfg, grid)
-                    uw, uh = g01.compute_unit_cell_bbox(tech_file, W, L, Nf)
-                    block = {
-                        "device_type":         tb["device_type"],
-                        "block_id":            bid,
-                        "inst":                dev["inst"],
-                        "hierarchy_path":      hierarchy_map.get(dev["inst"], ""),
-                        "parameters":          tb["parameters"],
-                        "variants":            tb["variants"],
-                        "num_pins":            num_pins,
-                        "generation_attempts": 1,
-                        "unit_cell_w":         uw,
-                        "unit_cell_h":         uh,
-                    }
-                    logger.debug("Block %d (%s): %d variant(s)  unit_cell=%.3f×%.3f",
-                                 bid, pdk_type, len(block["variants"]), uw, uh)
-                else:
-                    block = {"block_id": bid, "inst": dev["inst"],
-                             "error": "no variants even with unrestricted aspect bounds",
-                             "generation_attempts": 1}
-            except Exception as exc:
-                block = {"block_id": bid, "inst": dev["inst"], "error": str(exc), "generation_attempts": 1}
-                logger.warning("Block %d (%s): generation failed: %s", bid, pdk_type, exc)
+            res = mosfet_results[bid]
+            if "error" in res:
+                block = {"block_id": bid, "inst": dev["inst"],
+                          "error": res["error"], "generation_attempts": 1}
+                logger.warning("Block %d (%s): generation failed: %s", bid, pdk_type, res["error"])
+            else:
+                g01.append_rotation_90(res["variants"], rot_cfg, grid)
+                block = {
+                    "device_type":         res["device_type"],
+                    "block_id":            bid,
+                    "inst":                dev["inst"],
+                    "hierarchy_path":      hierarchy_map.get(dev["inst"], ""),
+                    "parameters":          res["parameters"],
+                    "variants":            res["variants"],
+                    "num_pins":            num_pins,
+                    "generation_attempts": 1,
+                    "unit_cell_w":         res["unit_cell_w"],
+                    "unit_cell_h":         res["unit_cell_h"],
+                }
+                logger.debug("Block %d (%s): %d variant(s)  unit_cell=%.3f×%.3f",
+                             bid, pdk_type, len(block["variants"]), res["unit_cell_w"], res["unit_cell_h"])
 
         if bid in self_sym_set and "error" not in block:
             block["variants"] = [v for v in block["variants"] if v.get("rotation_deg", 0) == 0]
