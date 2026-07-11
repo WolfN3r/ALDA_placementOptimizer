@@ -117,10 +117,10 @@
     "between_topologies": {
         "_comment": "Rules for pairs of devices with DIFFERENT cell types. Categories follow the advisor's tree: same_cellNames (same cell, no sharing), same_deviceGroups (same voltage class, no sharing), different_cellNames (different cells, no sharing), different_bulks (different wells, WPE-based), different_deviceGroups (different voltage classes, WPE-based).",
 
-        "same_cellNames":         {"active": 2, "poly": 3},
-        "same_deviceGroups":      {"active": 4, "poly": 5},
-        "different_cellNames":    {"active": 6, "poly": 7},
+        "same_cellNames":         {"active": 0.2, "poly": 0.3},
+        "same_deviceGroups":      {"active": 0.2, "poly": 0.3},
+        "different_cellNames":    {"active": 2.0, "poly": 2.0},
         "different_bulks":        {"WPE_active": 2, "WPE_poly": 3},
-        "different_deviceGroups": {"WPE_active": 5, "WPE_poly": 6}
+        "different_deviceGroups": {"WPE_active": 2, "WPE_poly": 2}
     }
 }

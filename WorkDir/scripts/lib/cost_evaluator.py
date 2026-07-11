@@ -6,17 +6,16 @@ Works on any {block_id: (x, y)} dict produced by any topology.
 """
 from __future__ import annotations
 
-from collections import defaultdict
 from dataclasses import dataclass
 
 
 # =============================================================================
 # CONSTANTS
 # =============================================================================
-_DEFAULT_AREA_WEIGHT   = 0.6
-_DEFAULT_WL_WEIGHT     = 0.4
-_DEFAULT_AR_WEIGHT     = 0.0
-_DEFAULT_TARGET_AR     = 2.0
+_DEFAULT_AREA_WEIGHT   = 0.1
+_DEFAULT_WL_WEIGHT     = 0.0
+_DEFAULT_AR_WEIGHT     = 0.9
+_DEFAULT_TARGET_AR     = 5.0
 
 _VDD_NET_IDS: frozenset[str] = frozenset({"VDD", "AVDD", "VCC", "VDDA"})
 _VSS_NET_IDS: frozenset[str] = frozenset({"VSS", "GND", "AGND", "VSSA"})
@@ -56,7 +55,6 @@ class CostWeights:
     wirelength_weight:         float = _DEFAULT_WL_WEIGHT
     aspect_ratio_weight:       float = _DEFAULT_AR_WEIGHT
     target_aspect_ratio:       float = _DEFAULT_TARGET_AR
-    device_clustering_weight:  float = 0.0
 
 
 # =============================================================================
@@ -114,8 +112,6 @@ class CostEvaluator:
             cost += self._w.wirelength_weight * (wl / self._init_wl)
         if self._w.aspect_ratio_weight > 0.0:
             cost += self._w.aspect_ratio_weight * (ar - self._w.target_aspect_ratio) ** 2
-        if self._w.device_clustering_weight > 0.0:
-            cost += self._w.device_clustering_weight * self._clustering_penalty(positions, vm)
         return cost
 
     # ------------------------------------------------------------------
@@ -210,35 +206,6 @@ class CostEvaluator:
     @staticmethod
     def _active_variant(block: dict, bid: str, variant_map: dict[str, int]) -> dict:
         return resolve_variant(block, bid, variant_map)
-
-    def _clustering_penalty(
-        self, positions: dict[str, tuple[float, float]], variant_map: dict[str, int]
-    ) -> float:
-        """HPWL of each device-type group's bounding box, summed and normalised by init_wl.
-
-        Penalises layouts where blocks of the same type (e.g. nmos_lvt, pmos_rvt)
-        are spread far apart, driving the optimiser to cluster them spatially.
-        Single-instance types are skipped (bounding box is always zero).
-        """
-        type_xs: dict[str, list[float]] = defaultdict(list)
-        type_ys: dict[str, list[float]] = defaultdict(list)
-        for bid, (bx, by) in positions.items():
-            block = self._blocks.get(bid, {})
-            dt = block.get("device_type", "")
-            if not dt:
-                continue
-            variant = self._active_variant(block, bid, variant_map)
-            bw = variant.get("main_bbox", {}).get("x_max", 0.0)
-            bh = variant.get("main_bbox", {}).get("y_max", 0.0)
-            type_xs[dt].append(bx + bw / 2.0)
-            type_ys[dt].append(by + bh / 2.0)
-        total = 0.0
-        for dt in type_xs:
-            xs, ys = type_xs[dt], type_ys[dt]
-            if len(xs) < 2:
-                continue
-            total += (max(xs) - min(xs)) + (max(ys) - min(ys))
-        return total / self._init_wl if self._init_wl > 0.0 else 0.0
 
     def _build_pin_positions(
         self,
