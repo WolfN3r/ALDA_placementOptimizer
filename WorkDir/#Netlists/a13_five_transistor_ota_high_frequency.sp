@@ -9,16 +9,18 @@
 *   Device types : nmos_rvt pmos_rvt
 *   Passives     : 0 resistors, 0 capacitors
 * Note: Converted from FinFET-style to CMOS-style netlist.
-*       Device sizes are placeholders — optimizer generates new sizes.
+* SIZES CONVERTED 2026-07-10 scale=7.14286 source_L_ref=0.014um
+*       Device/passive sizes are scaled from the real source-netlist values
+*       (see marker above) -- not random placeholders.
 * ============================================================
 
 * --- DEVICE PARAMETERS ---
-.param m5_M=1 m5_L=14e-9 m5_W=12 m5_Nf=2
-.param m4_L=14e-9 m4_W=12 m4_Nf=2
-.param m3_M=1 m3_L=14e-9 m3_W=12 m3_Nf=2
-.param m2_M=1 m2_L=14e-9 m2_W=12 m2_Nf=16
-.param m1_M=1 m1_L=14e-9 m1_W=12 m1_Nf=40
-.param m0_M=1 m0_L=14e-9 m0_W=12 m0_Nf=40
+.param m5_M=1 m5_L=0.1 m5_W=85.7 m5_Nf=2
+.param m4_L=0.1 m4_W=85.7 m4_Nf=2
+.param m3_M=1 m3_L=0.1 m3_W=85.7 m3_Nf=2
+.param m2_M=1 m2_L=0.1 m2_W=85.7 m2_Nf=16
+.param m1_M=1 m1_L=0.1 m1_W=85.7 m1_Nf=40
+.param m0_M=1 m0_L=0.1 m0_W=85.7 m0_Nf=40
 
 
 * --- CIRCUIT DEFINITION ---

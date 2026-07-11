@@ -9,46 +9,48 @@
 *   Device types : nmos_lvt pmos_lvt
 *   Passives     : 0 resistors, 0 capacitors
 * Note: Converted from FinFET-style to CMOS-style netlist.
-*       Device sizes are placeholders — optimizer generates new sizes.
+* SIZES CONVERTED 2026-07-10 scale=7.14286 source_L_ref=0.014um
+*       Device/passive sizes are scaled from the real source-netlist values
+*       (see marker above) -- not random placeholders.
 * ============================================================
 
 * --- DEVICE PARAMETERS ---
-.param nlvt_s_pcell_0_mi1_W=180e-9 nlvt_s_pcell_0_mi1_L=40e-9 nlvt_s_pcell_0_mi1_M=1 nlvt_s_pcell_0_mi1_Nf=2
-.param nlvt_s_pcell_0_mi2_W=180e-9 nlvt_s_pcell_0_mi2_L=40e-9 nlvt_s_pcell_0_mi2_M=1 nlvt_s_pcell_0_mi2_Nf=2
-.param nlvt_s_pcell_0_mi3_W=180e-9 nlvt_s_pcell_0_mi3_L=40e-9 nlvt_s_pcell_0_mi3_M=1 nlvt_s_pcell_0_mi3_Nf=2
-.param nlvt_s_pcell_0_mi4_W=180e-9 nlvt_s_pcell_0_mi4_L=40e-9 nlvt_s_pcell_0_mi4_M=1 nlvt_s_pcell_0_mi4_Nf=2
-.param nlvt_s_pcell_0_mi5_W=180e-9 nlvt_s_pcell_0_mi5_L=40e-9 nlvt_s_pcell_0_mi5_M=1 nlvt_s_pcell_0_mi5_Nf=2
-.param nlvt_s_pcell_0_mi6_W=180e-9 nlvt_s_pcell_0_mi6_L=40e-9 nlvt_s_pcell_0_mi6_M=1 nlvt_s_pcell_0_mi6_Nf=2
-.param plvt_s_pcell_1_mi8_W=360e-9 plvt_s_pcell_1_mi8_L=40e-9 plvt_s_pcell_1_mi8_M=1 plvt_s_pcell_1_mi8_Nf=2
-.param plvt_s_pcell_1_mi7_W=360e-9 plvt_s_pcell_1_mi7_L=40e-9 plvt_s_pcell_1_mi7_M=1 plvt_s_pcell_1_mi7_Nf=2
-.param plvt_s_pcell_1_mi6_W=360e-9 plvt_s_pcell_1_mi6_L=40e-9 plvt_s_pcell_1_mi6_M=1 plvt_s_pcell_1_mi6_Nf=2
-.param plvt_s_pcell_1_mi5_W=360e-9 plvt_s_pcell_1_mi5_L=40e-9 plvt_s_pcell_1_mi5_M=1 plvt_s_pcell_1_mi5_Nf=2
-.param plvt_s_pcell_1_mi4_W=360e-9 plvt_s_pcell_1_mi4_L=40e-9 plvt_s_pcell_1_mi4_M=1 plvt_s_pcell_1_mi4_Nf=2
-.param plvt_s_pcell_1_mi3_W=360e-9 plvt_s_pcell_1_mi3_L=40e-9 plvt_s_pcell_1_mi3_M=1 plvt_s_pcell_1_mi3_Nf=2
-.param plvt_s_pcell_1_mi2_W=360e-9 plvt_s_pcell_1_mi2_L=40e-9 plvt_s_pcell_1_mi2_M=1 plvt_s_pcell_1_mi2_Nf=2
-.param plvt_s_pcell_1_mi1_W=360e-9 plvt_s_pcell_1_mi1_L=40e-9 plvt_s_pcell_1_mi1_M=1 plvt_s_pcell_1_mi1_Nf=2
-.param plvt_s_pcell_2_mi4_W=360e-9 plvt_s_pcell_2_mi4_L=40e-9 plvt_s_pcell_2_mi4_M=1 plvt_s_pcell_2_mi4_Nf=2
-.param plvt_s_pcell_2_mi3_W=360e-9 plvt_s_pcell_2_mi3_L=40e-9 plvt_s_pcell_2_mi3_M=1 plvt_s_pcell_2_mi3_Nf=2
-.param plvt_s_pcell_2_mi2_W=360e-9 plvt_s_pcell_2_mi2_L=40e-9 plvt_s_pcell_2_mi2_M=1 plvt_s_pcell_2_mi2_Nf=2
-.param plvt_s_pcell_2_mi1_W=360e-9 plvt_s_pcell_2_mi1_L=40e-9 plvt_s_pcell_2_mi1_M=1 plvt_s_pcell_2_mi1_Nf=2
-.param plvt_s_pcell_3_mi4_W=360e-9 plvt_s_pcell_3_mi4_L=40e-9 plvt_s_pcell_3_mi4_M=1 plvt_s_pcell_3_mi4_Nf=2
-.param plvt_s_pcell_3_mi3_W=360e-9 plvt_s_pcell_3_mi3_L=40e-9 plvt_s_pcell_3_mi3_M=1 plvt_s_pcell_3_mi3_Nf=2
-.param plvt_s_pcell_3_mi2_W=360e-9 plvt_s_pcell_3_mi2_L=40e-9 plvt_s_pcell_3_mi2_M=1 plvt_s_pcell_3_mi2_Nf=2
-.param plvt_s_pcell_3_mi1_W=360e-9 plvt_s_pcell_3_mi1_L=40e-9 plvt_s_pcell_3_mi1_M=1 plvt_s_pcell_3_mi1_Nf=2
-.param test_vga_inv_als_mqn1_W=180e-9 test_vga_inv_als_mqn1_L=40e-9 test_vga_inv_als_mqn1_M=1 test_vga_inv_als_mqn1_Nf=2
-.param test_vga_inv_als_mqp1_W=180e-9 test_vga_inv_als_mqp1_L=40e-9 test_vga_inv_als_mqp1_M=1 test_vga_inv_als_mqp1_Nf=2
-.param test_vga_mmn16_W=1.62e-6 test_vga_mmn16_L=40e-9 test_vga_mmn16_M=1 test_vga_mmn16_Nf=6
-.param test_vga_mmn211_W=1.62e-6 test_vga_mmn211_L=40e-9 test_vga_mmn211_M=1 test_vga_mmn211_Nf=6
-.param test_vga_mmn221_W=1.62e-6 test_vga_mmn221_L=40e-9 test_vga_mmn221_M=1 test_vga_mmn221_Nf=6
-.param test_vga_mmn23_W=1.62e-6 test_vga_mmn23_L=40e-9 test_vga_mmn23_M=1 test_vga_mmn23_Nf=6
-.param test_vga_mmn14_W=1.62e-6 test_vga_mmn14_L=40e-9 test_vga_mmn14_M=1 test_vga_mmn14_Nf=6
-.param test_vga_mmn19_W=1.62e-6 test_vga_mmn19_L=40e-9 test_vga_mmn19_M=1 test_vga_mmn19_Nf=6
-.param test_vga_mmn20_W=1.62e-6 test_vga_mmn20_L=40e-9 test_vga_mmn20_M=1 test_vga_mmn20_Nf=6
-.param test_vga_mmn24_W=1.62e-6 test_vga_mmn24_L=40e-9 test_vga_mmn24_M=1 test_vga_mmn24_Nf=6
-.param test_vga_mmp10_W=1.44e-6 test_vga_mmp10_L=40e-9 test_vga_mmp10_M=1 test_vga_mmp10_Nf=4
-.param test_vga_mmp91_W=1.44e-6 test_vga_mmp91_L=40e-9 test_vga_mmp91_M=1 test_vga_mmp91_Nf=4
-.param test_vga_mmp6_W=1.44e-6 test_vga_mmp6_L=40e-9 test_vga_mmp6_M=1 test_vga_mmp6_Nf=4
-.param test_vga_mmp2_W=1.44e-6 test_vga_mmp2_L=40e-9 test_vga_mmp2_M=1 test_vga_mmp2_Nf=4
+.param nlvt_s_pcell_0_mi1_W=1.3 nlvt_s_pcell_0_mi1_L=0.3 nlvt_s_pcell_0_mi1_M=1 nlvt_s_pcell_0_mi1_Nf=2
+.param nlvt_s_pcell_0_mi2_W=1.3 nlvt_s_pcell_0_mi2_L=0.3 nlvt_s_pcell_0_mi2_M=1 nlvt_s_pcell_0_mi2_Nf=2
+.param nlvt_s_pcell_0_mi3_W=1.3 nlvt_s_pcell_0_mi3_L=0.3 nlvt_s_pcell_0_mi3_M=1 nlvt_s_pcell_0_mi3_Nf=2
+.param nlvt_s_pcell_0_mi4_W=1.3 nlvt_s_pcell_0_mi4_L=0.3 nlvt_s_pcell_0_mi4_M=1 nlvt_s_pcell_0_mi4_Nf=2
+.param nlvt_s_pcell_0_mi5_W=1.3 nlvt_s_pcell_0_mi5_L=0.3 nlvt_s_pcell_0_mi5_M=1 nlvt_s_pcell_0_mi5_Nf=2
+.param nlvt_s_pcell_0_mi6_W=1.3 nlvt_s_pcell_0_mi6_L=0.3 nlvt_s_pcell_0_mi6_M=1 nlvt_s_pcell_0_mi6_Nf=2
+.param plvt_s_pcell_1_mi8_W=2.55 plvt_s_pcell_1_mi8_L=0.3 plvt_s_pcell_1_mi8_M=1 plvt_s_pcell_1_mi8_Nf=2
+.param plvt_s_pcell_1_mi7_W=2.55 plvt_s_pcell_1_mi7_L=0.3 plvt_s_pcell_1_mi7_M=1 plvt_s_pcell_1_mi7_Nf=2
+.param plvt_s_pcell_1_mi6_W=2.55 plvt_s_pcell_1_mi6_L=0.3 plvt_s_pcell_1_mi6_M=1 plvt_s_pcell_1_mi6_Nf=2
+.param plvt_s_pcell_1_mi5_W=2.55 plvt_s_pcell_1_mi5_L=0.3 plvt_s_pcell_1_mi5_M=1 plvt_s_pcell_1_mi5_Nf=2
+.param plvt_s_pcell_1_mi4_W=2.55 plvt_s_pcell_1_mi4_L=0.3 plvt_s_pcell_1_mi4_M=1 plvt_s_pcell_1_mi4_Nf=2
+.param plvt_s_pcell_1_mi3_W=2.55 plvt_s_pcell_1_mi3_L=0.3 plvt_s_pcell_1_mi3_M=1 plvt_s_pcell_1_mi3_Nf=2
+.param plvt_s_pcell_1_mi2_W=2.55 plvt_s_pcell_1_mi2_L=0.3 plvt_s_pcell_1_mi2_M=1 plvt_s_pcell_1_mi2_Nf=2
+.param plvt_s_pcell_1_mi1_W=2.55 plvt_s_pcell_1_mi1_L=0.3 plvt_s_pcell_1_mi1_M=1 plvt_s_pcell_1_mi1_Nf=2
+.param plvt_s_pcell_2_mi4_W=2.55 plvt_s_pcell_2_mi4_L=0.3 plvt_s_pcell_2_mi4_M=1 plvt_s_pcell_2_mi4_Nf=2
+.param plvt_s_pcell_2_mi3_W=2.55 plvt_s_pcell_2_mi3_L=0.3 plvt_s_pcell_2_mi3_M=1 plvt_s_pcell_2_mi3_Nf=2
+.param plvt_s_pcell_2_mi2_W=2.55 plvt_s_pcell_2_mi2_L=0.3 plvt_s_pcell_2_mi2_M=1 plvt_s_pcell_2_mi2_Nf=2
+.param plvt_s_pcell_2_mi1_W=2.55 plvt_s_pcell_2_mi1_L=0.3 plvt_s_pcell_2_mi1_M=1 plvt_s_pcell_2_mi1_Nf=2
+.param plvt_s_pcell_3_mi4_W=2.55 plvt_s_pcell_3_mi4_L=0.3 plvt_s_pcell_3_mi4_M=1 plvt_s_pcell_3_mi4_Nf=2
+.param plvt_s_pcell_3_mi3_W=2.55 plvt_s_pcell_3_mi3_L=0.3 plvt_s_pcell_3_mi3_M=1 plvt_s_pcell_3_mi3_Nf=2
+.param plvt_s_pcell_3_mi2_W=2.55 plvt_s_pcell_3_mi2_L=0.3 plvt_s_pcell_3_mi2_M=1 plvt_s_pcell_3_mi2_Nf=2
+.param plvt_s_pcell_3_mi1_W=2.55 plvt_s_pcell_3_mi1_L=0.3 plvt_s_pcell_3_mi1_M=1 plvt_s_pcell_3_mi1_Nf=2
+.param test_vga_inv_als_mqn1_W=1.3 test_vga_inv_als_mqn1_L=0.3 test_vga_inv_als_mqn1_M=1 test_vga_inv_als_mqn1_Nf=2
+.param test_vga_inv_als_mqp1_W=1.3 test_vga_inv_als_mqp1_L=0.3 test_vga_inv_als_mqp1_M=1 test_vga_inv_als_mqp1_Nf=2
+.param test_vga_mmn16_W=11.55 test_vga_mmn16_L=0.3 test_vga_mmn16_M=1 test_vga_mmn16_Nf=6
+.param test_vga_mmn211_W=11.55 test_vga_mmn211_L=0.3 test_vga_mmn211_M=1 test_vga_mmn211_Nf=6
+.param test_vga_mmn221_W=11.55 test_vga_mmn221_L=0.3 test_vga_mmn221_M=1 test_vga_mmn221_Nf=6
+.param test_vga_mmn23_W=11.55 test_vga_mmn23_L=0.3 test_vga_mmn23_M=1 test_vga_mmn23_Nf=6
+.param test_vga_mmn14_W=11.55 test_vga_mmn14_L=0.3 test_vga_mmn14_M=1 test_vga_mmn14_Nf=6
+.param test_vga_mmn19_W=11.55 test_vga_mmn19_L=0.3 test_vga_mmn19_M=1 test_vga_mmn19_Nf=6
+.param test_vga_mmn20_W=11.55 test_vga_mmn20_L=0.3 test_vga_mmn20_M=1 test_vga_mmn20_Nf=6
+.param test_vga_mmn24_W=11.55 test_vga_mmn24_L=0.3 test_vga_mmn24_M=1 test_vga_mmn24_Nf=6
+.param test_vga_mmp10_W=10.3 test_vga_mmp10_L=0.3 test_vga_mmp10_M=1 test_vga_mmp10_Nf=4
+.param test_vga_mmp91_W=10.3 test_vga_mmp91_L=0.3 test_vga_mmp91_M=1 test_vga_mmp91_Nf=4
+.param test_vga_mmp6_W=10.3 test_vga_mmp6_L=0.3 test_vga_mmp6_M=1 test_vga_mmp6_Nf=4
+.param test_vga_mmp2_W=10.3 test_vga_mmp2_L=0.3 test_vga_mmp2_M=1 test_vga_mmp2_Nf=4
 
 
 * --- CIRCUIT DEFINITION ---

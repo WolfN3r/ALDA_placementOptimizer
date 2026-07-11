@@ -9,14 +9,16 @@
 *   Device types : nmos_lvt pmos_lvt
 *   Passives     : 0 resistors, 0 capacitors
 * Note: Converted from FinFET-style to CMOS-style netlist.
-*       Device sizes are placeholders — optimizer generates new sizes.
+* SIZES CONVERTED 2026-07-10 scale=7.14286 source_L_ref=0.014um
+*       Device/passive sizes are scaled from the real source-netlist values
+*       (see marker above) -- not random placeholders.
 * ============================================================
 
 * --- DEVICE PARAMETERS ---
-.param three_terminal_inv_MN34_M=1 three_terminal_inv_MN34_L=14n
-.param three_terminal_inv_MN33_M=1 three_terminal_inv_MN33_L=14n
-.param three_terminal_inv_MP34_M=1 three_terminal_inv_MP34_L=14n
-.param three_terminal_inv_MP33_M=1 three_terminal_inv_MP33_L=14n
+.param three_terminal_inv_MN34_M=1 three_terminal_inv_MN34_L=0.1
+.param three_terminal_inv_MN33_M=1 three_terminal_inv_MN33_L=0.1
+.param three_terminal_inv_MP34_M=1 three_terminal_inv_MP34_L=0.1
+.param three_terminal_inv_MP33_M=1 three_terminal_inv_MP33_L=0.1
 
 
 * --- CIRCUIT DEFINITION ---

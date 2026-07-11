@@ -9,24 +9,26 @@
 *   Device types : nmos_lvt pmos_lvt
 *   Passives     : 14 resistors, 0 capacitors
 * Note: Converted from FinFET-style to CMOS-style netlist.
-*       Device sizes are placeholders — optimizer generates new sizes.
+* SIZES CONVERTED 2026-07-10 scale=7.14286 source_L_ref=0.014um
+*       Device/passive sizes are scaled from the real source-netlist values
+*       (see marker above) -- not random placeholders.
 * ============================================================
 
 * --- DEVICE PARAMETERS ---
-.param diff2sing_v1_MP2_M=1 diff2sing_v1_MP2_L=14n
-.param diff2sing_v1_MP5_M=1 diff2sing_v1_MP5_L=14n
-.param diff2sing_v1_MP1_M=1 diff2sing_v1_MP1_L=14n
-.param diff2sing_v1_MP4_M=1 diff2sing_v1_MP4_L=14n
-.param diff2sing_v1_MP0_M=1 diff2sing_v1_MP0_L=14n
-.param diff2sing_v1_MP3_M=1 diff2sing_v1_MP3_L=14n
-.param diff2sing_v1_MN1_M=1 diff2sing_v1_MN1_L=14n
-.param diff2sing_v1_MN3_M=1 diff2sing_v1_MN3_L=14n
-.param diff2sing_v1_MN0_M=1 diff2sing_v1_MN0_L=14n
-.param diff2sing_v1_MN2_M=1 diff2sing_v1_MN2_L=14n
-.param three_terminal_inv_MN34_M=1 three_terminal_inv_MN34_L=14n
-.param three_terminal_inv_MN33_M=1 three_terminal_inv_MN33_L=14n
-.param three_terminal_inv_MP34_M=1 three_terminal_inv_MP34_L=14n
-.param three_terminal_inv_MP33_M=1 three_terminal_inv_MP33_L=14n
+.param diff2sing_v1_MP2_M=1 diff2sing_v1_MP2_L=0.1
+.param diff2sing_v1_MP5_M=1 diff2sing_v1_MP5_L=0.1
+.param diff2sing_v1_MP1_M=1 diff2sing_v1_MP1_L=0.1
+.param diff2sing_v1_MP4_M=1 diff2sing_v1_MP4_L=0.1
+.param diff2sing_v1_MP0_M=1 diff2sing_v1_MP0_L=0.1
+.param diff2sing_v1_MP3_M=1 diff2sing_v1_MP3_L=0.1
+.param diff2sing_v1_MN1_M=1 diff2sing_v1_MN1_L=0.1
+.param diff2sing_v1_MN3_M=1 diff2sing_v1_MN3_L=0.1
+.param diff2sing_v1_MN0_M=1 diff2sing_v1_MN0_L=0.1
+.param diff2sing_v1_MN2_M=1 diff2sing_v1_MN2_L=0.1
+.param three_terminal_inv_MN34_M=1 three_terminal_inv_MN34_L=0.1
+.param three_terminal_inv_MN33_M=1 three_terminal_inv_MN33_L=0.1
+.param three_terminal_inv_MP34_M=1 three_terminal_inv_MP34_L=0.1
+.param three_terminal_inv_MP33_M=1 three_terminal_inv_MP33_L=0.1
 
 
 * --- CIRCUIT DEFINITION ---

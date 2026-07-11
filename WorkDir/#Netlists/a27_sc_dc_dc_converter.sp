@@ -9,17 +9,21 @@
 *   Device types : nmos_rvt
 *   Passives     : 0 resistors, 2 capacitors
 * Note: Converted from FinFET-style to CMOS-style netlist.
-*       Device sizes are placeholders — optimizer generates new sizes.
+* SIZES CONVERTED 2026-07-10 scale=7.14286 source_L_ref=0.014um
+*       Device/passive sizes are scaled from the real source-netlist values
+*       (see marker above) -- not random placeholders.
 * ============================================================
 
 * --- DEVICE PARAMETERS ---
-.param m8_L=20e-9 m8_Nf=832
-.param m7_L=20e-9 m7_Nf=832
-.param m6_L=20e-9 m6_Nf=832
-.param m5_L=20e-9 m5_Nf=832
-.param m4_L=20e-9 m4_Nf=832
-.param m3_L=20e-9 m3_Nf=832
-.param m0_L=20e-9 m0_Nf=832
+.param cap_c1_L=25.82 cap_c1_W=25.82
+.param cap_c0_L=25.82 cap_c0_W=25.82
+.param m8_L=0.1 m8_Nf=832
+.param m7_L=0.1 m7_Nf=832
+.param m6_L=0.1 m6_Nf=832
+.param m5_L=0.1 m5_Nf=832
+.param m4_L=0.1 m4_Nf=832
+.param m3_L=0.1 m3_Nf=832
+.param m0_L=0.1 m0_Nf=832
 
 
 * --- CIRCUIT DEFINITION ---
@@ -31,6 +35,6 @@ m5 net9 phi1 net8 VSSA nmos_rvt L={m5_L} W 12 Nf={m5_Nf}
 m4 net9 phi2 VSSA VSSA nmos_rvt L={m4_L} W 12 Nf={m4_Nf}
 m3 vout phi2 net10 VSSA nmos_rvt L={m3_L} W 12 Nf={m3_Nf}
 m0 net10 phi1 vin VSSA nmos_rvt L={m0_L} W 12 Nf={m0_Nf}
-c1 net8 net7 1e-12
-c0 net10 net9 1e-12
+c1 net8 net7 1e-12 L={cap_c1_L} W={cap_c1_W}
+c0 net10 net9 1e-12 L={cap_c0_L} W={cap_c0_W}
 .ends sc_dc_dc_converter

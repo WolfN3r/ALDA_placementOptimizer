@@ -9,12 +9,14 @@
 *   Device types : nmos_rvt pmos_rvt
 *   Passives     : 0 resistors, 0 capacitors
 * Note: Converted from FinFET-style to CMOS-style netlist.
-*       Device sizes are placeholders — optimizer generates new sizes.
+* SIZES CONVERTED 2026-07-10 scale=7.14286 source_L_ref=0.014um
+*       Device/passive sizes are scaled from the real source-netlist values
+*       (see marker above) -- not random placeholders.
 * ============================================================
 
 * --- DEVICE PARAMETERS ---
-.param ring_oscillator_stage_mp0_W=2 ring_oscillator_stage_mp0_L=40n ring_oscillator_stage_mp0_M=1 ring_oscillator_stage_mp0_Nf=4
-.param ring_oscillator_stage_mn0_W=2 ring_oscillator_stage_mn0_L=40n ring_oscillator_stage_mn0_M=1 ring_oscillator_stage_mn0_Nf=4
+.param ring_oscillator_stage_mp0_W=14.3 ring_oscillator_stage_mp0_L=0.3 ring_oscillator_stage_mp0_M=1 ring_oscillator_stage_mp0_Nf=4
+.param ring_oscillator_stage_mn0_W=14.3 ring_oscillator_stage_mn0_L=0.3 ring_oscillator_stage_mn0_M=1 ring_oscillator_stage_mn0_Nf=4
 
 
 * --- CIRCUIT DEFINITION ---

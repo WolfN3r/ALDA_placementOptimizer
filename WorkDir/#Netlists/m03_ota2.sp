@@ -9,58 +9,74 @@
 *   Device types : nmos_hvt nmos_lvt pmos_hvt pmos_lvt pmos_rvt
 *   Passives     : 6 resistors, 8 capacitors
 * Note: Converted from Spectre/HSPICE format to ALIGN SPICE format.
-*       Device sizes are placeholders — optimizer generates new sizes.
+* SIZES CONVERTED 2026-07-10 scale=2.5 source_L_ref=0.04um
+*       Device/passive sizes are scaled from the real source-netlist values
+*       (see marker above) -- not random placeholders.
 * ============================================================
 
 * --- DEVICE PARAMETERS ---
-.param M36_L=120.0n M36_W=2.4u M36_M=1 M36_Nf=2
-.param M33_L=120.0n M33_W=4.8u M33_M=1 M33_Nf=4
-.param M32_L=120.0n M32_W=7.2u M32_M=1 M32_Nf=6
-.param M21_L=120.0n M21_W=5.4u M21_M=1 M21_Nf=6
-.param M20_L=120.0n M20_W=5.4u M20_M=1 M20_Nf=6
-.param M18_L=240.0n M18_W=118.8u M18_M=1 M18_Nf=33
-.param M17_L=240.0n M17_W=118.8u M17_M=1 M17_Nf=33
-.param M7_L=120.0n M7_W=11.7u M7_M=1 M7_Nf=13
-.param M8_L=240.0n M8_W=115.2u M8_M=1 M8_Nf=32
-.param M9_L=120.0n M9_W=108.000000u M9_M=1 M9_Nf=30
-.param M10_L=240.0n M10_W=115.2u M10_M=1 M10_Nf=32
-.param M12_L=120.0n M12_W=108.000000u M12_M=1 M12_Nf=30
-.param M1_L=120.0n M1_W=93.6u M1_M=1 M1_Nf=104
-.param M19_L=120.0n M19_W=9.9u M19_M=1 M19_Nf=11
-.param M16_L=120.0n M16_W=11.7u M16_M=1 M16_Nf=13
-.param M15_L=120.0n M15_W=11.7u M15_M=1 M15_Nf=13
-.param M14_L=240.0n M14_W=1.2u M14_M=1 M14_Nf=2
-.param M13_L=120.0n M13_W=4.5u M13_M=1 M13_Nf=5
-.param M3_L=120.0n M3_W=4.5u M3_M=1 M3_Nf=5
-.param M4_L=120.0n M4_W=11.7u M4_M=1 M4_Nf=13
-.param M2_L=120.0n M2_W=11.7u M2_M=1 M2_Nf=13
-.param M74_L=120.0n M74_W=48.0u M74_M=1 M74_Nf=40
-.param M71_L=120.0n M71_W=48.0u M71_M=1 M71_Nf=20
-.param M70_L=120.0n M70_W=48.0u M70_M=1 M70_Nf=20
-.param M69_L=120.0n M69_W=7.2u M69_M=1 M69_Nf=6
-.param M68_L=120.0n M68_W=7.2u M68_M=1 M68_Nf=6
-.param M35_L=240.0n M35_W=86.4u M35_M=1 M35_Nf=24
-.param M34_L=240.0n M34_W=86.4u M34_M=1 M34_Nf=24
-.param M27_L=240.0n M27_W=124.8u M27_M=1 M27_Nf=26
-.param M26_L=240.0n M26_W=124.8u M26_M=1 M26_Nf=26
-.param M28_L=120.0n M28_W=1.2u M28_M=1 M28_Nf=1
-.param M25_L=120.0n M25_W=4.8u M25_M=1 M25_Nf=4
-.param M24_L=120.0n M24_W=7.2u M24_M=1 M24_Nf=6
-.param M50_L=120.0n M50_W=144.000000u M50_M=1 M50_Nf=40
-.param M6_L=240.0n M6_W=1.2u M6_M=1 M6_Nf=2
+.param cap_xC7_L=3.478 cap_xC7_W=3.478
+.param cap_xC6_L=3.478 cap_xC6_W=3.478
+.param cap_xC5_L=2.592 cap_xC5_W=2.592
+.param cap_xC4_L=2.592 cap_xC4_W=2.592
+.param cap_xC3_L=17.39 cap_xC3_W=17.39
+.param cap_xC2_L=17.39 cap_xC2_W=17.39
+.param cap_xC1_L=8.299 cap_xC1_W=8.299
+.param cap_xC0_L=8.299 cap_xC0_W=8.299
+.param res_xR11_L=9 res_xR11_W=1
+.param res_xR14_L=9 res_xR14_W=1
+.param res_xR5_L=20.46 res_xR5_W=1
+.param res_xR12_L=20.46 res_xR12_W=1
+.param res_xR13_L=7.5 res_xR13_W=1
+.param res_xR0_L=7.5 res_xR0_W=1
+.param M36_L=0.4 M36_W=8 M36_M=1 M36_Nf=2
+.param M33_L=0.3 M33_W=12 M33_M=1 M33_Nf=4
+.param M32_L=0.3 M32_W=18 M32_M=1 M32_Nf=6
+.param M21_L=0.3 M21_W=13.5 M21_M=1 M21_Nf=6
+.param M20_L=0.3 M20_W=13.5 M20_M=1 M20_Nf=6
+.param M18_L=0.6 M18_W=74.25 M18_M=4 M18_Nf=33
+.param M17_L=0.6 M17_W=74.25 M17_M=4 M17_Nf=33
+.param M7_L=0.3 M7_W=29.25 M7_M=1 M7_Nf=13
+.param M8_L=0.6 M8_W=72 M8_M=4 M8_Nf=32
+.param M9_L=0.3 M9_W=67.5 M9_M=4 M9_Nf=30
+.param M10_L=0.6 M10_W=72 M10_M=4 M10_Nf=32
+.param M12_L=0.3 M12_W=67.5 M12_M=4 M12_Nf=30
+.param M1_L=0.3 M1_W=58.5 M1_M=4 M1_Nf=104
+.param M19_L=0.3 M19_W=24.75 M19_M=1 M19_Nf=11
+.param M16_L=0.3 M16_W=29.25 M16_M=1 M16_Nf=13
+.param M15_L=0.3 M15_W=29.25 M15_M=1 M15_Nf=13
+.param M14_L=0.6 M14_W=3 M14_M=1 M14_Nf=2
+.param M13_L=0.3 M13_W=11.25 M13_M=1 M13_Nf=5
+.param M3_L=0.3 M3_W=11.25 M3_M=1 M3_Nf=5
+.param M4_L=0.3 M4_W=29.25 M4_M=1 M4_Nf=13
+.param M2_L=0.3 M2_W=29.25 M2_M=1 M2_Nf=13
+.param M74_L=0.3 M74_W=60 M74_M=2 M74_Nf=40
+.param M71_L=0.3 M71_W=60 M71_M=2 M71_Nf=20
+.param M70_L=0.3 M70_W=60 M70_M=2 M70_Nf=20
+.param M69_L=0.3 M69_W=18 M69_M=1 M69_Nf=6
+.param M68_L=0.3 M68_W=18 M68_M=1 M68_Nf=6
+.param M35_L=0.6 M35_W=54 M35_M=4 M35_Nf=24
+.param M34_L=0.6 M34_W=54 M34_M=4 M34_Nf=24
+.param M27_L=0.6 M27_W=78 M27_M=4 M27_Nf=26
+.param M26_L=0.6 M26_W=78 M26_M=4 M26_Nf=26
+.param M28_L=0.3 M28_W=3 M28_M=1 M28_Nf=1
+.param M25_L=0.3 M25_W=12 M25_M=1 M25_Nf=4
+.param M24_L=0.3 M24_W=18 M24_M=1 M24_Nf=6
+.param M50_L=0.4 M50_W=100 M50_M=4 M50_Nf=40
+.param M6_L=0.6 M6_W=3 M6_M=1 M6_Nf=2
 
 
 * --- CIRCUIT DEFINITION ---
 .subckt OTA_2 VSSA IBIAS VCM VDDA VIM VIP VOM VOP
     M36 net0134 PCAS VDDA VDDA pmos_hvt L={M36_L} W={M36_W} M={M36_M} Nf={M36_Nf}
-    xC7 vtail VOP VSSA cfmom nr=32 lr=2.7u w=70n s=70n stm=1 spm=6 multi=1 ftip=140.0n dmflag=0
-    xC6 VOM vtail VSSA cfmom nr=32 lr=2.7u w=70n s=70n stm=1 spm=6 multi=1 ftip=140.0n dmflag=0
-    xC5 VOM net0101 VSSA cfmom nr=32 lr=1.5u w=70n s=70n stm=1 spm=6 multi=1 ftip=140.0n dmflag=0
-    xC4 net0101 VOP VSSA cfmom nr=32 lr=1.5u w=70n s=70n stm=1 spm=6 multi=1 ftip=140.0n dmflag=0
-    xC3 VIM net096 VSSA cfmom nr=120 lr=18.0u w=70n s=70n stm=1 spm=6 multi=1 ftip=140.0n dmflag=0
-    xC2 VIP net092 VSSA cfmom nr=120 lr=18.0u w=70n s=70n stm=1 spm=6 multi=1 ftip=140.0n dmflag=0
-    xC1 VO1P net0118 VSSA cfmom nr=60 lr=8.2u w=70n s=70n stm=1 spm=6 multi=1 ftip=140.0n dmflag=0
-    xC0 net0118 VO1M VSSA cfmom nr=60 lr=8.2u w=70n s=70n stm=1 spm=6 multi=1 ftip=140.0n dmflag=0
+    xC7 vtail VOP VSSA cfmom nr=32 stm=1 spm=6 multi=1 ftip=140.0n dmflag=0 L={cap_xC7_L} W={cap_xC7_W}
+    xC6 VOM vtail VSSA cfmom nr=32 stm=1 spm=6 multi=1 ftip=140.0n dmflag=0 L={cap_xC6_L} W={cap_xC6_W}
+    xC5 VOM net0101 VSSA cfmom nr=32 stm=1 spm=6 multi=1 ftip=140.0n dmflag=0 L={cap_xC5_L} W={cap_xC5_W}
+    xC4 net0101 VOP VSSA cfmom nr=32 stm=1 spm=6 multi=1 ftip=140.0n dmflag=0 L={cap_xC4_L} W={cap_xC4_W}
+    xC3 VIM net096 VSSA cfmom nr=120 stm=1 spm=6 multi=1 ftip=140.0n dmflag=0 L={cap_xC3_L} W={cap_xC3_W}
+    xC2 VIP net092 VSSA cfmom nr=120 stm=1 spm=6 multi=1 ftip=140.0n dmflag=0 L={cap_xC2_L} W={cap_xC2_W}
+    xC1 VO1P net0118 VSSA cfmom nr=60 stm=1 spm=6 multi=1 ftip=140.0n dmflag=0 L={cap_xC1_L} W={cap_xC1_W}
+    xC0 net0118 VO1M VSSA cfmom nr=60 stm=1 spm=6 multi=1 ftip=140.0n dmflag=0 L={cap_xC0_L} W={cap_xC0_W}
     M33 net0138 net077 VDDA VDDA pmos_rvt L={M33_L} W={M33_W} M={M33_M} Nf={M33_Nf}
     M32 net0136 net077 VDDA VDDA pmos_rvt L={M32_L} W={M32_W} M={M32_M} Nf={M32_Nf}
     M21 net0104 net0101 CMFBTAIL VSSA nmos_lvt L={M21_L} W={M21_W} M={M21_M} Nf={M21_Nf}
@@ -96,17 +112,17 @@
     M50 vs vtail VSSA VSSA nmos_hvt L={M50_L} W={M50_W} M={M50_M} Nf={M50_Nf}
     M6 net0137 INCM2 VSSA VSSA nmos_hvt L={M6_L} W={M6_W} M={M6_M} Nf={M6_Nf}
 
-xR11 net0101 VOM VSSA rppolywo lr=3.6u wr=400n series=6 segspace=250n
+xR11 net0101 VOM VSSA rppolywo lr={res_xR11_L} wr={res_xR11_W} series=6 segspace=250n
 
-xR14 VOP net0101 VSSA rppolywo lr=3.6u wr=400n series=6 segspace=250n
+xR14 VOP net0101 VSSA rppolywo lr={res_xR14_L} wr={res_xR14_W} series=6 segspace=250n
 
-xR5 VO1M net0118 VSSA rppolywo lr=8.185u wr=400n series=17 segspace=250n
+xR5 VO1M net0118 VSSA rppolywo lr={res_xR5_L} wr={res_xR5_W} series=17 segspace=250n
 
-xR12 net0118 VO1P VSSA rppolywo lr=8.185u wr=400n series=17 segspace=250n
+xR12 net0118 VO1P VSSA rppolywo lr={res_xR12_L} wr={res_xR12_W} series=17 segspace=250n
 
-xR13 net096 INCM2 VSSA rppolywo lr=3u wr=400n series=12 segspace=250n
+xR13 net096 INCM2 VSSA rppolywo lr={res_xR13_L} wr={res_xR13_W} series=12 segspace=250n
 
-xR0 net092 INCM2 VSSA rppolywo lr=3u wr=400n series=12 segspace=250n
+xR0 net092 INCM2 VSSA rppolywo lr={res_xR0_L} wr={res_xR0_W} series=12 segspace=250n
 
 
 .ends OTA_2

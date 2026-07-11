@@ -9,32 +9,44 @@
 *   Device types : nmos_rvt pmos_rvt
 *   Passives     : 0 resistors, 10 capacitors
 * Note: Converted from FinFET-style to CMOS-style netlist.
-*       Device sizes are placeholders — optimizer generates new sizes.
+* SIZES CONVERTED 2026-07-10 scale=7.14286 source_L_ref=0.014um
+*       Device/passive sizes are scaled from the real source-netlist values
+*       (see marker above) -- not random placeholders.
 * ============================================================
 
 * --- DEVICE PARAMETERS ---
-.param telescopic_ota_m9_L=20e-9 telescopic_ota_m9_W=9 telescopic_ota_m9_Nf=4
-.param telescopic_ota_m8_L=20e-9 telescopic_ota_m8_W=9 telescopic_ota_m8_Nf=4
-.param telescopic_ota_m5_L=20e-9 telescopic_ota_m5_W=6 telescopic_ota_m5_Nf=4
-.param telescopic_ota_m4_L=20e-9 telescopic_ota_m4_W=6 telescopic_ota_m4_Nf=6
-.param telescopic_ota_m3_L=20e-9 telescopic_ota_m3_W=12 telescopic_ota_m3_Nf=6
-.param telescopic_ota_m0_L=20e-9 telescopic_ota_m0_W=12 telescopic_ota_m0_Nf=6
-.param telescopic_ota_m7_L=20e-9 telescopic_ota_m7_W=12 telescopic_ota_m7_Nf=2
-.param telescopic_ota_m6_L=20e-9 telescopic_ota_m6_W=12 telescopic_ota_m6_Nf=2
-.param telescopic_ota_m2_L=20e-9 telescopic_ota_m2_W=6 telescopic_ota_m2_Nf=2
-.param telescopic_ota_m1_L=20e-9 telescopic_ota_m1_W=6 telescopic_ota_m1_Nf=2
-.param switched_capacitor_filter_m0_L=20e-9 switched_capacitor_filter_m0_W=6 switched_capacitor_filter_m0_Nf=2
-.param switched_capacitor_filter_m7_L=20e-9 switched_capacitor_filter_m7_W=6 switched_capacitor_filter_m7_Nf=2
-.param switched_capacitor_filter_m6_L=20e-9 switched_capacitor_filter_m6_W=6 switched_capacitor_filter_m6_Nf=2
-.param switched_capacitor_filter_m3_L=20e-9 switched_capacitor_filter_m3_W=6 switched_capacitor_filter_m3_Nf=2
-.param switched_capacitor_filter_m5_L=20e-9 switched_capacitor_filter_m5_W=6 switched_capacitor_filter_m5_Nf=2
-.param switched_capacitor_filter_m4_L=20e-9 switched_capacitor_filter_m4_W=6 switched_capacitor_filter_m4_Nf=2
-.param switched_capacitor_filter_m8_L=20e-9 switched_capacitor_filter_m8_W=6 switched_capacitor_filter_m8_Nf=2
-.param switched_capacitor_filter_m11_L=20e-9 switched_capacitor_filter_m11_W=6 switched_capacitor_filter_m11_Nf=2
-.param switched_capacitor_filter_m9_L=20e-9 switched_capacitor_filter_m9_W=6 switched_capacitor_filter_m9_Nf=2
-.param switched_capacitor_filter_m10_L=20e-9 switched_capacitor_filter_m10_W=6 switched_capacitor_filter_m10_Nf=2
-.param switched_capacitor_filter_m12_L=20e-9 switched_capacitor_filter_m12_W=6 switched_capacitor_filter_m12_Nf=2
-.param switched_capacitor_filter_m14_L=20e-9 switched_capacitor_filter_m14_W=6 switched_capacitor_filter_m14_Nf=2
+.param cap_switched_capacitor_filter_c9_L=6.325 cap_switched_capacitor_filter_c9_W=6.325
+.param cap_switched_capacitor_filter_c8_L=6.325 cap_switched_capacitor_filter_c8_W=6.325
+.param cap_switched_capacitor_filter_c7_L=4.472 cap_switched_capacitor_filter_c7_W=4.472
+.param cap_switched_capacitor_filter_c6_L=6.325 cap_switched_capacitor_filter_c6_W=6.325
+.param cap_switched_capacitor_filter_c5_L=4.472 cap_switched_capacitor_filter_c5_W=4.472
+.param cap_switched_capacitor_filter_c4_L=6.325 cap_switched_capacitor_filter_c4_W=6.325
+.param cap_switched_capacitor_filter_c3_L=6.325 cap_switched_capacitor_filter_c3_W=6.325
+.param cap_switched_capacitor_filter_c2_L=4.472 cap_switched_capacitor_filter_c2_W=4.472
+.param cap_switched_capacitor_filter_c1_L=4.472 cap_switched_capacitor_filter_c1_W=4.472
+.param cap_switched_capacitor_filter_c0_L=6.325 cap_switched_capacitor_filter_c0_W=6.325
+.param telescopic_ota_m9_L=0.15 telescopic_ota_m9_W=64.3 telescopic_ota_m9_Nf=4
+.param telescopic_ota_m8_L=0.15 telescopic_ota_m8_W=64.3 telescopic_ota_m8_Nf=4
+.param telescopic_ota_m5_L=0.15 telescopic_ota_m5_W=42.85 telescopic_ota_m5_Nf=4
+.param telescopic_ota_m4_L=0.15 telescopic_ota_m4_W=42.85 telescopic_ota_m4_Nf=6
+.param telescopic_ota_m3_L=0.15 telescopic_ota_m3_W=85.7 telescopic_ota_m3_Nf=6
+.param telescopic_ota_m0_L=0.15 telescopic_ota_m0_W=85.7 telescopic_ota_m0_Nf=6
+.param telescopic_ota_m7_L=0.15 telescopic_ota_m7_W=85.7 telescopic_ota_m7_Nf=2
+.param telescopic_ota_m6_L=0.15 telescopic_ota_m6_W=85.7 telescopic_ota_m6_Nf=2
+.param telescopic_ota_m2_L=0.15 telescopic_ota_m2_W=42.85 telescopic_ota_m2_Nf=2
+.param telescopic_ota_m1_L=0.15 telescopic_ota_m1_W=42.85 telescopic_ota_m1_Nf=2
+.param switched_capacitor_filter_m0_L=0.15 switched_capacitor_filter_m0_W=42.85 switched_capacitor_filter_m0_Nf=2
+.param switched_capacitor_filter_m7_L=0.15 switched_capacitor_filter_m7_W=42.85 switched_capacitor_filter_m7_Nf=2
+.param switched_capacitor_filter_m6_L=0.15 switched_capacitor_filter_m6_W=42.85 switched_capacitor_filter_m6_Nf=2
+.param switched_capacitor_filter_m3_L=0.15 switched_capacitor_filter_m3_W=42.85 switched_capacitor_filter_m3_Nf=2
+.param switched_capacitor_filter_m5_L=0.15 switched_capacitor_filter_m5_W=42.85 switched_capacitor_filter_m5_Nf=2
+.param switched_capacitor_filter_m4_L=0.15 switched_capacitor_filter_m4_W=42.85 switched_capacitor_filter_m4_Nf=2
+.param switched_capacitor_filter_m8_L=0.15 switched_capacitor_filter_m8_W=42.85 switched_capacitor_filter_m8_Nf=2
+.param switched_capacitor_filter_m11_L=0.15 switched_capacitor_filter_m11_W=42.85 switched_capacitor_filter_m11_Nf=2
+.param switched_capacitor_filter_m9_L=0.15 switched_capacitor_filter_m9_W=42.85 switched_capacitor_filter_m9_Nf=2
+.param switched_capacitor_filter_m10_L=0.15 switched_capacitor_filter_m10_W=42.85 switched_capacitor_filter_m10_Nf=2
+.param switched_capacitor_filter_m12_L=0.15 switched_capacitor_filter_m12_W=42.85 switched_capacitor_filter_m12_Nf=2
+.param switched_capacitor_filter_m14_L=0.15 switched_capacitor_filter_m14_W=42.85 switched_capacitor_filter_m14_Nf=2
 
 
 * --- CIRCUIT DEFINITION ---
@@ -82,14 +94,14 @@ m10 net64 phi1 net62 VSSA nmos_rvt L={switched_capacitor_filter_m10_L} W={switch
 m12 net60 phi1 vinp VSSA nmos_rvt L={switched_capacitor_filter_m12_L} W={switched_capacitor_filter_m12_W} Nf={switched_capacitor_filter_m12_Nf}
 m14 voutp phi1 net68 VSSA nmos_rvt L={switched_capacitor_filter_m14_L} W={switched_capacitor_filter_m14_W} Nf={switched_capacitor_filter_m14_Nf}
 xi0 id VDDA net64 net66 VSSA vbiasn vbiasp1 vbiasp2 voutn voutp telescopic_ota
-c9 voutp VSSA 60e-15
-c8 voutn VSSA 60e-15
-c7 net62 net68 30e-15
-c6 net64 voutp 60e-15
-c5 vinn net64 30e-15
-c4 net60 net62 60e-15
-c3 net66 voutn 60e-15
-c2 vinp net66 30e-15
-c1 net63 net67 30e-15
-c0 net72 net63 60e-15
+c9 voutp VSSA 60e-15 L={cap_switched_capacitor_filter_c9_L} W={cap_switched_capacitor_filter_c9_W}
+c8 voutn VSSA 60e-15 L={cap_switched_capacitor_filter_c8_L} W={cap_switched_capacitor_filter_c8_W}
+c7 net62 net68 30e-15 L={cap_switched_capacitor_filter_c7_L} W={cap_switched_capacitor_filter_c7_W}
+c6 net64 voutp 60e-15 L={cap_switched_capacitor_filter_c6_L} W={cap_switched_capacitor_filter_c6_W}
+c5 vinn net64 30e-15 L={cap_switched_capacitor_filter_c5_L} W={cap_switched_capacitor_filter_c5_W}
+c4 net60 net62 60e-15 L={cap_switched_capacitor_filter_c4_L} W={cap_switched_capacitor_filter_c4_W}
+c3 net66 voutn 60e-15 L={cap_switched_capacitor_filter_c3_L} W={cap_switched_capacitor_filter_c3_W}
+c2 vinp net66 30e-15 L={cap_switched_capacitor_filter_c2_L} W={cap_switched_capacitor_filter_c2_W}
+c1 net63 net67 30e-15 L={cap_switched_capacitor_filter_c1_L} W={cap_switched_capacitor_filter_c1_W}
+c0 net72 net63 60e-15 L={cap_switched_capacitor_filter_c0_L} W={cap_switched_capacitor_filter_c0_W}
 .ends switched_capacitor_filter

@@ -9,33 +9,37 @@
 *   Device types : nmos_lvt nmos_rvt pmos_lvt pmos_rvt
 *   Passives     : 0 resistors, 2 capacitors
 * Note: Converted from Spectre/HSPICE format to ALIGN SPICE format.
-*       Device sizes are placeholders — optimizer generates new sizes.
+* SIZES CONVERTED 2026-07-10 scale=2.5 source_L_ref=0.04um
+*       Device/passive sizes are scaled from the real source-netlist values
+*       (see marker above) -- not random placeholders.
 * ============================================================
 
 * --- DEVICE PARAMETERS ---
-.param MP1c_L=120.0n MP1c_W=16.0u MP1c_M=1 MP1c_Nf=8
-.param M20_L=120.0n M20_W=16.0u M20_M=1 M20_Nf=8
-.param M7_L=120.0n M7_W=16.0u M7_M=1 M7_Nf=8
-.param M5_L=120.0n M5_W=16.0u M5_M=1 M5_Nf=8
-.param MP1a_L=120.0n MP1a_W=40u MP1a_M=1 MP1a_Nf=20
-.param MP1b_L=120.0n MP1b_W=40u MP1b_M=1 MP1b_Nf=20
-.param M10_L=120.0n M10_W=32.0u M10_M=1 M10_Nf=16
-.param M9_L=120.0n M9_W=12.0u M9_M=1 M9_Nf=6
-.param M6_L=120.0n M6_W=12.0u M6_M=1 M6_Nf=6
-.param M13_L=120.0n M13_W=4u M13_M=1 M13_Nf=2
-.param M12_L=120.0n M12_W=4u M12_M=1 M12_Nf=2
-.param M11_L=120.0n M11_W=8u M11_M=1 M11_Nf=4
-.param M4_L=120.0n M4_W=8u M4_M=1 M4_Nf=4
-.param M19_L=120.0n M19_W=16.0u M19_M=1 M19_Nf=8
-.param M17_L=120.0n M17_W=16.0u M17_M=1 M17_Nf=8
-.param M15_L=120.0n M15_W=16.0u M15_M=1 M15_Nf=8
-.param M25_L=120.0n M25_W=24.0u M25_M=1 M25_Nf=12
-.param M23_L=120.0n M23_W=24.0u M23_M=1 M23_Nf=12
-.param M3_L=120.0n M3_W=24.0u M3_M=1 M3_Nf=12
-.param M1_L=120.0n M1_W=24.0u M1_M=1 M1_Nf=12
-.param M18_L=120.0n M18_W=16.0u M18_M=1 M18_Nf=8
-.param M0_L=500n M0_W=60u M0_M=1 M0_Nf=12
-.param M2_L=500n M2_W=60u M2_M=1 M2_Nf=12
+.param cap_xC1_L=19.55 cap_xC1_W=19.55
+.param cap_xC0_L=19.55 cap_xC0_W=19.55
+.param MP1c_L=0.3 MP1c_W=40 MP1c_M=1 MP1c_Nf=8
+.param M20_L=0.3 M20_W=40 M20_M=1 M20_Nf=8
+.param M7_L=0.3 M7_W=40 M7_M=1 M7_Nf=8
+.param M5_L=0.3 M5_W=40 M5_M=1 M5_Nf=8
+.param MP1a_L=0.3 MP1a_W=100 MP1a_M=1 MP1a_Nf=20
+.param MP1b_L=0.3 MP1b_W=100 MP1b_M=1 MP1b_Nf=20
+.param M10_L=0.3 M10_W=80 M10_M=1 M10_Nf=16
+.param M9_L=0.3 M9_W=30 M9_M=1 M9_Nf=6
+.param M6_L=0.3 M6_W=30 M6_M=1 M6_Nf=6
+.param M13_L=0.3 M13_W=10 M13_M=1 M13_Nf=2
+.param M12_L=0.3 M12_W=10 M12_M=1 M12_Nf=2
+.param M11_L=0.3 M11_W=20 M11_M=1 M11_Nf=4
+.param M4_L=0.3 M4_W=20 M4_M=1 M4_Nf=4
+.param M19_L=0.3 M19_W=40 M19_M=1 M19_Nf=8
+.param M17_L=0.3 M17_W=40 M17_M=1 M17_Nf=8
+.param M15_L=0.3 M15_W=40 M15_M=1 M15_Nf=8
+.param M25_L=0.3 M25_W=60 M25_M=1 M25_Nf=12
+.param M23_L=0.3 M23_W=60 M23_M=1 M23_Nf=12
+.param M3_L=0.3 M3_W=60 M3_M=1 M3_Nf=12
+.param M1_L=0.3 M1_W=60 M1_M=1 M1_Nf=12
+.param M18_L=0.3 M18_W=40 M18_M=1 M18_Nf=8
+.param M0_L=1.25 M0_W=75 M0_M=2 M0_Nf=12
+.param M2_L=1.25 M2_W=75 M2_M=2 M2_Nf=12
 
 
 * --- CIRCUIT DEFINITION ---
@@ -79,10 +83,10 @@ MP1a intm VBIAS_P VDDA VDDA pmos_rvt L={MP1a_L} W={MP1a_W} M={MP1a_M} Nf={MP1a_N
 MP1b intp VBIAS_P VDDA VDDA pmos_rvt L={MP1b_L} W={MP1b_W} M={MP1b_M} Nf={MP1b_Nf}
 
 * cfmom_2t Instance C1 = spectre device C1
-xC1 OUTM net037 cfmom_2t nr=210 lr=13.0u w=70n s=70n stm=3 spm=6 multi=1 ftip=140.0n
+xC1 OUTM net037 cfmom_2t nr=210 stm=3 spm=6 multi=1 ftip=140.0n L={cap_xC1_L} W={cap_xC1_W}
 
 * cfmom_2t Instance C0 = spectre device C0
-xC0 OUTP net047 cfmom_2t nr=210 lr=13.0u w=70n s=70n stm=3 spm=6 multi=1 ftip=140.0n
+xC0 OUTP net047 cfmom_2t nr=210 stm=3 spm=6 multi=1 ftip=140.0n L={cap_xC0_L} W={cap_xC0_W}
 
 * nch_lvt Instance M10 = spectre device M10
 M10 net7 vbias_n VSSA VSSA nmos_lvt L={M10_L} W={M10_W} M={M10_M} Nf={M10_Nf}

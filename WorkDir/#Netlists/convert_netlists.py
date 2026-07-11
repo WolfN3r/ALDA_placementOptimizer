@@ -6,8 +6,11 @@ Converts ALIGN FinFET example netlists to CMOS-style netlists.
 Run from any location; paths are resolved relative to this script.
 Output: examples/#Netlists/a<XY>_<circuit_name>.sp
 """
+import json
+import math
 import re
 import sys
+from datetime import date
 from pathlib import Path
 from collections import defaultdict
 
@@ -166,6 +169,434 @@ def is_literal(val: str) -> bool:
     """True if val is a numeric literal (not a variable/expression reference)."""
     v = val.strip().lstrip('{').rstrip('}')
     return bool(_LITERAL_RE.match(v))
+
+
+# ---------------------------------------------------------------------------
+# Numeric technology-scaling pass (transistor W/L, passive R/C sizing)
+# See .claude/plans/netlist_technology_scaling.md for the full derivation.
+# ---------------------------------------------------------------------------
+GPDK_RULES_PATH    = EXAMPLES_DIR / 'myPDK' / 'gpdk090_device_rules.json'
+DEVICE_CONSTRAINTS = json.loads(GPDK_RULES_PATH.read_text())['device_constraints']
+
+GPDK_TECH_PATH   = EXAMPLES_DIR / 'myPDK' / 'gpdk090_tech_simple.json'
+_MFG_GRID_UM     = json.loads(GPDK_TECH_PATH.read_text())['technology_info']['manufacturing_grid']
+TRANSISTOR_GRID_UM = _MFG_GRID_UM * 10   # transistor L/W snapped to 10x the manufacturing grid
+
+GPDK_L_MIN_TRANSISTOR   = DEVICE_CONSTRAINTS['nmos_rvt']['L']['min']   # 0.1 um, gpdk090 reference Lmin
+RES_POLY_RHO_OHM_PER_SQ = 100.0                                        # gpdk090-spec-derived (Cadence GPDK090 ref manual)
+RES_POLY_DEFAULT_W_UM   = DEVICE_CONSTRAINTS['res_poly']['W']['default']
+CAP_DENSITY_F_PER_UM2   = 1.5e-15                                      # generic 90nm estimate, ratios matter more than exact value
+SCALE_PERCENTILE        = 3.0                                          # within the plan's 1st-5th percentile band
+
+
+def snap_to_grid(value_um: float, grid_um: float) -> float:
+    return round(round(value_um / grid_um) * grid_um, 6)
+
+_SUFFIX_MULT = {
+    'f': 1e-15, 'p': 1e-12, 'n': 1e-9, 'u': 1e-6, 'm': 1e-3,
+    'k': 1e3, 'K': 1e3, 'M': 1e6, 'G': 1e9, 'T': 1e12,
+}
+_NUM_RE = re.compile(r'^([-+]?\d*\.?\d+)((?:[eE][-+]?\d+)?)([A-Za-z]*)$')
+
+CONVERSION_MARKER_RE = re.compile(r'SIZES CONVERTED', re.IGNORECASE)
+
+
+def parse_spice_scalar(val: str) -> float | None:
+    """Parse a SPICE numeric literal (optional exponent/unit suffix) to a plain base-unit float."""
+    s = val.strip().lstrip('{').rstrip('}')
+    m = _NUM_RE.match(s)
+    if not m or not m.group(1):
+        return None
+    mantissa = float(m.group(1))
+    if m.group(2):
+        mantissa *= 10 ** int(m.group(2)[1:])
+    suffix = m.group(3)
+    if suffix:
+        mult = _SUFFIX_MULT.get(suffix)
+        if mult is None:
+            return None
+        mantissa *= mult
+    return mantissa
+
+
+def parse_length_um(val: str) -> float | None:
+    """
+    Parse a length-bearing literal to micrometers.
+    Convention used across a*/m* netlists: a value carrying an explicit SPICE
+    unit suffix or exponent is stated in meters (standard SPICE) -> x1e6 to um.
+    A bare plain number with neither suffix nor exponent is already stated in
+    um (this repo's own convention for these files' W/L values).
+    """
+    s = val.strip().lstrip('{').rstrip('}')
+    m = _NUM_RE.match(s)
+    if not m or not m.group(1):
+        return None
+    base = parse_spice_scalar(val)
+    if base is None:
+        return None
+    if m.group(2) or m.group(3):
+        return base * 1e6
+    return base
+
+
+def fmt_um(value: float) -> str:
+    return f'{value:.4g}'
+
+
+def percentile(values: list, pct: float) -> float:
+    s = sorted(values)
+    k = (len(s) - 1) * (pct / 100.0)
+    f, c = math.floor(k), math.ceil(k)
+    if f == c:
+        return s[int(k)]
+    return s[f] + (s[c] - s[f]) * (k - f)
+
+
+def compute_scale_factor(percentile_L_um: float) -> float:
+    return GPDK_L_MIN_TRANSISTOR / percentile_L_um
+
+
+def clip_transistor(L_um: float, W_um: float, M: int, Nf: int, pdk_type: str,
+                    can_split_m: bool, can_split_nf: bool) -> tuple:
+    """
+    Deterministic overshoot rule (plan section 3): redistribute width into M,
+    then into Nf, then clip L with an aspect-preserving W rescale. A pure
+    function of its own arguments -> two matched devices sharing identical
+    (L, W, pdk_type, can_split_m, can_split_nf) always converge to identical
+    results, with no pair-matching/iteration-order state required.
+    """
+    c = DEVICE_CONSTRAINTS[pdk_type]
+    Lmin, Lmax = c['L']['min'], c['L']['max']
+    Wmin, Wmax = c['W']['min'], c['W']['max']
+
+    if W_um > Wmax and can_split_m:
+        n = math.ceil(math.log2(W_um / Wmax))
+        W_um /= 2 ** n
+        M *= 2 ** n
+
+    if W_um > Wmax and can_split_nf:
+        n = math.ceil(math.log2(W_um / Wmax))
+        W_um /= 2 ** n
+        Nf *= 2 ** n
+
+    if L_um > Lmax or L_um < Lmin:
+        aspect = (W_um / L_um) if L_um else 1.0
+        L_um = min(max(L_um, Lmin), Lmax)
+        W_um = L_um * aspect
+
+    W_um = min(max(W_um, Wmin), Wmax)
+
+    # Snap to 10x the manufacturing grid, then re-clip -- a snap can round a
+    # boundary value just outside [min, max].
+    L_um = min(max(snap_to_grid(L_um, TRANSISTOR_GRID_UM), Lmin), Lmax)
+    W_um = min(max(snap_to_grid(W_um, TRANSISTOR_GRID_UM), Wmin), Wmax)
+    return L_um, W_um, M, Nf
+
+
+def electrical_resistor_to_LW(r_ohms: float) -> tuple:
+    """Section 6: fix W at res_poly's default width, solve L = R*W/rho, clip."""
+    c = DEVICE_CONSTRAINTS['res_poly']
+    W_um = RES_POLY_DEFAULT_W_UM
+    L_um = abs(r_ohms) * W_um / RES_POLY_RHO_OHM_PER_SQ
+    L_um = min(max(L_um, c['L']['min']), c['L']['max'])
+    return L_um, W_um
+
+
+def electrical_cap_to_LW(c_farad: float) -> tuple:
+    """Section 5: no source geometry -> square sized from the generic density estimate."""
+    c = DEVICE_CONSTRAINTS['cap_mom']
+    side_um = math.sqrt(abs(c_farad) / CAP_DENSITY_F_PER_UM2)
+    side_um = min(max(side_um, c['L']['min']), c['L']['max'])
+    return side_um, side_um
+
+
+def geometry_cap_to_LW(nr: float, lr_um: float, w_um: float, s_um: float) -> tuple:
+    """Section 4/5: MAGICAL source footprint -> square of equal area (density cancels)."""
+    c = DEVICE_CONSTRAINTS['cap_mom']
+    area_um2 = nr * lr_um * (w_um + s_um)
+    side_um = math.sqrt(max(area_um2, 0.0))
+    side_um = min(max(side_um, c['L']['min']), c['L']['max'])
+    return side_um, side_um
+
+
+def scale_transistor_params(device_params: dict, device_records: list, scale_factor: float) -> None:
+    """Mutate device_params in place: scale every _L/_W pair by scale_factor, clip per pdk_type."""
+    model_by_dev = {r['dev_id']: r['model'] for r in device_records}
+    dev_keys = defaultdict(dict)
+    for pname in device_params:
+        for suffix in ('_L', '_W', '_M', '_Nf'):
+            if pname.endswith(suffix):
+                dev_keys[pname[:-len(suffix)]][suffix] = pname
+                break
+
+    for dev_id, keys in dev_keys.items():
+        if '_L' not in keys or '_W' not in keys:
+            continue
+        model = model_by_dev.get(dev_id)
+        if model not in DEVICE_CONSTRAINTS:
+            continue
+        L_name, W_name = keys['_L'], keys['_W']
+        L0 = parse_length_um(device_params[L_name])
+        W0 = parse_length_um(device_params[W_name])
+        if L0 is None or W0 is None:
+            continue
+        L1, W1 = L0 * scale_factor, W0 * scale_factor
+
+        M_name, Nf_name = keys.get('_M'), keys.get('_Nf')
+        M_val  = int(float(device_params[M_name]))  if M_name  and is_literal(device_params[M_name])  else 1
+        Nf_val = int(float(device_params[Nf_name])) if Nf_name and is_literal(device_params[Nf_name]) else 1
+        can_split_m  = bool(M_name  and is_literal(device_params[M_name]))
+        can_split_nf = bool(Nf_name and is_literal(device_params[Nf_name]))
+
+        L1, W1, M_val, Nf_val = clip_transistor(
+            L1, W1, M_val, Nf_val, model, can_split_m, can_split_nf
+        )
+
+        device_params[L_name] = fmt_um(L1)
+        device_params[W_name] = fmt_um(W1)
+        if can_split_m:
+            device_params[M_name] = str(M_val)
+        if can_split_nf:
+            device_params[Nf_name] = str(Nf_val)
+
+
+# --- Passive component scaling ----------------------------------------------
+_PARAM_ASSIGN_RE = re.compile(r'(\w+)=(\S+)')
+_RC_ELEMENT_RE   = re.compile(r'^(\s*)([RC]\w*)\s+(\S+)\s+(\S+)\s+(.*)$', re.IGNORECASE)
+_NON_WORD_RE     = re.compile(r'\W')
+
+
+def register_passive_param(device_params: dict, prefix: str, inst: str,
+                           L_um: float, W_um: float, scope: str = '') -> tuple:
+    """
+    Register a passive device's L/W as named .param entries (same convention
+    as transistor sizing: <prefix>_[<subckt>_]<inst>_L / _W), so every device
+    size in the file -- transistor or passive -- lives in one param block at
+    the top instead of as an inline literal on the instance line. `scope` is
+    the enclosing subckt name (with trailing '_'), when the file has more
+    than one subckt and instance names can repeat across them.
+    """
+    safe_inst = _NON_WORD_RE.sub('', inst)
+    L_name = f'{prefix}_{scope}{safe_inst}_L'
+    W_name = f'{prefix}_{scope}{safe_inst}_W'
+    device_params[L_name] = fmt_um(L_um)
+    device_params[W_name] = fmt_um(W_um)
+    return L_name, W_name
+
+
+def build_param_index(lines: list) -> dict:
+    """Map param_name -> (line_idx, 'name=value' token) for every '.param' assignment."""
+    index = {}
+    for i, line in enumerate(lines):
+        if not line.lstrip().lower().startswith('.param'):
+            continue
+        for m in _PARAM_ASSIGN_RE.finditer(line):
+            index[m.group(1)] = (i, m.group(0))
+    return index
+
+
+def rewrite_param_value(lines: list, param_index: dict, name: str, new_value: str) -> None:
+    i, raw_token = param_index[name]
+    new_token = f'{name}={new_value}'
+    lines[i] = lines[i].replace(raw_token, new_token, 1)
+    param_index[name] = (i, new_token)
+
+
+def process_rc_line(line: str, param_index: dict, lines: list, scale_factor: float,
+                    device_params: dict, scope: str = '') -> str:
+    """
+    a-family electrical/geometric R/C element or 'resistor'/'capacitor' subckt
+    call (plan sections 6 and the length-vs-electrical split in the a21/a28
+    note). Electrical values (bare direct value, or r=/c= keyword) are left
+    untouched for simulation fidelity; derived physical L/W are registered as
+    named .param entries (see register_passive_param) and referenced from the
+    line. Pure length keyword args (w=/l= with no r=/c=) are geometric
+    already and get scaled, also promoted to named .param entries.
+    """
+    m = _RC_ELEMENT_RE.match(line)
+    if not m:
+        return line
+    indent, inst, n1, n2, rest = m.groups()
+    rest_tokens = rest.split()
+    if not rest_tokens:
+        return line
+    kind = 'R' if inst[0].upper() == 'R' else 'C'
+    prefix = 'res' if kind == 'R' else 'cap'
+    bounds = DEVICE_CONSTRAINTS['res_poly'] if kind == 'R' else DEVICE_CONSTRAINTS['cap_mom']
+
+    def resolve_scalar(ref: str, as_length: bool):
+        if is_literal(ref):
+            return parse_length_um(ref) if as_length else parse_spice_scalar(ref)
+        if ref in param_index:
+            val = param_index[ref][1].split('=', 1)[1]
+            return parse_length_um(val) if as_length else parse_spice_scalar(val)
+        return None
+
+    if len(rest_tokens) == 1 and '=' not in rest_tokens[0]:
+        ref = rest_tokens[0]
+        val = resolve_scalar(ref, as_length=False)
+        if val is None:
+            return line
+        L_um, W_um = electrical_resistor_to_LW(val) if kind == 'R' else electrical_cap_to_LW(val)
+        L_name, W_name = register_passive_param(device_params, prefix, inst, L_um, W_um, scope)
+        return f'{indent}{inst} {n1} {n2} {ref} L={{{L_name}}} W={{{W_name}}}'
+
+    kv_order = []
+    kv = {}
+    for t in rest_tokens:
+        if '=' in t:
+            k, v = t.split('=', 1)
+            kv[k.lower()] = v
+            kv_order.append((t, k, v))
+        else:
+            kv_order.append((t, None, None))
+
+    if 'w' in kv and 'l' in kv and 'r' not in kv and 'c' not in kv:
+        new_tokens = []
+        for tok, k, v in kv_order:
+            if k and k.lower() in ('w', 'l'):
+                length_um = resolve_scalar(v, as_length=True)
+                if length_um is None:
+                    new_tokens.append(tok)
+                    continue
+                new_len = min(max(length_um * scale_factor, bounds['L']['min']), bounds['L']['max'])
+                param_name = f'{prefix}_{scope}{_NON_WORD_RE.sub("", inst)}_{k.upper()}'
+                device_params[param_name] = fmt_um(new_len)
+                if v in param_index:
+                    rewrite_param_value(lines, param_index, v, fmt_um(new_len))
+                new_tokens.append(f'{k}={{{param_name}}}')
+            else:
+                new_tokens.append(tok)
+        return f'{indent}{inst} {n1} {n2} ' + ' '.join(new_tokens)
+
+    if 'r' in kv or 'c' in kv:
+        key = 'r' if 'r' in kv else 'c'
+        ref = kv[key]
+        val = resolve_scalar(ref, as_length=False)
+        if val is None:
+            return line
+        L_um, W_um = electrical_resistor_to_LW(val) if key == 'r' else electrical_cap_to_LW(val)
+        L_name, W_name = register_passive_param(device_params, prefix, inst, L_um, W_um, scope)
+        orig_tokens = [t for t, _, _ in kv_order]
+        return f'{indent}{inst} {n1} {n2} ' + ' '.join(orig_tokens) + \
+               f' L={{{L_name}}} W={{{W_name}}}'
+
+    return line
+
+
+def _split_x_passive_line(line: str) -> tuple | None:
+    """Split an MAGICAL xC/xR instance line into (indent, inst, nets, model, kv_order) or None."""
+    indent = line[:len(line) - len(line.lstrip())]
+    tokens = line.split()
+    non_kv_idx = [i for i, t in enumerate(tokens) if '=' not in t]
+    if len(non_kv_idx) < 2:
+        return None
+    model_idx = non_kv_idx[-1]
+    inst  = tokens[0]
+    nets  = tokens[1:model_idx]
+    model = tokens[model_idx]
+    kv_order = []
+    for t in tokens[model_idx + 1:]:
+        if '=' in t:
+            k, v = t.split('=', 1)
+            kv_order.append((t, k, v))
+        else:
+            kv_order.append((t, None, None))
+    return indent, inst, nets, model, kv_order
+
+
+def process_xc_line(line: str, device_params: dict, scope: str = '') -> str:
+    """m-family MAGICAL cfmom capacitor: unified density-based square sizing (section 4/5)."""
+    parts = _split_x_passive_line(line)
+    if parts is None:
+        return line
+    indent, inst, nets, model, kv_order = parts
+    kv = {k.lower(): v for _, k, v in kv_order if k}
+    if 'lr' not in kv:
+        return line
+    nr    = parse_spice_scalar(kv.get('nr', '1')) or 1.0
+    lr_um = parse_length_um(kv['lr']) or 0.0
+    w_um  = parse_length_um(kv.get('w', '0')) or 0.0
+    s_um  = parse_length_um(kv.get('s', '0')) or 0.0
+    side_um, _ = geometry_cap_to_LW(nr, lr_um, w_um, s_um)
+    L_name, W_name = register_passive_param(device_params, 'cap', inst, side_um, side_um, scope)
+
+    new_tokens = [tok for tok, k, v in kv_order if not (k and k.lower() in ('lr', 'w', 's'))]
+    new_tokens += [f'L={{{L_name}}}', f'W={{{W_name}}}']
+    return f'{indent}{inst} ' + ' '.join(nets) + f' {model} ' + ' '.join(new_tokens)
+
+
+def process_xr_line(line: str, scale_factor: float, device_params: dict, scope: str = '') -> str:
+    """m-family MAGICAL rppolywo resistor: scale lr/wr as lengths (section 4)."""
+    parts = _split_x_passive_line(line)
+    if parts is None:
+        return line
+    indent, inst, nets, model, kv_order = parts
+    kv = {k.lower(): v for _, k, v in kv_order if k}
+    if 'lr' not in kv or 'wr' not in kv:
+        return line
+    c = DEVICE_CONSTRAINTS['res_poly']
+    lr_um = (parse_length_um(kv['lr']) or 0.0) * scale_factor
+    wr_um = (parse_length_um(kv['wr']) or 0.0) * scale_factor
+    lr_um = min(max(lr_um, c['L']['min']), c['L']['max'])
+    wr_um = min(max(wr_um, c['W']['min']), c['W']['max'])
+    L_name, W_name = register_passive_param(device_params, 'res', inst, lr_um, wr_um, scope)
+
+    new_tokens = []
+    for tok, k, v in kv_order:
+        if k and k.lower() == 'lr':
+            new_tokens.append(f'{k}={{{L_name}}}')
+        elif k and k.lower() == 'wr':
+            new_tokens.append(f'{k}={{{W_name}}}')
+        else:
+            new_tokens.append(tok)
+    return f'{indent}{inst} ' + ' '.join(nets) + f' {model} ' + ' '.join(new_tokens)
+
+
+def scale_passives(lines: list, family: str, scale_factor: float, device_params: dict) -> list:
+    """
+    Apply the section 4/5/6 passive conversion to one file's already-transformed
+    lines. Tracks .subckt scope so instance names that repeat across sibling
+    subckts (e.g. 'R0' in two different unit cells) still get distinct
+    .param entries -- mirrors the transistor-side <subckt>_<inst> convention.
+    """
+    new_lines = list(lines)
+    param_index = build_param_index(new_lines) if family == 'a' else None
+    multi = count_subckts(lines) > 1
+    subckt_stack = []
+    for i, line in enumerate(new_lines):
+        s = line.lstrip()
+        if not s or s[0] in '*$.':
+            lo = s.lower()
+            if lo.startswith('.subckt'):
+                subckt_stack.append(line.split()[1] if len(line.split()) > 1 else '')
+            elif lo.startswith('.ends') or lo == '.end':
+                if subckt_stack:
+                    subckt_stack.pop()
+            continue
+        first = s.split()[0]
+        scope = f'{subckt_stack[-1]}_' if (multi and subckt_stack) else ''
+        if family == 'a' and first[:1].upper() in ('R', 'C'):
+            new_lines[i] = process_rc_line(new_lines[i], param_index, new_lines, scale_factor,
+                                            device_params, scope)
+        elif family == 'm':
+            fl = first.lower()
+            if fl.startswith('xc'):
+                new_lines[i] = process_xc_line(new_lines[i], device_params, scope)
+            elif fl.startswith('xr'):
+                new_lines[i] = process_xr_line(new_lines[i], scale_factor, device_params, scope)
+    return new_lines
+
+
+def helper_subckt_text(base_text: str, seg_r_ohms: float) -> str:
+    """
+    Append derived physical L/W to the mimo_bulk split-resistor helper subckt
+    segments, as named .param entries local to the subckt (all segments
+    share one size since they share seg_r) rather than inline literals.
+    """
+    L_um, W_um = electrical_resistor_to_LW(seg_r_ohms)
+    text = base_text.replace('.param seg_r=', f'.param seg_L={fmt_um(L_um)} seg_W={fmt_um(W_um)} seg_r=', 1)
+    return text.replace('{seg_r}', '{seg_r} L={seg_L} W={seg_W}')
 
 
 def map_token(tok: str, rail_map: dict) -> str:
@@ -435,13 +866,16 @@ def count_subckts(lines: list) -> int:
 def transform_file(lines: list, circuit_name: str) -> tuple:
     """
     Apply all transformations to a list of logical lines.
-    Returns (transformed_lines, device_params_dict, stats_dict).
+    Returns (transformed_lines, device_params_dict, stats_dict, device_records).
+    device_records is a list of {'dev_id', 'model'} used by the numeric
+    scaling pass to look up each transistor's pdk_type for clipping.
     """
     rail_map  = POWER_RAIL_MAP.get(circuit_name.lower(), {})
     multi     = count_subckts(lines) > 1
     subckt_stack = []    # stack of open subckt names
     current_subckt = ''
     device_params  = {}  # ordered param_name -> value
+    device_records = []  # [{'dev_id': ..., 'model': ...}, ...]
     out_lines = []
 
     # Stats
@@ -487,6 +921,8 @@ def transform_file(lines: list, circuit_name: str) -> tuple:
                 orig_model = tokens[5]
                 new_model  = MODEL_MAP.get(orig_model.lower(), orig_model)
                 model_types.add(new_model)
+                prefix = f"{current_subckt}_" if multi else ""
+                device_records.append({'dev_id': f"{prefix}{inst}", 'model': new_model})
             new_line = transform_m_line(
                 line, rail_map, inst, multi, current_subckt, device_params
             )
@@ -524,14 +960,15 @@ def transform_file(lines: list, circuit_name: str) -> tuple:
         'r_count': r_count,
         'c_count': c_count,
     }
-    return out_lines, device_params, stats
+    return out_lines, device_params, stats, device_records
 
 
 # ---------------------------------------------------------------------------
 # Output assembly
 # ---------------------------------------------------------------------------
 def build_header(circuit_name: str, rel_path: str, stats: dict, *,
-                 source: str = None, note: str = None) -> str:
+                 source: str = None, note: str = None,
+                 scale_factor: float = None, source_L_ref: float = None) -> str:
     types_str = ' '.join(stats['types']) if stats['types'] else 'none'
     src  = source or 'ALIGN analog layout examples'
     note_line = note or 'Converted from FinFET-style to CMOS-style netlist.'
@@ -547,9 +984,15 @@ def build_header(circuit_name: str, rel_path: str, stats: dict, *,
         f'*   Device types : {types_str}',
         f'*   Passives     : {stats["r_count"]} resistors, {stats["c_count"]} capacitors',
         f'* Note: {note_line}',
-        '*       Device sizes are placeholders — optimizer generates new sizes.',
-        '* ' + '=' * 60,
     ]
+    if scale_factor is not None:
+        lines.append(f'* SIZES CONVERTED {date.today().isoformat()} '
+                     f'scale={scale_factor:.6g} source_L_ref={source_L_ref:.6g}um')
+        lines.append('*       Device/passive sizes are scaled from the real source-netlist values')
+        lines.append('*       (see marker above) -- not random placeholders.')
+    else:
+        lines.append('*       Device sizes are placeholders — optimizer generates new sizes.')
+    lines.append('* ' + '=' * 60)
     return '\n'.join(lines)
 
 
@@ -717,56 +1160,143 @@ def find_sp_file(circuit_dir: Path, circuit_name: str) -> Path | None:
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
-def convert_circuit(num: int, circuit_name: str) -> bool:
+def build_circuit_job(num: int, circuit_name: str) -> dict | None:
+    """Phase 1: read + syntax-transform one ALIGN circuit. No numeric scaling, no write."""
     circuit_dir = EXAMPLES_DIR / circuit_name
     if not circuit_dir.is_dir():
         print(f"  [SKIP] Directory not found: {circuit_dir}")
-        return False
+        return None
 
     sp_file = find_sp_file(circuit_dir, circuit_name)
     if sp_file is None:
         print(f"  [SKIP] No .sp file found in {circuit_dir}")
-        return False
+        return None
 
     rel_path = sp_file.relative_to(EXAMPLES_DIR)
     print(f"  [{num:02d}] {circuit_name} <- {rel_path}")
 
-    # Read and preprocess
     raw_lines = read_file(sp_file)
     lines = join_continuations(raw_lines)
     lines = convert_comments(lines)
     lines = strip_model_decls(lines)
 
-    # Special: collapse split resistors (mimo_bulk)
     helper_subckts_needed = set()
     if circuit_name.lower() == 'mimo_bulk':
         lines, helper_subckts_needed = collapse_split_resistors(lines)
 
-    # Transform
-    out_lines, device_params, stats = transform_file(lines, circuit_name)
+    out_lines, device_params, stats, device_records = transform_file(lines, circuit_name)
 
-    # Build param block
+    return {
+        'family': 'a',
+        'out_name': f"a{num:02d}_{circuit_name}.sp",
+        'circuit_name': circuit_name,
+        'rel_path': str(rel_path),
+        'source': None,
+        'note': None,
+        'out_lines': out_lines,
+        'device_params': device_params,
+        'device_records': device_records,
+        'stats': stats,
+        'helper_subckts_needed': helper_subckts_needed,
+        'log_prefix': f"[{num:02d}] {circuit_name}",
+    }
+
+
+def build_magical_job(num: int, name: str, filename: str) -> dict | None:
+    """Phase 1: read + syntax-transform one MAGICAL circuit. No numeric scaling, no write."""
+    sp_file = MAGICAL_DIR / filename
+    if not sp_file.exists():
+        print(f"  [SKIP] Not found: {sp_file}")
+        return None
+
+    print(f"  [m{num:02d}] {name} <- MAGICALexamples/{filename}")
+
+    raw_lines = read_file(sp_file)
+    lines = join_continuations(raw_lines)
+    lines = convert_comments(lines)
+    lines = normalize_magical_format(lines)
+    lines = strip_model_decls(lines)
+
+    out_lines, device_params, stats, device_records = transform_file(lines, name)
+
+    return {
+        'family': 'm',
+        'out_name': f"m{num:02d}_{name}.sp",
+        'circuit_name': name,
+        'rel_path': f"MAGICALexamples/{filename}",
+        'source': 'MAGICAL analog layout examples',
+        'note': 'Converted from Spectre/HSPICE format to ALIGN SPICE format.',
+        'out_lines': out_lines,
+        'device_params': device_params,
+        'device_records': device_records,
+        'stats': stats,
+        'helper_subckts_needed': set(),
+        'log_prefix': f"[m{num:02d}] {name}",
+    }
+
+
+def compute_family_scale_factor(jobs: list) -> tuple:
+    """
+    Population scale factor for one source-technology family (plan section 1):
+    scale = gpdk090_L_min / percentile(all *_L values in the family).
+    Returns (scale_factor, percentile_L_um).
+    """
+    Ls = []
+    for job in jobs:
+        model_by_dev = {r['dev_id']: r['model'] for r in job['device_records']}
+        for pname, pval in job['device_params'].items():
+            if not pname.endswith('_L'):
+                continue
+            dev_id = pname[:-2]
+            if model_by_dev.get(dev_id) not in DEVICE_CONSTRAINTS:
+                continue
+            v = parse_length_um(pval)
+            if v is not None:
+                Ls.append(v)
+    if not Ls:
+        return 1.0, GPDK_L_MIN_TRANSISTOR
+    p = percentile(Ls, SCALE_PERCENTILE)
+    return compute_scale_factor(p), p
+
+
+def already_converted(out_path: Path) -> bool:
+    if not out_path.exists():
+        return False
+    return bool(CONVERSION_MARKER_RE.search(out_path.read_text(encoding='utf-8', errors='ignore')))
+
+
+def write_job(job: dict, scale_factor: float, source_L_ref: float) -> bool:
+    """Phase 2: apply the numeric scaling pass (sections 1-6) and write the .sp file."""
+    out_path = OUTPUT_DIR / job['out_name']
+    if already_converted(out_path):
+        print(f"  {job['log_prefix']}: [SKIP] {job['out_name']} already carries a "
+              f"SIZES CONVERTED marker -- refusing to re-run.")
+        return False
+
+    device_params = dict(job['device_params'])
+    scale_transistor_params(device_params, job['device_records'], scale_factor)
+    out_lines = scale_passives(job['out_lines'], job['family'], scale_factor, device_params)
+
     param_block = build_param_block(device_params)
+    header = build_header(
+        job['circuit_name'], job['rel_path'], job['stats'],
+        source=job['source'], note=job['note'],
+        scale_factor=scale_factor, source_L_ref=source_L_ref,
+    )
 
-    # Build header
-    header = build_header(circuit_name, str(rel_path), stats)
-
-    # Assemble helper subckts for mimo_bulk
     helper_text = ''
+    helper_subckts_needed = job['helper_subckts_needed']
     if helper_subckts_needed:
         parts = []
-        if 'res8'  in helper_subckts_needed:
-            parts.append(RES8_SUBCKT)
+        if 'res8' in helper_subckts_needed:
+            parts.append(helper_subckt_text(RES8_SUBCKT, 100.0))
         if 'res18' in helper_subckts_needed:
-            parts.append(RES18_SUBCKT)
+            parts.append(helper_subckt_text(RES18_SUBCKT, 200.0))
         if parts:
             helper_text = '\n* --- HELPER SUBCKTS (split-resistor wrappers) ---\n' + \
                           '\n\n'.join(parts) + '\n'
 
-    # Write output
-    out_name = f"a{num:02d}_{circuit_name}.sp"
-    out_path  = OUTPUT_DIR / out_name
-
+    out_path = OUTPUT_DIR / job['out_name']
     with open(out_path, 'w', encoding='utf-8') as f:
         f.write(header + '\n')
         if param_block:
@@ -778,45 +1308,8 @@ def convert_circuit(num: int, circuit_name: str) -> bool:
         for line in out_lines:
             f.write(line + '\n')
 
-    print(f"         -> {out_name}  "
-          f"(M={stats['devices']}, subckts={stats['subckts']}, "
-          f"types={stats['types']}, R={stats['r_count']}, C={stats['c_count']})")
-    return True
-
-
-def convert_magical_circuit(num: int, name: str, filename: str) -> bool:
-    sp_file = MAGICAL_DIR / filename
-    if not sp_file.exists():
-        print(f"  [SKIP] Not found: {sp_file}")
-        return False
-
-    print(f"  [m{num:02d}] {name} <- MAGICALexamples/{filename}")
-
-    raw_lines = read_file(sp_file)
-    lines = join_continuations(raw_lines)
-    lines = convert_comments(lines)
-    lines = normalize_magical_format(lines)
-    lines = strip_model_decls(lines)
-
-    out_lines, device_params, stats = transform_file(lines, name)
-    param_block = build_param_block(device_params)
-    header = build_header(
-        name, f"MAGICALexamples/{filename}", stats,
-        source='MAGICAL analog layout examples',
-        note='Converted from Spectre/HSPICE format to ALIGN SPICE format.',
-    )
-
-    out_name = f"m{num:02d}_{name}.sp"
-    out_path  = OUTPUT_DIR / out_name
-    with open(out_path, 'w', encoding='utf-8') as f:
-        f.write(header + '\n')
-        if param_block:
-            f.write('\n'.join(param_block) + '\n')
-            f.write('\n* --- CIRCUIT DEFINITION ---\n')
-        for line in out_lines:
-            f.write(line + '\n')
-
-    print(f"         -> {out_name}  "
+    stats = job['stats']
+    print(f"         -> {job['out_name']}  "
           f"(M={stats['devices']}, subckts={stats['subckts']}, "
           f"types={stats['types']}, R={stats['r_count']}, C={stats['c_count']})")
     return True
@@ -828,21 +1321,38 @@ def main():
     print(f"Output dir   : {OUTPUT_DIR}")
     print()
 
-    ok = 0
-    skip = 0
+    a_jobs = []
     for num, name in CIRCUIT_LIST:
-        result = convert_circuit(num, name)
-        if result:
-            ok += 1
-        else:
-            skip += 1
+        job = build_circuit_job(num, name)
+        if job:
+            a_jobs.append(job)
 
     print(f"\nMAGICAL Netlist Converter")
     print(f"MAGICAL dir  : {MAGICAL_DIR}")
     print()
+    m_jobs = []
     for num, name, filename in MAGICAL_CIRCUIT_LIST:
-        result = convert_magical_circuit(num, name, filename)
-        if result:
+        job = build_magical_job(num, name, filename)
+        if job:
+            m_jobs.append(job)
+
+    scale_a, Lref_a = compute_family_scale_factor(a_jobs)
+    scale_m, Lref_m = compute_family_scale_factor(m_jobs)
+    print(f"\nNumeric scaling: a-family scale={scale_a:.6g} "
+          f"(p{SCALE_PERCENTILE:g} source L={Lref_a:.6g}um)")
+    print(f"Numeric scaling: m-family scale={scale_m:.6g} "
+          f"(p{SCALE_PERCENTILE:g} source L={Lref_m:.6g}um)")
+    print()
+
+    ok = 0
+    skip = 0
+    for job in a_jobs:
+        if write_job(job, scale_a, Lref_a):
+            ok += 1
+        else:
+            skip += 1
+    for job in m_jobs:
+        if write_job(job, scale_m, Lref_m):
             ok += 1
         else:
             skip += 1

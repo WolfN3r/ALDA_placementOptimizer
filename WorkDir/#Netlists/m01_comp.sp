@@ -9,27 +9,29 @@
 *   Device types : nmos_lvt pmos_lvt
 *   Passives     : 0 resistors, 0 capacitors
 * Note: Converted from Spectre/HSPICE format to ALIGN SPICE format.
-*       Device sizes are placeholders — optimizer generates new sizes.
+* SIZES CONVERTED 2026-07-10 scale=2.5 source_L_ref=0.04um
+*       Device/passive sizes are scaled from the real source-netlist values
+*       (see marker above) -- not random placeholders.
 * ============================================================
 
 * --- DEVICE PARAMETERS ---
-.param M0_L=1u M0_W=1.05u M0_M=1 M0_Nf=1
-.param M22_L=1u M22_W=1.05u M22_M=1 M22_Nf=1
-.param M16_L=40n M16_W=1.44u M16_M=1 M16_Nf=3
-.param M17_L=40n M17_W=1.44u M17_M=1 M17_Nf=3
-.param M4_L=40n M4_W=1.92u M4_M=1 M4_Nf=4
-.param M3_L=40n M3_W=1.92u M3_M=1 M3_Nf=4
-.param M7_L=40n M7_W=8.64u M7_M=1 M7_Nf=18
-.param M5_L=40n M5_W=9.6u M5_M=1 M5_Nf=10
-.param M6_L=40n M6_W=9.6u M6_M=1 M6_Nf=10
-.param M8_L=40n M8_W=2.88u M8_M=1 M8_Nf=3
-.param M18_L=40n M18_W=1.92u M18_M=1 M18_Nf=2
-.param M15_L=40n M15_W=2.88u M15_M=1 M15_Nf=3
-.param M19_L=40n M19_W=1.92u M19_M=1 M19_Nf=2
-.param M10_L=40n M10_W=1.92u M10_M=1 M10_Nf=2
-.param M12_L=40n M12_W=1.92u M12_M=1 M12_Nf=2
-.param M14_L=40n M14_W=3.84u M14_M=1 M14_Nf=4
-.param M13_L=40n M13_W=3.84u M13_M=1 M13_Nf=4
+.param M0_L=2.5 M0_W=2.6 M0_M=1 M0_Nf=1
+.param M22_L=2.5 M22_W=2.6 M22_M=1 M22_Nf=1
+.param M16_L=0.1 M16_W=3.6 M16_M=1 M16_Nf=3
+.param M17_L=0.1 M17_W=3.6 M17_M=1 M17_Nf=3
+.param M4_L=0.1 M4_W=4.8 M4_M=1 M4_Nf=4
+.param M3_L=0.1 M3_W=4.8 M3_M=1 M3_Nf=4
+.param M7_L=0.1 M7_W=21.6 M7_M=1 M7_Nf=18
+.param M5_L=0.1 M5_W=24 M5_M=1 M5_Nf=10
+.param M6_L=0.1 M6_W=24 M6_M=1 M6_Nf=10
+.param M8_L=0.1 M8_W=7.2 M8_M=1 M8_Nf=3
+.param M18_L=0.1 M18_W=4.8 M18_M=1 M18_Nf=2
+.param M15_L=0.1 M15_W=7.2 M15_M=1 M15_Nf=3
+.param M19_L=0.1 M19_W=4.8 M19_M=1 M19_Nf=2
+.param M10_L=0.1 M10_W=4.8 M10_M=1 M10_Nf=2
+.param M12_L=0.1 M12_W=4.8 M12_M=1 M12_Nf=2
+.param M14_L=0.1 M14_W=9.6 M14_M=1 M14_Nf=4
+.param M13_L=0.1 M13_W=9.6 M13_M=1 M13_Nf=4
 
 
 * --- CIRCUIT DEFINITION ---

@@ -9,24 +9,28 @@
 *   Device types : nmos_rvt
 *   Passives     : 2 resistors, 0 capacitors
 * Note: Converted from FinFET-style to CMOS-style netlist.
-*       Device sizes are placeholders — optimizer generates new sizes.
+* SIZES CONVERTED 2026-07-10 scale=7.14286 source_L_ref=0.014um
+*       Device/passive sizes are scaled from the real source-netlist values
+*       (see marker above) -- not random placeholders.
 * ============================================================
 
 * --- DEVICE PARAMETERS ---
+.param res_R5_L=4 res_R5_W=1
+.param res_R6_L=4 res_R6_W=1
 .param M03_M=1 M03_Nf=6
 .param M02_M=1 M02_Nf=6
 .param M01_M=1 M01_Nf=4
 .param M00_Nf=4
-.param Msw0_L=0.014u Msw0_Nf=6
-.param Msw1_L=0.014u Msw1_Nf=6
+.param Msw0_L=0.1 Msw0_Nf=6
+.param Msw1_L=0.1 Msw1_Nf=6
 .param M12_Nf=6
 .param M11_Nf=4
 .param M10_Nf=4
-.param Msw2_L=0.014u Msw2_Nf=6
+.param Msw2_L=0.1 Msw2_Nf=6
 .param M22_Nf=6
 .param M21_Nf=4
 .param M20_Nf=4
-.param Msw3_L=0.014u Msw3_Nf=6
+.param Msw3_L=0.1 Msw3_Nf=6
 .param M32_Nf=6
 .param M31_Nf=4
 .param M30_Nf=4
@@ -53,6 +57,6 @@
 		M32 net6p vmirror_vga VSSA VSSA nmos_rvt W=nfpf_cm Nf={M32_Nf}
 		M31 vout_vga2 vin2 net6 VSSA nmos_rvt W=nfpf_dp Nf={M31_Nf}
 		M30 vout_vga1 vin1 net6 VSSA nmos_rvt W=nfpf_dp Nf={M30_Nf}
-		R5 VDDA vout_vga2 rl
-		R6 VDDA vout_vga1 rl
+		R5 VDDA vout_vga2 rl L={res_R5_L} W={res_R5_W}
+		R6 VDDA vout_vga1 rl L={res_R6_L} W={res_R6_W}
 .ends variable_gain_amplifier

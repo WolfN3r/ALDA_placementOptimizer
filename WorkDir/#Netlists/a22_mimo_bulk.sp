@@ -9,70 +9,100 @@
 *   Device types : nmos_lvt nmos_rvt pmos_rvt
 *   Passives     : 12 resistors, 20 capacitors
 * Note: Converted from FinFET-style to CMOS-style netlist.
-*       Device sizes are placeholders — optimizer generates new sizes.
+* SIZES CONVERTED 2026-07-10 scale=7.14286 source_L_ref=0.014um
+*       Device/passive sizes are scaled from the real source-netlist values
+*       (see marker above) -- not random placeholders.
 * ============================================================
 
 * --- DEVICE PARAMETERS ---
-.param TIA_1_m1_L=400e-9 TIA_1_m1_W=64e-6 TIA_1_m1_M=1 TIA_1_m1_Nf=8
-.param TIA_1_m0_L=400e-9 TIA_1_m0_W=64e-6 TIA_1_m0_M=1 TIA_1_m0_Nf=8
-.param TIA_1_m5_L=200e-9 TIA_1_m5_W=32e-6 TIA_1_m5_M=1 TIA_1_m5_Nf=8
-.param TIA_1_m4_L=200e-9 TIA_1_m4_W=32e-6 TIA_1_m4_M=1 TIA_1_m4_Nf=8
-.param TIA_1_m3_L=200e-9 TIA_1_m3_W=192e-6 TIA_1_m3_M=1 TIA_1_m3_Nf=32
-.param TIA_1_m2_L=200e-9 TIA_1_m2_W=192e-6 TIA_1_m2_M=1 TIA_1_m2_Nf=32
-.param bottom_plate_4path_beamforming_m15_L=60e-9 bottom_plate_4path_beamforming_m15_W=2e-6 bottom_plate_4path_beamforming_m15_Nf=16
-.param bottom_plate_4path_beamforming_m14_L=60e-9 bottom_plate_4path_beamforming_m14_W=2e-6 bottom_plate_4path_beamforming_m14_Nf=16
-.param bottom_plate_4path_beamforming_m13_L=60e-9 bottom_plate_4path_beamforming_m13_W=2e-6 bottom_plate_4path_beamforming_m13_Nf=16
-.param bottom_plate_4path_beamforming_m12_L=60e-9 bottom_plate_4path_beamforming_m12_W=2e-6 bottom_plate_4path_beamforming_m12_Nf=16
-.param bottom_plate_4path_beamforming_m11_L=60e-9 bottom_plate_4path_beamforming_m11_W=2e-6 bottom_plate_4path_beamforming_m11_Nf=16
-.param bottom_plate_4path_beamforming_m10_L=60e-9 bottom_plate_4path_beamforming_m10_W=2e-6 bottom_plate_4path_beamforming_m10_Nf=16
-.param bottom_plate_4path_beamforming_m9_L=60e-9 bottom_plate_4path_beamforming_m9_W=2e-6 bottom_plate_4path_beamforming_m9_Nf=16
-.param bottom_plate_4path_beamforming_m8_L=60e-9 bottom_plate_4path_beamforming_m8_W=2e-6 bottom_plate_4path_beamforming_m8_Nf=16
-.param bottom_plate_4path_beamforming_m7_L=60e-9 bottom_plate_4path_beamforming_m7_W=2e-6 bottom_plate_4path_beamforming_m7_Nf=16
-.param bottom_plate_4path_beamforming_m6_L=60e-9 bottom_plate_4path_beamforming_m6_W=2e-6 bottom_plate_4path_beamforming_m6_Nf=16
-.param bottom_plate_4path_beamforming_m5_L=60e-9 bottom_plate_4path_beamforming_m5_W=2e-6 bottom_plate_4path_beamforming_m5_Nf=16
-.param bottom_plate_4path_beamforming_m4_L=60e-9 bottom_plate_4path_beamforming_m4_W=2e-6 bottom_plate_4path_beamforming_m4_Nf=16
-.param bottom_plate_4path_beamforming_m3_L=60e-9 bottom_plate_4path_beamforming_m3_W=2e-6 bottom_plate_4path_beamforming_m3_Nf=16
-.param bottom_plate_4path_beamforming_m2_L=60e-9 bottom_plate_4path_beamforming_m2_W=2e-6 bottom_plate_4path_beamforming_m2_Nf=16
-.param bottom_plate_4path_beamforming_m1_L=60e-9 bottom_plate_4path_beamforming_m1_W=2e-6 bottom_plate_4path_beamforming_m1_Nf=16
-.param bottom_plate_4path_beamforming_m0_L=60e-9 bottom_plate_4path_beamforming_m0_W=2e-6 bottom_plate_4path_beamforming_m0_Nf=16
-.param INVx1_8Phase_m1_L=60e-9 INVx1_8Phase_m1_W=1.2e-6 INVx1_8Phase_m1_Nf=4
-.param INVx1_8Phase_m0_L=60e-9 INVx1_8Phase_m0_W=600e-9 INVx1_8Phase_m0_Nf=4
-.param CLK_IO_m6_L=60e-9 CLK_IO_m6_W=300e-9 CLK_IO_m6_Nf=2
-.param CLK_IO_m4_L=60e-9 CLK_IO_m4_W=300e-9 CLK_IO_m4_Nf=2
-.param CLK_IO_m0_L=60e-9 CLK_IO_m0_W=300e-9 CLK_IO_m0_Nf=2
-.param CLK_IO_m2_L=60e-9 CLK_IO_m2_W=300e-9 CLK_IO_m2_Nf=2
-.param CLK_IO_m7_L=60e-9 CLK_IO_m7_W=300e-9 CLK_IO_m7_Nf=2
-.param CLK_IO_m5_L=60e-9 CLK_IO_m5_W=300e-9 CLK_IO_m5_Nf=2
-.param CLK_IO_m3_L=60e-9 CLK_IO_m3_W=7.5e-7 CLK_IO_m3_Nf=2
-.param CLK_IO_m1_L=60e-9 CLK_IO_m1_W=7.5e-7 CLK_IO_m1_Nf=2
-.param INVx1_8Phase_schematic_m1_L=60e-9 INVx1_8Phase_schematic_m1_W=1.2e-6 INVx1_8Phase_schematic_m1_Nf=4
-.param INVx1_8Phase_schematic_m0_L=60e-9 INVx1_8Phase_schematic_m0_W=600e-9 INVx1_8Phase_schematic_m0_Nf=4
-.param INVx4_8Phase_m1_L=60e-9 INVx4_8Phase_m1_W=1.2e-6 INVx4_8Phase_m1_Nf=16
-.param INVx4_8Phase_m0_L=60e-9 INVx4_8Phase_m0_W=600e-9 INVx4_8Phase_m0_Nf=16
-.param AND2_m4_L=60e-9 AND2_m4_W=600e-9 AND2_m4_Nf=4
-.param AND2_m6_L=60e-9 AND2_m6_W=600e-9 AND2_m6_Nf=4
-.param AND2_m5_L=60e-9 AND2_m5_W=600e-9 AND2_m5_Nf=4
-.param AND2_m13_L=60e-9 AND2_m13_W=1.2e-6 AND2_m13_Nf=4
-.param AND2_m14_L=60e-9 AND2_m14_W=1.2e-6 AND2_m14_Nf=4
-.param AND2_m1_L=60e-9 AND2_m1_W=1.2e-6 AND2_m1_Nf=4
-.param FF_DTG_m1_L=60e-9 FF_DTG_m1_W=600e-9 FF_DTG_m1_Nf=4
-.param FF_DTG_m2_L=60e-9 FF_DTG_m2_W=600e-9 FF_DTG_m2_Nf=4
-.param FF_DTG_m3_L=60e-9 FF_DTG_m3_W=600e-9 FF_DTG_m3_Nf=4
-.param FF_DTG_m5_L=60e-9 FF_DTG_m5_W=600e-9 FF_DTG_m5_Nf=4
-.param FF_DTG_m14_L=60e-9 FF_DTG_m14_W=600e-9 FF_DTG_m14_Nf=4
-.param FF_DTG_m12_L=60e-9 FF_DTG_m12_W=600e-9 FF_DTG_m12_Nf=4
-.param FF_DTG_m11_L=60e-9 FF_DTG_m11_W=600e-9 FF_DTG_m11_Nf=4
-.param FF_DTG_m6_L=60e-9 FF_DTG_m6_W=600e-9 FF_DTG_m6_Nf=4
-.param FF_DTG_m10_L=60e-9 FF_DTG_m10_W=600e-9 FF_DTG_m10_Nf=4
-.param FF_DTG_m20_L=60e-9 FF_DTG_m20_W=1.2e-6 FF_DTG_m20_Nf=4
-.param FF_DTG_m0_L=60e-9 FF_DTG_m0_W=1.2e-6 FF_DTG_m0_Nf=4
-.param FF_DTG_m4_L=60e-9 FF_DTG_m4_W=1.2e-6 FF_DTG_m4_Nf=4
-.param FF_DTG_m8_L=60e-9 FF_DTG_m8_W=1.2e-6 FF_DTG_m8_Nf=4
-.param FF_DTG_m7_L=60e-9 FF_DTG_m7_W=1.2e-6 FF_DTG_m7_Nf=4
-.param FF_DTG_m17_L=60e-9 FF_DTG_m17_W=1.2e-6 FF_DTG_m17_Nf=4
-.param FF_DTG_m13_L=60e-9 FF_DTG_m13_W=1.2e-6 FF_DTG_m13_Nf=4
-.param FF_DTG_m16_L=60e-9 FF_DTG_m16_W=1.2e-6 FF_DTG_m16_Nf=4
-.param FF_DTG_m9_L=60e-9 FF_DTG_m9_W=1.2e-6 FF_DTG_m9_Nf=4
+.param res_bottom_plate_4path_beamforming_r11_L=1.4 res_bottom_plate_4path_beamforming_r11_W=1
+.param res_bottom_plate_4path_beamforming_r10_L=1.4 res_bottom_plate_4path_beamforming_r10_W=1
+.param res_bottom_plate_4path_beamforming_r9_L=1.4 res_bottom_plate_4path_beamforming_r9_W=1
+.param res_bottom_plate_4path_beamforming_r8_L=1.4 res_bottom_plate_4path_beamforming_r8_W=1
+.param res_bottom_plate_4path_beamforming_r3_L=1.4 res_bottom_plate_4path_beamforming_r3_W=1
+.param res_bottom_plate_4path_beamforming_r2_L=1.4 res_bottom_plate_4path_beamforming_r2_W=1
+.param res_bottom_plate_4path_beamforming_r1_L=1.4 res_bottom_plate_4path_beamforming_r1_W=1
+.param res_bottom_plate_4path_beamforming_r0_L=1.4 res_bottom_plate_4path_beamforming_r0_W=1
+.param cap_bottom_plate_4path_beamforming_c8_L=36.51 cap_bottom_plate_4path_beamforming_c8_W=36.51
+.param cap_bottom_plate_4path_beamforming_c9_L=36.51 cap_bottom_plate_4path_beamforming_c9_W=36.51
+.param cap_bottom_plate_4path_beamforming_c4_L=36.51 cap_bottom_plate_4path_beamforming_c4_W=36.51
+.param cap_bottom_plate_4path_beamforming_c5_L=36.51 cap_bottom_plate_4path_beamforming_c5_W=36.51
+.param cap_bottom_plate_4path_beamforming_c7_L=36.51 cap_bottom_plate_4path_beamforming_c7_W=36.51
+.param cap_bottom_plate_4path_beamforming_c6_L=36.51 cap_bottom_plate_4path_beamforming_c6_W=36.51
+.param cap_bottom_plate_4path_beamforming_c2_L=36.51 cap_bottom_plate_4path_beamforming_c2_W=36.51
+.param cap_bottom_plate_4path_beamforming_c3_L=36.51 cap_bottom_plate_4path_beamforming_c3_W=36.51
+.param cap_bottom_plate_4path_beamforming_c1_L=36.51 cap_bottom_plate_4path_beamforming_c1_W=36.51
+.param cap_bottom_plate_4path_beamforming_c0_L=36.51 cap_bottom_plate_4path_beamforming_c0_W=36.51
+.param cap_CLK_IO_c0_L=11.55 cap_CLK_IO_c0_W=11.55
+.param cap_CLK_IO_c1_L=11.55 cap_CLK_IO_c1_W=11.55
+.param cap_bottom_plate_4path_mixer_diff_end_c7_L=50 cap_bottom_plate_4path_mixer_diff_end_c7_W=50
+.param cap_bottom_plate_4path_mixer_diff_end_c3_L=50 cap_bottom_plate_4path_mixer_diff_end_c3_W=50
+.param cap_bottom_plate_4path_mixer_diff_end_c8_L=50 cap_bottom_plate_4path_mixer_diff_end_c8_W=50
+.param cap_bottom_plate_4path_mixer_diff_end_c9_L=50 cap_bottom_plate_4path_mixer_diff_end_c9_W=50
+.param cap_bottom_plate_4path_mixer_diff_end_c5_L=50 cap_bottom_plate_4path_mixer_diff_end_c5_W=50
+.param cap_bottom_plate_4path_mixer_diff_end_c4_L=50 cap_bottom_plate_4path_mixer_diff_end_c4_W=50
+.param cap_bottom_plate_4path_mixer_diff_end_c6_L=50 cap_bottom_plate_4path_mixer_diff_end_c6_W=50
+.param cap_bottom_plate_4path_mixer_diff_end_c10_L=50 cap_bottom_plate_4path_mixer_diff_end_c10_W=50
+.param TIA_1_m1_L=2.85 TIA_1_m1_W=57.15 TIA_1_m1_M=8 TIA_1_m1_Nf=8
+.param TIA_1_m0_L=2.85 TIA_1_m0_W=57.15 TIA_1_m0_M=8 TIA_1_m0_Nf=8
+.param TIA_1_m5_L=1.45 TIA_1_m5_W=57.15 TIA_1_m5_M=4 TIA_1_m5_Nf=8
+.param TIA_1_m4_L=1.45 TIA_1_m4_W=57.15 TIA_1_m4_M=4 TIA_1_m4_Nf=8
+.param TIA_1_m3_L=1.45 TIA_1_m3_W=85.7 TIA_1_m3_M=16 TIA_1_m3_Nf=32
+.param TIA_1_m2_L=1.45 TIA_1_m2_W=85.7 TIA_1_m2_M=16 TIA_1_m2_Nf=32
+.param bottom_plate_4path_beamforming_m15_L=0.45 bottom_plate_4path_beamforming_m15_W=14.3 bottom_plate_4path_beamforming_m15_Nf=16
+.param bottom_plate_4path_beamforming_m14_L=0.45 bottom_plate_4path_beamforming_m14_W=14.3 bottom_plate_4path_beamforming_m14_Nf=16
+.param bottom_plate_4path_beamforming_m13_L=0.45 bottom_plate_4path_beamforming_m13_W=14.3 bottom_plate_4path_beamforming_m13_Nf=16
+.param bottom_plate_4path_beamforming_m12_L=0.45 bottom_plate_4path_beamforming_m12_W=14.3 bottom_plate_4path_beamforming_m12_Nf=16
+.param bottom_plate_4path_beamforming_m11_L=0.45 bottom_plate_4path_beamforming_m11_W=14.3 bottom_plate_4path_beamforming_m11_Nf=16
+.param bottom_plate_4path_beamforming_m10_L=0.45 bottom_plate_4path_beamforming_m10_W=14.3 bottom_plate_4path_beamforming_m10_Nf=16
+.param bottom_plate_4path_beamforming_m9_L=0.45 bottom_plate_4path_beamforming_m9_W=14.3 bottom_plate_4path_beamforming_m9_Nf=16
+.param bottom_plate_4path_beamforming_m8_L=0.45 bottom_plate_4path_beamforming_m8_W=14.3 bottom_plate_4path_beamforming_m8_Nf=16
+.param bottom_plate_4path_beamforming_m7_L=0.45 bottom_plate_4path_beamforming_m7_W=14.3 bottom_plate_4path_beamforming_m7_Nf=16
+.param bottom_plate_4path_beamforming_m6_L=0.45 bottom_plate_4path_beamforming_m6_W=14.3 bottom_plate_4path_beamforming_m6_Nf=16
+.param bottom_plate_4path_beamforming_m5_L=0.45 bottom_plate_4path_beamforming_m5_W=14.3 bottom_plate_4path_beamforming_m5_Nf=16
+.param bottom_plate_4path_beamforming_m4_L=0.45 bottom_plate_4path_beamforming_m4_W=14.3 bottom_plate_4path_beamforming_m4_Nf=16
+.param bottom_plate_4path_beamforming_m3_L=0.45 bottom_plate_4path_beamforming_m3_W=14.3 bottom_plate_4path_beamforming_m3_Nf=16
+.param bottom_plate_4path_beamforming_m2_L=0.45 bottom_plate_4path_beamforming_m2_W=14.3 bottom_plate_4path_beamforming_m2_Nf=16
+.param bottom_plate_4path_beamforming_m1_L=0.45 bottom_plate_4path_beamforming_m1_W=14.3 bottom_plate_4path_beamforming_m1_Nf=16
+.param bottom_plate_4path_beamforming_m0_L=0.45 bottom_plate_4path_beamforming_m0_W=14.3 bottom_plate_4path_beamforming_m0_Nf=16
+.param INVx1_8Phase_m1_L=0.45 INVx1_8Phase_m1_W=8.55 INVx1_8Phase_m1_Nf=4
+.param INVx1_8Phase_m0_L=0.45 INVx1_8Phase_m0_W=4.3 INVx1_8Phase_m0_Nf=4
+.param CLK_IO_m6_L=0.45 CLK_IO_m6_W=2.15 CLK_IO_m6_Nf=2
+.param CLK_IO_m4_L=0.45 CLK_IO_m4_W=2.15 CLK_IO_m4_Nf=2
+.param CLK_IO_m0_L=0.45 CLK_IO_m0_W=2.15 CLK_IO_m0_Nf=2
+.param CLK_IO_m2_L=0.45 CLK_IO_m2_W=2.15 CLK_IO_m2_Nf=2
+.param CLK_IO_m7_L=0.45 CLK_IO_m7_W=2.15 CLK_IO_m7_Nf=2
+.param CLK_IO_m5_L=0.45 CLK_IO_m5_W=2.15 CLK_IO_m5_Nf=2
+.param CLK_IO_m3_L=0.45 CLK_IO_m3_W=5.35 CLK_IO_m3_Nf=2
+.param CLK_IO_m1_L=0.45 CLK_IO_m1_W=5.35 CLK_IO_m1_Nf=2
+.param INVx1_8Phase_schematic_m1_L=0.45 INVx1_8Phase_schematic_m1_W=8.55 INVx1_8Phase_schematic_m1_Nf=4
+.param INVx1_8Phase_schematic_m0_L=0.45 INVx1_8Phase_schematic_m0_W=4.3 INVx1_8Phase_schematic_m0_Nf=4
+.param INVx4_8Phase_m1_L=0.45 INVx4_8Phase_m1_W=8.55 INVx4_8Phase_m1_Nf=16
+.param INVx4_8Phase_m0_L=0.45 INVx4_8Phase_m0_W=4.3 INVx4_8Phase_m0_Nf=16
+.param AND2_m4_L=0.45 AND2_m4_W=4.3 AND2_m4_Nf=4
+.param AND2_m6_L=0.45 AND2_m6_W=4.3 AND2_m6_Nf=4
+.param AND2_m5_L=0.45 AND2_m5_W=4.3 AND2_m5_Nf=4
+.param AND2_m13_L=0.45 AND2_m13_W=8.55 AND2_m13_Nf=4
+.param AND2_m14_L=0.45 AND2_m14_W=8.55 AND2_m14_Nf=4
+.param AND2_m1_L=0.45 AND2_m1_W=8.55 AND2_m1_Nf=4
+.param FF_DTG_m1_L=0.45 FF_DTG_m1_W=4.3 FF_DTG_m1_Nf=4
+.param FF_DTG_m2_L=0.45 FF_DTG_m2_W=4.3 FF_DTG_m2_Nf=4
+.param FF_DTG_m3_L=0.45 FF_DTG_m3_W=4.3 FF_DTG_m3_Nf=4
+.param FF_DTG_m5_L=0.45 FF_DTG_m5_W=4.3 FF_DTG_m5_Nf=4
+.param FF_DTG_m14_L=0.45 FF_DTG_m14_W=4.3 FF_DTG_m14_Nf=4
+.param FF_DTG_m12_L=0.45 FF_DTG_m12_W=4.3 FF_DTG_m12_Nf=4
+.param FF_DTG_m11_L=0.45 FF_DTG_m11_W=4.3 FF_DTG_m11_Nf=4
+.param FF_DTG_m6_L=0.45 FF_DTG_m6_W=4.3 FF_DTG_m6_Nf=4
+.param FF_DTG_m10_L=0.45 FF_DTG_m10_W=4.3 FF_DTG_m10_Nf=4
+.param FF_DTG_m20_L=0.45 FF_DTG_m20_W=8.55 FF_DTG_m20_Nf=4
+.param FF_DTG_m0_L=0.45 FF_DTG_m0_W=8.55 FF_DTG_m0_Nf=4
+.param FF_DTG_m4_L=0.45 FF_DTG_m4_W=8.55 FF_DTG_m4_Nf=4
+.param FF_DTG_m8_L=0.45 FF_DTG_m8_W=8.55 FF_DTG_m8_Nf=4
+.param FF_DTG_m7_L=0.45 FF_DTG_m7_W=8.55 FF_DTG_m7_Nf=4
+.param FF_DTG_m17_L=0.45 FF_DTG_m17_W=8.55 FF_DTG_m17_Nf=4
+.param FF_DTG_m13_L=0.45 FF_DTG_m13_W=8.55 FF_DTG_m13_Nf=4
+.param FF_DTG_m16_L=0.45 FF_DTG_m16_W=8.55 FF_DTG_m16_Nf=4
+.param FF_DTG_m9_L=0.45 FF_DTG_m9_W=8.55 FF_DTG_m9_Nf=4
 .param Divider_m3<0>_L=60e-9 Divider_m3<0>_W=600e-9 Divider_m3<0>_Nf=4
 .param Divider_m3<1>_L=60e-9 Divider_m3<1>_W=600e-9 Divider_m3<1>_Nf=4
 .param Divider_m3<2>_L=60e-9 Divider_m3<2>_W=600e-9 Divider_m3<2>_Nf=4
@@ -89,53 +119,53 @@
 .param Divider_m1<1>_L=60e-9 Divider_m1<1>_W=1.2e-6 Divider_m1<1>_Nf=4
 .param Divider_m1<2>_L=60e-9 Divider_m1<2>_W=1.2e-6 Divider_m1<2>_Nf=4
 .param Divider_m1<3>_L=60e-9 Divider_m1<3>_W=1.2e-6 Divider_m1<3>_Nf=4
-.param bottom_plate_4path_mixer_diff_end_m0_L=60e-9 bottom_plate_4path_mixer_diff_end_m0_W=4e-6 bottom_plate_4path_mixer_diff_end_m0_Nf=16
-.param bottom_plate_4path_mixer_diff_end_m1_L=60e-9 bottom_plate_4path_mixer_diff_end_m1_W=4e-6 bottom_plate_4path_mixer_diff_end_m1_Nf=16
-.param bottom_plate_4path_mixer_diff_end_m2_L=60e-9 bottom_plate_4path_mixer_diff_end_m2_W=4e-6 bottom_plate_4path_mixer_diff_end_m2_Nf=16
-.param bottom_plate_4path_mixer_diff_end_m3_L=60e-9 bottom_plate_4path_mixer_diff_end_m3_W=4e-6 bottom_plate_4path_mixer_diff_end_m3_Nf=16
-.param bottom_plate_4path_mixer_diff_end_m4_L=60e-9 bottom_plate_4path_mixer_diff_end_m4_W=4e-6 bottom_plate_4path_mixer_diff_end_m4_Nf=16
-.param bottom_plate_4path_mixer_diff_end_m5_L=60e-9 bottom_plate_4path_mixer_diff_end_m5_W=4e-6 bottom_plate_4path_mixer_diff_end_m5_Nf=16
-.param bottom_plate_4path_mixer_diff_end_m6_L=60e-9 bottom_plate_4path_mixer_diff_end_m6_W=4e-6 bottom_plate_4path_mixer_diff_end_m6_Nf=16
-.param bottom_plate_4path_mixer_diff_end_m7_L=60e-9 bottom_plate_4path_mixer_diff_end_m7_W=4e-6 bottom_plate_4path_mixer_diff_end_m7_Nf=16
-.param bottom_plate_4path_mixer_diff_end_m8_L=60e-9 bottom_plate_4path_mixer_diff_end_m8_W=4e-6 bottom_plate_4path_mixer_diff_end_m8_Nf=16
-.param bottom_plate_4path_mixer_diff_end_m9_L=60e-9 bottom_plate_4path_mixer_diff_end_m9_W=4e-6 bottom_plate_4path_mixer_diff_end_m9_Nf=16
-.param bottom_plate_4path_mixer_diff_end_m10_L=60e-9 bottom_plate_4path_mixer_diff_end_m10_W=4e-6 bottom_plate_4path_mixer_diff_end_m10_Nf=16
-.param bottom_plate_4path_mixer_diff_end_m11_L=60e-9 bottom_plate_4path_mixer_diff_end_m11_W=4e-6 bottom_plate_4path_mixer_diff_end_m11_Nf=16
+.param bottom_plate_4path_mixer_diff_end_m0_L=0.45 bottom_plate_4path_mixer_diff_end_m0_W=28.55 bottom_plate_4path_mixer_diff_end_m0_Nf=16
+.param bottom_plate_4path_mixer_diff_end_m1_L=0.45 bottom_plate_4path_mixer_diff_end_m1_W=28.55 bottom_plate_4path_mixer_diff_end_m1_Nf=16
+.param bottom_plate_4path_mixer_diff_end_m2_L=0.45 bottom_plate_4path_mixer_diff_end_m2_W=28.55 bottom_plate_4path_mixer_diff_end_m2_Nf=16
+.param bottom_plate_4path_mixer_diff_end_m3_L=0.45 bottom_plate_4path_mixer_diff_end_m3_W=28.55 bottom_plate_4path_mixer_diff_end_m3_Nf=16
+.param bottom_plate_4path_mixer_diff_end_m4_L=0.45 bottom_plate_4path_mixer_diff_end_m4_W=28.55 bottom_plate_4path_mixer_diff_end_m4_Nf=16
+.param bottom_plate_4path_mixer_diff_end_m5_L=0.45 bottom_plate_4path_mixer_diff_end_m5_W=28.55 bottom_plate_4path_mixer_diff_end_m5_Nf=16
+.param bottom_plate_4path_mixer_diff_end_m6_L=0.45 bottom_plate_4path_mixer_diff_end_m6_W=28.55 bottom_plate_4path_mixer_diff_end_m6_Nf=16
+.param bottom_plate_4path_mixer_diff_end_m7_L=0.45 bottom_plate_4path_mixer_diff_end_m7_W=28.55 bottom_plate_4path_mixer_diff_end_m7_Nf=16
+.param bottom_plate_4path_mixer_diff_end_m8_L=0.45 bottom_plate_4path_mixer_diff_end_m8_W=28.55 bottom_plate_4path_mixer_diff_end_m8_Nf=16
+.param bottom_plate_4path_mixer_diff_end_m9_L=0.45 bottom_plate_4path_mixer_diff_end_m9_W=28.55 bottom_plate_4path_mixer_diff_end_m9_Nf=16
+.param bottom_plate_4path_mixer_diff_end_m10_L=0.45 bottom_plate_4path_mixer_diff_end_m10_W=28.55 bottom_plate_4path_mixer_diff_end_m10_Nf=16
+.param bottom_plate_4path_mixer_diff_end_m11_L=0.45 bottom_plate_4path_mixer_diff_end_m11_W=28.55 bottom_plate_4path_mixer_diff_end_m11_Nf=16
 
 
 * --- HELPER SUBCKTS (split-resistor wrappers) ---
 .subckt res8 n1 n2
-.param seg_r=100
-r1 n1 x1 {seg_r}
-r2 x1 x2 {seg_r}
-r3 x2 x3 {seg_r}
-r4 x3 x4 {seg_r}
-r5 x4 x5 {seg_r}
-r6 x5 x6 {seg_r}
-r7 x6 x7 {seg_r}
-r8 x7 n2 {seg_r}
+.param seg_L=1 seg_W=1 seg_r=100
+r1 n1 x1 {seg_r} L={seg_L} W={seg_W}
+r2 x1 x2 {seg_r} L={seg_L} W={seg_W}
+r3 x2 x3 {seg_r} L={seg_L} W={seg_W}
+r4 x3 x4 {seg_r} L={seg_L} W={seg_W}
+r5 x4 x5 {seg_r} L={seg_L} W={seg_W}
+r6 x5 x6 {seg_r} L={seg_L} W={seg_W}
+r7 x6 x7 {seg_r} L={seg_L} W={seg_W}
+r8 x7 n2 {seg_r} L={seg_L} W={seg_W}
 .ends res8
 
 .subckt res18 n1 n2
-.param seg_r=200
-r1 n1 x1 {seg_r}
-r2 x1 x2 {seg_r}
-r3 x2 x3 {seg_r}
-r4 x3 x4 {seg_r}
-r5 x4 x5 {seg_r}
-r6 x5 x6 {seg_r}
-r7 x6 x7 {seg_r}
-r8 x7 x8 {seg_r}
-r9 x8 x9 {seg_r}
-r10 x9 x10 {seg_r}
-r11 x10 x11 {seg_r}
-r12 x11 x12 {seg_r}
-r13 x12 x13 {seg_r}
-r14 x13 x14 {seg_r}
-r15 x14 x15 {seg_r}
-r16 x15 x16 {seg_r}
-r17 x16 x17 {seg_r}
-r18 x17 n2 {seg_r}
+.param seg_L=2 seg_W=1 seg_r=200
+r1 n1 x1 {seg_r} L={seg_L} W={seg_W}
+r2 x1 x2 {seg_r} L={seg_L} W={seg_W}
+r3 x2 x3 {seg_r} L={seg_L} W={seg_W}
+r4 x3 x4 {seg_r} L={seg_L} W={seg_W}
+r5 x4 x5 {seg_r} L={seg_L} W={seg_W}
+r6 x5 x6 {seg_r} L={seg_L} W={seg_W}
+r7 x6 x7 {seg_r} L={seg_L} W={seg_W}
+r8 x7 x8 {seg_r} L={seg_L} W={seg_W}
+r9 x8 x9 {seg_r} L={seg_L} W={seg_W}
+r10 x9 x10 {seg_r} L={seg_L} W={seg_W}
+r11 x10 x11 {seg_r} L={seg_L} W={seg_W}
+r12 x11 x12 {seg_r} L={seg_L} W={seg_W}
+r13 x12 x13 {seg_r} L={seg_L} W={seg_W}
+r14 x13 x14 {seg_r} L={seg_L} W={seg_W}
+r15 x14 x15 {seg_r} L={seg_L} W={seg_W}
+r16 x15 x16 {seg_r} L={seg_L} W={seg_W}
+r17 x16 x17 {seg_r} L={seg_L} W={seg_W}
+r18 x17 n2 {seg_r} L={seg_L} W={seg_W}
 .ends res18
 
 
@@ -187,25 +217,25 @@ m0 _net11 clk_x1 _net15 _net15 nmos_rvt L={bottom_plate_4path_beamforming_m0_L} 
 xR18 _net16 _net17 res8
 
 xR16 _net18 _net19 res8
-r11 _net1 _net18 140
-r10 _net3 _net18 140
-r9 _net5 _net18 140
-r8 _net7 _net18 140
-r3 _net12 _net16 140
-r2 _net13 _net16 140
-r1 _net14 _net16 140
-r0 _net15 _net16 140
+r11 _net1 _net18 140 L={res_bottom_plate_4path_beamforming_r11_L} W={res_bottom_plate_4path_beamforming_r11_W}
+r10 _net3 _net18 140 L={res_bottom_plate_4path_beamforming_r10_L} W={res_bottom_plate_4path_beamforming_r10_W}
+r9 _net5 _net18 140 L={res_bottom_plate_4path_beamforming_r9_L} W={res_bottom_plate_4path_beamforming_r9_W}
+r8 _net7 _net18 140 L={res_bottom_plate_4path_beamforming_r8_L} W={res_bottom_plate_4path_beamforming_r8_W}
+r3 _net12 _net16 140 L={res_bottom_plate_4path_beamforming_r3_L} W={res_bottom_plate_4path_beamforming_r3_W}
+r2 _net13 _net16 140 L={res_bottom_plate_4path_beamforming_r2_L} W={res_bottom_plate_4path_beamforming_r2_W}
+r1 _net14 _net16 140 L={res_bottom_plate_4path_beamforming_r1_L} W={res_bottom_plate_4path_beamforming_r1_W}
+r0 _net15 _net16 140 L={res_bottom_plate_4path_beamforming_r0_L} W={res_bottom_plate_4path_beamforming_r0_W}
 
-c8 _net16 _net17 2e-12
-c9 _net18 _net19 2e-12
-c4 _net7 vcmbias 2e-12
-c5 _net5 vcmbias 2e-12
-c7 _net1 vcmbias 2e-12
-c6 _net3 vcmbias 2e-12
-c2 _net13 vcmbias 2e-12
-c3 _net12 vcmbias 2e-12
-c1 _net15 vcmbias 2e-12
-c0 _net14 vcmbias 2e-12
+c8 _net16 _net17 2e-12 L={cap_bottom_plate_4path_beamforming_c8_L} W={cap_bottom_plate_4path_beamforming_c8_W}
+c9 _net18 _net19 2e-12 L={cap_bottom_plate_4path_beamforming_c9_L} W={cap_bottom_plate_4path_beamforming_c9_W}
+c4 _net7 vcmbias 2e-12 L={cap_bottom_plate_4path_beamforming_c4_L} W={cap_bottom_plate_4path_beamforming_c4_W}
+c5 _net5 vcmbias 2e-12 L={cap_bottom_plate_4path_beamforming_c5_L} W={cap_bottom_plate_4path_beamforming_c5_W}
+c7 _net1 vcmbias 2e-12 L={cap_bottom_plate_4path_beamforming_c7_L} W={cap_bottom_plate_4path_beamforming_c7_W}
+c6 _net3 vcmbias 2e-12 L={cap_bottom_plate_4path_beamforming_c6_L} W={cap_bottom_plate_4path_beamforming_c6_W}
+c2 _net13 vcmbias 2e-12 L={cap_bottom_plate_4path_beamforming_c2_L} W={cap_bottom_plate_4path_beamforming_c2_W}
+c3 _net12 vcmbias 2e-12 L={cap_bottom_plate_4path_beamforming_c3_L} W={cap_bottom_plate_4path_beamforming_c3_W}
+c1 _net15 vcmbias 2e-12 L={cap_bottom_plate_4path_beamforming_c1_L} W={cap_bottom_plate_4path_beamforming_c1_W}
+c0 _net14 vcmbias 2e-12 L={cap_bottom_plate_4path_beamforming_c0_L} W={cap_bottom_plate_4path_beamforming_c0_W}
 xi0 _net16 _net18 _net19 _net17 VDDA VSSA TIA_1
 .ends bottom_plate_4path_beamforming
 ** End of subcircuit definition.
@@ -233,8 +263,8 @@ m0 out in VSSD VSSD nmos_rvt L={INVx1_8Phase_m0_L} W={INVx1_8Phase_m0_W} Nf={INV
 ** View name: schematic
 ** Digital
 .subckt CLK_IO inn inp outn outp VDDD VSSD
-c0 net3 inp 2e-13
-c1 net2 inn 2e-13
+c0 net3 inp 2e-13 L={cap_CLK_IO_c0_L} W={cap_CLK_IO_c0_W}
+c1 net2 inn 2e-13 L={cap_CLK_IO_c1_L} W={cap_CLK_IO_c1_W}
 xR2 bias net3 res18
 
 xR0 net2 bias res18
@@ -436,14 +466,14 @@ xi2 clk0 clk0_k01 clk90 clk90_k01 clk180 clk180_k01 clk270 clk270_k01 VDDD VSSD 
 ** Cell name: bottom_plate_4path_mixer_diff_end
 ** View name: schematic
 .subckt bottom_plate_4path_mixer_diff_end clk0 clk90 clk180 clk270 _net1 _net0 vcmbias vdda_q
-c7 n5 _net0 13e-12
-c3 n1 _net1 13e-12
-c8 n6 _net0 13e-12
-c9 n7 _net0 13e-12
-c5 n3 _net1 13e-12
-c4 n2 _net1 13e-12
-c6 n4 _net1 13e-12
-c10 n8 _net0 13e-12
+c7 n5 _net0 13e-12 L={cap_bottom_plate_4path_mixer_diff_end_c7_L} W={cap_bottom_plate_4path_mixer_diff_end_c7_W}
+c3 n1 _net1 13e-12 L={cap_bottom_plate_4path_mixer_diff_end_c3_L} W={cap_bottom_plate_4path_mixer_diff_end_c3_W}
+c8 n6 _net0 13e-12 L={cap_bottom_plate_4path_mixer_diff_end_c8_L} W={cap_bottom_plate_4path_mixer_diff_end_c8_W}
+c9 n7 _net0 13e-12 L={cap_bottom_plate_4path_mixer_diff_end_c9_L} W={cap_bottom_plate_4path_mixer_diff_end_c9_W}
+c5 n3 _net1 13e-12 L={cap_bottom_plate_4path_mixer_diff_end_c5_L} W={cap_bottom_plate_4path_mixer_diff_end_c5_W}
+c4 n2 _net1 13e-12 L={cap_bottom_plate_4path_mixer_diff_end_c4_L} W={cap_bottom_plate_4path_mixer_diff_end_c4_W}
+c6 n4 _net1 13e-12 L={cap_bottom_plate_4path_mixer_diff_end_c6_L} W={cap_bottom_plate_4path_mixer_diff_end_c6_W}
+c10 n8 _net0 13e-12 L={cap_bottom_plate_4path_mixer_diff_end_c10_L} W={cap_bottom_plate_4path_mixer_diff_end_c10_W}
 m0 n1 clk0 n5 vcmbias nmos_rvt L={bottom_plate_4path_mixer_diff_end_m0_L} W={bottom_plate_4path_mixer_diff_end_m0_W} Nf={bottom_plate_4path_mixer_diff_end_m0_Nf}
 m1 n2 clk90 n6 vcmbias nmos_rvt L={bottom_plate_4path_mixer_diff_end_m1_L} W={bottom_plate_4path_mixer_diff_end_m1_W} Nf={bottom_plate_4path_mixer_diff_end_m1_Nf}
 m2 n3 clk180 n7 vcmbias nmos_rvt L={bottom_plate_4path_mixer_diff_end_m2_L} W={bottom_plate_4path_mixer_diff_end_m2_W} Nf={bottom_plate_4path_mixer_diff_end_m2_Nf}

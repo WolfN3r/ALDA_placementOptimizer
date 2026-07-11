@@ -9,192 +9,251 @@
 *   Device types : nmos_hvt nmos_lvt nmos_rvt pmos_lvt pmos_rvt
 *   Passives     : 13 resistors, 47 capacitors
 * Note: Converted from Spectre/HSPICE format to ALIGN SPICE format.
-*       Device sizes are placeholders — optimizer generates new sizes.
+* SIZES CONVERTED 2026-07-10 scale=2.5 source_L_ref=0.04um
+*       Device/passive sizes are scaled from the real source-netlist values
+*       (see marker above) -- not random placeholders.
 * ============================================================
 
 * --- DEVICE PARAMETERS ---
-.param Gm2_v5_Practice_schematic_Mm20_L=3.6e-6 Gm2_v5_Practice_schematic_Mm20_W=2.8e-6 Gm2_v5_Practice_schematic_Mm20_M=1 Gm2_v5_Practice_schematic_Mm20_Nf=1
-.param Gm2_v5_Practice_schematic_Mm18_L=3.6e-6 Gm2_v5_Practice_schematic_Mm18_W=2.8e-6 Gm2_v5_Practice_schematic_Mm18_M=1 Gm2_v5_Practice_schematic_Mm18_Nf=1
-.param Gm2_v5_Practice_schematic_Mm0_L=160e-9 Gm2_v5_Practice_schematic_Mm0_W=700e-9 Gm2_v5_Practice_schematic_Mm0_M=1 Gm2_v5_Practice_schematic_Mm0_Nf=2
-.param Gm2_v5_Practice_schematic_Mm24_L=160e-9 Gm2_v5_Practice_schematic_Mm24_W=700e-9 Gm2_v5_Practice_schematic_Mm24_M=1 Gm2_v5_Practice_schematic_Mm24_Nf=2
-.param Gm2_v5_Practice_schematic_Mm23_L=160e-9 Gm2_v5_Practice_schematic_Mm23_W=1.4e-6 Gm2_v5_Practice_schematic_Mm23_M=1 Gm2_v5_Practice_schematic_Mm23_Nf=4
-.param Gm2_v5_Practice_schematic_Mm14_L=160e-9 Gm2_v5_Practice_schematic_Mm14_W=1.4e-6 Gm2_v5_Practice_schematic_Mm14_M=1 Gm2_v5_Practice_schematic_Mm14_Nf=4
-.param Gm2_v5_Practice_schematic_Mm22_L=160e-9 Gm2_v5_Practice_schematic_Mm22_W=3.12e-6 Gm2_v5_Practice_schematic_Mm22_M=1 Gm2_v5_Practice_schematic_Mm22_Nf=4
-.param Gm2_v5_Practice_schematic_Mm12_L=2.2e-6 Gm2_v5_Practice_schematic_Mm12_W=2.1e-6 Gm2_v5_Practice_schematic_Mm12_M=1 Gm2_v5_Practice_schematic_Mm12_Nf=1
-.param Gm2_v5_Practice_schematic_Mm11_L=2.2e-6 Gm2_v5_Practice_schematic_Mm11_W=2.1e-6 Gm2_v5_Practice_schematic_Mm11_M=1 Gm2_v5_Practice_schematic_Mm11_Nf=1
-.param Gm2_v5_Practice_schematic_Mm13_L=160e-9 Gm2_v5_Practice_schematic_Mm13_W=1.16e-6 Gm2_v5_Practice_schematic_Mm13_M=1 Gm2_v5_Practice_schematic_Mm13_Nf=4
-.param Gm2_v5_Practice_schematic_Mm21_L=160e-9 Gm2_v5_Practice_schematic_Mm21_W=1.16e-6 Gm2_v5_Practice_schematic_Mm21_M=1 Gm2_v5_Practice_schematic_Mm21_Nf=4
-.param Gm1_v5_Practice_schematic_Mm8_L=120e-9 Gm1_v5_Practice_schematic_Mm8_W=3.22e-6 Gm1_v5_Practice_schematic_Mm8_M=1 Gm1_v5_Practice_schematic_Mm8_Nf=4
-.param Gm1_v5_Practice_schematic_Mm2_L=3.3e-6 Gm1_v5_Practice_schematic_Mm2_W=2.95e-6 Gm1_v5_Practice_schematic_Mm2_M=1 Gm1_v5_Practice_schematic_Mm2_Nf=1
-.param Gm1_v5_Practice_schematic_Mm4_L=3.3e-6 Gm1_v5_Practice_schematic_Mm4_W=2.95e-6 Gm1_v5_Practice_schematic_Mm4_M=1 Gm1_v5_Practice_schematic_Mm4_Nf=1
-.param Gm1_v5_Practice_schematic_Mm12_L=120e-9 Gm1_v5_Practice_schematic_Mm12_W=585e-9 Gm1_v5_Practice_schematic_Mm12_M=1 Gm1_v5_Practice_schematic_Mm12_Nf=1
-.param Gm1_v5_Practice_schematic_Mm11_L=120e-9 Gm1_v5_Practice_schematic_Mm11_W=2.34e-6 Gm1_v5_Practice_schematic_Mm11_M=1 Gm1_v5_Practice_schematic_Mm11_Nf=4
-.param Gm1_v5_Practice_schematic_Mm15_L=120e-9 Gm1_v5_Practice_schematic_Mm15_W=585e-9 Gm1_v5_Practice_schematic_Mm15_M=1 Gm1_v5_Practice_schematic_Mm15_Nf=1
-.param Gm1_v5_Practice_schematic_Mm14_L=120e-9 Gm1_v5_Practice_schematic_Mm14_W=2.34e-6 Gm1_v5_Practice_schematic_Mm14_M=1 Gm1_v5_Practice_schematic_Mm14_Nf=4
-.param Gm1_v5_Practice_schematic_Mm3_L=2.2e-6 Gm1_v5_Practice_schematic_Mm3_W=2.5e-6 Gm1_v5_Practice_schematic_Mm3_M=1 Gm1_v5_Practice_schematic_Mm3_Nf=1
-.param Gm1_v5_Practice_schematic_Mm0_L=2.2e-6 Gm1_v5_Practice_schematic_Mm0_W=2.5e-6 Gm1_v5_Practice_schematic_Mm0_M=1 Gm1_v5_Practice_schematic_Mm0_Nf=1
-.param Gm1_v5_Practice_schematic_Mm26_L=240e-9 Gm1_v5_Practice_schematic_Mm26_W=3.4e-6 Gm1_v5_Practice_schematic_Mm26_M=1 Gm1_v5_Practice_schematic_Mm26_Nf=8
-.param Gm1_v5_Practice_schematic_Mm27_L=240e-9 Gm1_v5_Practice_schematic_Mm27_W=3.4e-6 Gm1_v5_Practice_schematic_Mm27_M=1 Gm1_v5_Practice_schematic_Mm27_Nf=8
-.param DFCNQD2BWP_LVT_M0_L=40e-9 DFCNQD2BWP_LVT_M0_W=155e-9 DFCNQD2BWP_LVT_M0_M=1 DFCNQD2BWP_LVT_M0_Nf=1
-.param DFCNQD2BWP_LVT_Mmi4_L=40e-9 DFCNQD2BWP_LVT_Mmi4_W=310e-9 DFCNQD2BWP_LVT_Mmi4_M=1 DFCNQD2BWP_LVT_Mmi4_Nf=1
-.param DFCNQD2BWP_LVT_M1_L=40e-9 DFCNQD2BWP_LVT_M1_W=210e-9 DFCNQD2BWP_LVT_M1_M=1 DFCNQD2BWP_LVT_M1_Nf=1
-.param DFCNQD2BWP_LVT_M2_L=40e-9 DFCNQD2BWP_LVT_M2_W=150e-9 DFCNQD2BWP_LVT_M2_M=1 DFCNQD2BWP_LVT_M2_Nf=1
-.param DFCNQD2BWP_LVT_Mmi29_L=40e-9 DFCNQD2BWP_LVT_Mmi29_W=120e-9 DFCNQD2BWP_LVT_Mmi29_M=1 DFCNQD2BWP_LVT_Mmi29_Nf=1
-.param DFCNQD2BWP_LVT_Mmi15_L=40e-9 DFCNQD2BWP_LVT_Mmi15_W=150e-9 DFCNQD2BWP_LVT_Mmi15_M=1 DFCNQD2BWP_LVT_Mmi15_Nf=1
-.param DFCNQD2BWP_LVT_M3_L=40e-9 DFCNQD2BWP_LVT_M3_W=210e-9 DFCNQD2BWP_LVT_M3_M=1 DFCNQD2BWP_LVT_M3_Nf=1
-.param DFCNQD2BWP_LVT_M4_L=40e-9 DFCNQD2BWP_LVT_M4_W=210e-9 DFCNQD2BWP_LVT_M4_M=1 DFCNQD2BWP_LVT_M4_Nf=1
-.param DFCNQD2BWP_LVT_M5_L=40e-9 DFCNQD2BWP_LVT_M5_W=155e-9 DFCNQD2BWP_LVT_M5_M=1 DFCNQD2BWP_LVT_M5_Nf=1
-.param DFCNQD2BWP_LVT_Mmi5_L=40e-9 DFCNQD2BWP_LVT_Mmi5_W=310e-9 DFCNQD2BWP_LVT_Mmi5_M=1 DFCNQD2BWP_LVT_Mmi5_Nf=1
-.param DFCNQD2BWP_LVT_Mmi49_L=40e-9 DFCNQD2BWP_LVT_Mmi49_W=120e-9 DFCNQD2BWP_LVT_Mmi49_M=1 DFCNQD2BWP_LVT_Mmi49_Nf=1
-.param DFCNQD2BWP_LVT_M6_L=40e-9 DFCNQD2BWP_LVT_M6_W=210e-9 DFCNQD2BWP_LVT_M6_M=1 DFCNQD2BWP_LVT_M6_Nf=1
-.param DFCNQD2BWP_LVT_Mmi26_L=40e-9 DFCNQD2BWP_LVT_Mmi26_W=120e-9 DFCNQD2BWP_LVT_Mmi26_M=1 DFCNQD2BWP_LVT_Mmi26_Nf=1
-.param DFCNQD2BWP_LVT_Mmi48_L=40e-9 DFCNQD2BWP_LVT_Mmi48_W=120e-9 DFCNQD2BWP_LVT_Mmi48_M=1 DFCNQD2BWP_LVT_Mmi48_Nf=1
-.param DFCNQD2BWP_LVT_M7_L=40e-9 DFCNQD2BWP_LVT_M7_W=310e-9 DFCNQD2BWP_LVT_M7_M=1 DFCNQD2BWP_LVT_M7_Nf=1
-.param DFCNQD2BWP_LVT_M8_L=40e-9 DFCNQD2BWP_LVT_M8_W=310e-9 DFCNQD2BWP_LVT_M8_M=1 DFCNQD2BWP_LVT_M8_Nf=1
-.param DFCNQD2BWP_LVT_Mmi47_L=40e-9 DFCNQD2BWP_LVT_Mmi47_W=120e-9 DFCNQD2BWP_LVT_Mmi47_M=1 DFCNQD2BWP_LVT_Mmi47_Nf=1
-.param DFCNQD2BWP_LVT_Mmi33_L=40e-9 DFCNQD2BWP_LVT_Mmi33_W=120e-9 DFCNQD2BWP_LVT_Mmi33_M=1 DFCNQD2BWP_LVT_Mmi33_Nf=1
-.param DFCNQD2BWP_LVT_M9_L=40e-9 DFCNQD2BWP_LVT_M9_W=410e-9 DFCNQD2BWP_LVT_M9_M=1 DFCNQD2BWP_LVT_M9_Nf=1
-.param DFCNQD2BWP_LVT_M10_L=40e-9 DFCNQD2BWP_LVT_M10_W=370e-9 DFCNQD2BWP_LVT_M10_M=1 DFCNQD2BWP_LVT_M10_Nf=1
-.param DFCNQD2BWP_LVT_Mmi43_L=40e-9 DFCNQD2BWP_LVT_Mmi43_W=120e-9 DFCNQD2BWP_LVT_Mmi43_M=1 DFCNQD2BWP_LVT_Mmi43_Nf=1
-.param DFCNQD2BWP_LVT_Mmi6_L=40e-9 DFCNQD2BWP_LVT_Mmi6_W=340e-9 DFCNQD2BWP_LVT_Mmi6_M=1 DFCNQD2BWP_LVT_Mmi6_Nf=1
-.param DFCNQD2BWP_LVT_M11_L=40e-9 DFCNQD2BWP_LVT_M11_W=410e-9 DFCNQD2BWP_LVT_M11_M=1 DFCNQD2BWP_LVT_M11_Nf=1
-.param DFCNQD2BWP_LVT_M12_L=40e-9 DFCNQD2BWP_LVT_M12_W=370e-9 DFCNQD2BWP_LVT_M12_M=1 DFCNQD2BWP_LVT_M12_Nf=1
-.param DFCNQD2BWP_LVT_M13_L=40e-9 DFCNQD2BWP_LVT_M13_W=370e-9 DFCNQD2BWP_LVT_M13_M=1 DFCNQD2BWP_LVT_M13_Nf=1
-.param DFCNQD2BWP_LVT_Mmi44_L=40e-9 DFCNQD2BWP_LVT_Mmi44_W=120e-9 DFCNQD2BWP_LVT_Mmi44_M=1 DFCNQD2BWP_LVT_Mmi44_Nf=1
-.param DFCNQD2BWP_LVT_M14_L=40e-9 DFCNQD2BWP_LVT_M14_W=370e-9 DFCNQD2BWP_LVT_M14_M=1 DFCNQD2BWP_LVT_M14_Nf=1
-.param DFCNQD2BWP_LVT_M15_L=40e-9 DFCNQD2BWP_LVT_M15_W=180e-9 DFCNQD2BWP_LVT_M15_M=1 DFCNQD2BWP_LVT_M15_Nf=1
-.param DFCNQD2BWP_LVT_M16_L=40e-9 DFCNQD2BWP_LVT_M16_W=205e-9 DFCNQD2BWP_LVT_M16_M=1 DFCNQD2BWP_LVT_M16_Nf=1
-.param DFCNQD2BWP_LVT_Mmi16_L=40e-9 DFCNQD2BWP_LVT_Mmi16_W=180e-9 DFCNQD2BWP_LVT_Mmi16_M=1 DFCNQD2BWP_LVT_Mmi16_Nf=1
-.param DFCNQD2BWP_LVT_M17_L=40e-9 DFCNQD2BWP_LVT_M17_W=205e-9 DFCNQD2BWP_LVT_M17_M=1 DFCNQD2BWP_LVT_M17_Nf=1
-.param DFCNQD2BWP_LVT_Mmi32_L=40e-9 DFCNQD2BWP_LVT_Mmi32_W=120e-9 DFCNQD2BWP_LVT_Mmi32_M=1 DFCNQD2BWP_LVT_Mmi32_Nf=1
-.param DFCNQD2BWP_LVT_Mmi45_L=40e-9 DFCNQD2BWP_LVT_Mmi45_W=120e-9 DFCNQD2BWP_LVT_Mmi45_M=1 DFCNQD2BWP_LVT_Mmi45_Nf=1
-.param DFCNQD2BWP_LVT_Mmi7_L=40e-9 DFCNQD2BWP_LVT_Mmi7_W=340e-9 DFCNQD2BWP_LVT_Mmi7_M=1 DFCNQD2BWP_LVT_Mmi7_Nf=1
-.param DFCNQD2BWP_LVT_schematic_M0_L=40e-9 DFCNQD2BWP_LVT_schematic_M0_W=155e-9 DFCNQD2BWP_LVT_schematic_M0_M=1 DFCNQD2BWP_LVT_schematic_M0_Nf=1
-.param DFCNQD2BWP_LVT_schematic_Mmi4_L=40e-9 DFCNQD2BWP_LVT_schematic_Mmi4_W=310e-9 DFCNQD2BWP_LVT_schematic_Mmi4_M=1 DFCNQD2BWP_LVT_schematic_Mmi4_Nf=1
-.param DFCNQD2BWP_LVT_schematic_M1_L=40e-9 DFCNQD2BWP_LVT_schematic_M1_W=210e-9 DFCNQD2BWP_LVT_schematic_M1_M=1 DFCNQD2BWP_LVT_schematic_M1_Nf=1
-.param DFCNQD2BWP_LVT_schematic_M2_L=40e-9 DFCNQD2BWP_LVT_schematic_M2_W=150e-9 DFCNQD2BWP_LVT_schematic_M2_M=1 DFCNQD2BWP_LVT_schematic_M2_Nf=1
-.param DFCNQD2BWP_LVT_schematic_Mmi29_L=40e-9 DFCNQD2BWP_LVT_schematic_Mmi29_W=120e-9 DFCNQD2BWP_LVT_schematic_Mmi29_M=1 DFCNQD2BWP_LVT_schematic_Mmi29_Nf=1
-.param DFCNQD2BWP_LVT_schematic_Mmi15_L=40e-9 DFCNQD2BWP_LVT_schematic_Mmi15_W=150e-9 DFCNQD2BWP_LVT_schematic_Mmi15_M=1 DFCNQD2BWP_LVT_schematic_Mmi15_Nf=1
-.param DFCNQD2BWP_LVT_schematic_M3_L=40e-9 DFCNQD2BWP_LVT_schematic_M3_W=210e-9 DFCNQD2BWP_LVT_schematic_M3_M=1 DFCNQD2BWP_LVT_schematic_M3_Nf=1
-.param DFCNQD2BWP_LVT_schematic_M4_L=40e-9 DFCNQD2BWP_LVT_schematic_M4_W=210e-9 DFCNQD2BWP_LVT_schematic_M4_M=1 DFCNQD2BWP_LVT_schematic_M4_Nf=1
-.param DFCNQD2BWP_LVT_schematic_M5_L=40e-9 DFCNQD2BWP_LVT_schematic_M5_W=155e-9 DFCNQD2BWP_LVT_schematic_M5_M=1 DFCNQD2BWP_LVT_schematic_M5_Nf=1
-.param DFCNQD2BWP_LVT_schematic_Mmi5_L=40e-9 DFCNQD2BWP_LVT_schematic_Mmi5_W=310e-9 DFCNQD2BWP_LVT_schematic_Mmi5_M=1 DFCNQD2BWP_LVT_schematic_Mmi5_Nf=1
-.param DFCNQD2BWP_LVT_schematic_Mmi49_L=40e-9 DFCNQD2BWP_LVT_schematic_Mmi49_W=120e-9 DFCNQD2BWP_LVT_schematic_Mmi49_M=1 DFCNQD2BWP_LVT_schematic_Mmi49_Nf=1
-.param DFCNQD2BWP_LVT_schematic_M6_L=40e-9 DFCNQD2BWP_LVT_schematic_M6_W=210e-9 DFCNQD2BWP_LVT_schematic_M6_M=1 DFCNQD2BWP_LVT_schematic_M6_Nf=1
-.param DFCNQD2BWP_LVT_schematic_Mmi26_L=40e-9 DFCNQD2BWP_LVT_schematic_Mmi26_W=120e-9 DFCNQD2BWP_LVT_schematic_Mmi26_M=1 DFCNQD2BWP_LVT_schematic_Mmi26_Nf=1
-.param DFCNQD2BWP_LVT_schematic_Mmi48_L=40e-9 DFCNQD2BWP_LVT_schematic_Mmi48_W=120e-9 DFCNQD2BWP_LVT_schematic_Mmi48_M=1 DFCNQD2BWP_LVT_schematic_Mmi48_Nf=1
-.param DFCNQD2BWP_LVT_schematic_M7_L=40e-9 DFCNQD2BWP_LVT_schematic_M7_W=310e-9 DFCNQD2BWP_LVT_schematic_M7_M=1 DFCNQD2BWP_LVT_schematic_M7_Nf=1
-.param DFCNQD2BWP_LVT_schematic_M8_L=40e-9 DFCNQD2BWP_LVT_schematic_M8_W=310e-9 DFCNQD2BWP_LVT_schematic_M8_M=1 DFCNQD2BWP_LVT_schematic_M8_Nf=1
-.param DFCNQD2BWP_LVT_schematic_Mmi47_L=40e-9 DFCNQD2BWP_LVT_schematic_Mmi47_W=120e-9 DFCNQD2BWP_LVT_schematic_Mmi47_M=1 DFCNQD2BWP_LVT_schematic_Mmi47_Nf=1
-.param DFCNQD2BWP_LVT_schematic_Mmi33_L=40e-9 DFCNQD2BWP_LVT_schematic_Mmi33_W=120e-9 DFCNQD2BWP_LVT_schematic_Mmi33_M=1 DFCNQD2BWP_LVT_schematic_Mmi33_Nf=1
-.param DFCNQD2BWP_LVT_schematic_M9_L=40e-9 DFCNQD2BWP_LVT_schematic_M9_W=410e-9 DFCNQD2BWP_LVT_schematic_M9_M=1 DFCNQD2BWP_LVT_schematic_M9_Nf=1
-.param DFCNQD2BWP_LVT_schematic_M10_L=40e-9 DFCNQD2BWP_LVT_schematic_M10_W=370e-9 DFCNQD2BWP_LVT_schematic_M10_M=1 DFCNQD2BWP_LVT_schematic_M10_Nf=1
-.param DFCNQD2BWP_LVT_schematic_Mmi43_L=40e-9 DFCNQD2BWP_LVT_schematic_Mmi43_W=120e-9 DFCNQD2BWP_LVT_schematic_Mmi43_M=1 DFCNQD2BWP_LVT_schematic_Mmi43_Nf=1
-.param DFCNQD2BWP_LVT_schematic_Mmi6_L=40e-9 DFCNQD2BWP_LVT_schematic_Mmi6_W=340e-9 DFCNQD2BWP_LVT_schematic_Mmi6_M=1 DFCNQD2BWP_LVT_schematic_Mmi6_Nf=1
-.param DFCNQD2BWP_LVT_schematic_M11_L=40e-9 DFCNQD2BWP_LVT_schematic_M11_W=410e-9 DFCNQD2BWP_LVT_schematic_M11_M=1 DFCNQD2BWP_LVT_schematic_M11_Nf=1
-.param DFCNQD2BWP_LVT_schematic_M12_L=40e-9 DFCNQD2BWP_LVT_schematic_M12_W=370e-9 DFCNQD2BWP_LVT_schematic_M12_M=1 DFCNQD2BWP_LVT_schematic_M12_Nf=1
-.param DFCNQD2BWP_LVT_schematic_M13_L=40e-9 DFCNQD2BWP_LVT_schematic_M13_W=370e-9 DFCNQD2BWP_LVT_schematic_M13_M=1 DFCNQD2BWP_LVT_schematic_M13_Nf=1
-.param DFCNQD2BWP_LVT_schematic_Mmi44_L=40e-9 DFCNQD2BWP_LVT_schematic_Mmi44_W=120e-9 DFCNQD2BWP_LVT_schematic_Mmi44_M=1 DFCNQD2BWP_LVT_schematic_Mmi44_Nf=1
-.param DFCNQD2BWP_LVT_schematic_M14_L=40e-9 DFCNQD2BWP_LVT_schematic_M14_W=370e-9 DFCNQD2BWP_LVT_schematic_M14_M=1 DFCNQD2BWP_LVT_schematic_M14_Nf=1
-.param DFCNQD2BWP_LVT_schematic_M15_L=40e-9 DFCNQD2BWP_LVT_schematic_M15_W=180e-9 DFCNQD2BWP_LVT_schematic_M15_M=1 DFCNQD2BWP_LVT_schematic_M15_Nf=1
-.param DFCNQD2BWP_LVT_schematic_M16_L=40e-9 DFCNQD2BWP_LVT_schematic_M16_W=205e-9 DFCNQD2BWP_LVT_schematic_M16_M=1 DFCNQD2BWP_LVT_schematic_M16_Nf=1
-.param DFCNQD2BWP_LVT_schematic_Mmi16_L=40e-9 DFCNQD2BWP_LVT_schematic_Mmi16_W=180e-9 DFCNQD2BWP_LVT_schematic_Mmi16_M=1 DFCNQD2BWP_LVT_schematic_Mmi16_Nf=1
-.param DFCNQD2BWP_LVT_schematic_M17_L=40e-9 DFCNQD2BWP_LVT_schematic_M17_W=205e-9 DFCNQD2BWP_LVT_schematic_M17_M=1 DFCNQD2BWP_LVT_schematic_M17_Nf=1
-.param DFCNQD2BWP_LVT_schematic_Mmi32_L=40e-9 DFCNQD2BWP_LVT_schematic_Mmi32_W=120e-9 DFCNQD2BWP_LVT_schematic_Mmi32_M=1 DFCNQD2BWP_LVT_schematic_Mmi32_Nf=1
-.param DFCNQD2BWP_LVT_schematic_Mmi45_L=40e-9 DFCNQD2BWP_LVT_schematic_Mmi45_W=120e-9 DFCNQD2BWP_LVT_schematic_Mmi45_M=1 DFCNQD2BWP_LVT_schematic_Mmi45_Nf=1
-.param DFCNQD2BWP_LVT_schematic_Mmi7_L=40e-9 DFCNQD2BWP_LVT_schematic_Mmi7_W=340e-9 DFCNQD2BWP_LVT_schematic_Mmi7_M=1 DFCNQD2BWP_LVT_schematic_Mmi7_Nf=1
-.param myComparator_v3_CTDSM_DEC2016_schematic_Mm0_L=1e-6 myComparator_v3_CTDSM_DEC2016_schematic_Mm0_W=1.05e-6 myComparator_v3_CTDSM_DEC2016_schematic_Mm0_M=1 myComparator_v3_CTDSM_DEC2016_schematic_Mm0_Nf=1
-.param myComparator_v3_CTDSM_DEC2016_schematic_Mm22_L=1e-6 myComparator_v3_CTDSM_DEC2016_schematic_Mm22_W=1.05e-6 myComparator_v3_CTDSM_DEC2016_schematic_Mm22_M=1 myComparator_v3_CTDSM_DEC2016_schematic_Mm22_Nf=1
-.param myComparator_v3_CTDSM_DEC2016_schematic_Mm16_L=40e-9 myComparator_v3_CTDSM_DEC2016_schematic_Mm16_W=1.44e-6 myComparator_v3_CTDSM_DEC2016_schematic_Mm16_M=1 myComparator_v3_CTDSM_DEC2016_schematic_Mm16_Nf=4
-.param myComparator_v3_CTDSM_DEC2016_schematic_Mm17_L=40e-9 myComparator_v3_CTDSM_DEC2016_schematic_Mm17_W=1.44e-6 myComparator_v3_CTDSM_DEC2016_schematic_Mm17_M=1 myComparator_v3_CTDSM_DEC2016_schematic_Mm17_Nf=4
-.param myComparator_v3_CTDSM_DEC2016_schematic_Mm4_L=40e-9 myComparator_v3_CTDSM_DEC2016_schematic_Mm4_W=1.92e-6 myComparator_v3_CTDSM_DEC2016_schematic_Mm4_M=1 myComparator_v3_CTDSM_DEC2016_schematic_Mm4_Nf=4
-.param myComparator_v3_CTDSM_DEC2016_schematic_Mm3_L=40e-9 myComparator_v3_CTDSM_DEC2016_schematic_Mm3_W=1.92e-6 myComparator_v3_CTDSM_DEC2016_schematic_Mm3_M=1 myComparator_v3_CTDSM_DEC2016_schematic_Mm3_Nf=4
-.param myComparator_v3_CTDSM_DEC2016_schematic_Mm7_L=40e-9 myComparator_v3_CTDSM_DEC2016_schematic_Mm7_W=6.9e-6 myComparator_v3_CTDSM_DEC2016_schematic_Mm7_M=1 myComparator_v3_CTDSM_DEC2016_schematic_Mm7_Nf=15
-.param myComparator_v3_CTDSM_DEC2016_schematic_Mm5_L=40e-9 myComparator_v3_CTDSM_DEC2016_schematic_Mm5_W=14.4e-6 myComparator_v3_CTDSM_DEC2016_schematic_Mm5_M=1 myComparator_v3_CTDSM_DEC2016_schematic_Mm5_Nf=15
-.param myComparator_v3_CTDSM_DEC2016_schematic_Mm6_L=40e-9 myComparator_v3_CTDSM_DEC2016_schematic_Mm6_W=14.4e-6 myComparator_v3_CTDSM_DEC2016_schematic_Mm6_M=1 myComparator_v3_CTDSM_DEC2016_schematic_Mm6_Nf=15
-.param myComparator_v3_CTDSM_DEC2016_schematic_Mm8_L=40e-9 myComparator_v3_CTDSM_DEC2016_schematic_Mm8_W=1.92e-6 myComparator_v3_CTDSM_DEC2016_schematic_Mm8_M=1 myComparator_v3_CTDSM_DEC2016_schematic_Mm8_Nf=4
-.param myComparator_v3_CTDSM_DEC2016_schematic_Mm18_L=40e-9 myComparator_v3_CTDSM_DEC2016_schematic_Mm18_W=1.92e-6 myComparator_v3_CTDSM_DEC2016_schematic_Mm18_M=1 myComparator_v3_CTDSM_DEC2016_schematic_Mm18_Nf=4
-.param myComparator_v3_CTDSM_DEC2016_schematic_Mm15_L=40e-9 myComparator_v3_CTDSM_DEC2016_schematic_Mm15_W=1.92e-6 myComparator_v3_CTDSM_DEC2016_schematic_Mm15_M=1 myComparator_v3_CTDSM_DEC2016_schematic_Mm15_Nf=4
-.param myComparator_v3_CTDSM_DEC2016_schematic_Mm2_L=40e-9 myComparator_v3_CTDSM_DEC2016_schematic_Mm2_W=1.92e-6 myComparator_v3_CTDSM_DEC2016_schematic_Mm2_M=1 myComparator_v3_CTDSM_DEC2016_schematic_Mm2_Nf=4
-.param myComparator_v3_CTDSM_DEC2016_schematic_Mm1_L=40e-9 myComparator_v3_CTDSM_DEC2016_schematic_Mm1_W=1.92e-6 myComparator_v3_CTDSM_DEC2016_schematic_Mm1_M=1 myComparator_v3_CTDSM_DEC2016_schematic_Mm1_Nf=4
-.param myComparator_v3_CTDSM_DEC2016_schematic_Mm12_L=40e-9 myComparator_v3_CTDSM_DEC2016_schematic_Mm12_W=1.92e-6 myComparator_v3_CTDSM_DEC2016_schematic_Mm12_M=1 myComparator_v3_CTDSM_DEC2016_schematic_Mm12_Nf=4
-.param myComparator_v3_CTDSM_DEC2016_schematic_Mm14_L=40e-9 myComparator_v3_CTDSM_DEC2016_schematic_Mm14_W=3.84e-6 myComparator_v3_CTDSM_DEC2016_schematic_Mm14_M=1 myComparator_v3_CTDSM_DEC2016_schematic_Mm14_Nf=8
-.param myComparator_v3_CTDSM_DEC2016_schematic_Mm13_L=40e-9 myComparator_v3_CTDSM_DEC2016_schematic_Mm13_W=3.84e-6 myComparator_v3_CTDSM_DEC2016_schematic_Mm13_M=1 myComparator_v3_CTDSM_DEC2016_schematic_Mm13_Nf=8
-.param NR2D8BWP_LVT_M0_L=80e-9 NR2D8BWP_LVT_M0_W=4.96e-6 NR2D8BWP_LVT_M0_M=1 NR2D8BWP_LVT_M0_Nf=2
-.param NR2D8BWP_LVT_M1_L=80e-9 NR2D8BWP_LVT_M1_W=4.96e-6 NR2D8BWP_LVT_M1_M=1 NR2D8BWP_LVT_M1_Nf=2
-.param NR2D8BWP_LVT_M2_L=80e-9 NR2D8BWP_LVT_M2_W=6.56e-6 NR2D8BWP_LVT_M2_M=1 NR2D8BWP_LVT_M2_Nf=2
-.param NR2D8BWP_LVT_M3_L=80e-9 NR2D8BWP_LVT_M3_W=6.56e-6 NR2D8BWP_LVT_M3_M=1 NR2D8BWP_LVT_M3_Nf=2
-.param INVD4BWP_LVT_m0_L=40e-9 INVD4BWP_LVT_m0_W=310e-9 INVD4BWP_LVT_m0_M=1 INVD4BWP_LVT_m0_Nf=1
-.param INVD4BWP_LVT_m1_L=40e-9 INVD4BWP_LVT_m1_W=310e-9 INVD4BWP_LVT_m1_M=1 INVD4BWP_LVT_m1_Nf=1
-.param INVD4BWP_LVT_m2_L=40e-9 INVD4BWP_LVT_m2_W=410e-9 INVD4BWP_LVT_m2_M=1 INVD4BWP_LVT_m2_Nf=1
-.param INVD4BWP_LVT_m3_L=40e-9 INVD4BWP_LVT_m3_W=410e-9 INVD4BWP_LVT_m3_M=1 INVD4BWP_LVT_m3_Nf=1
-.param C2_BANK_Mm17_L=40e-9 C2_BANK_Mm17_W=6e-6 C2_BANK_Mm17_M=1 C2_BANK_Mm17_Nf=12
-.param C2_BANK_Mm15_L=40e-9 C2_BANK_Mm15_W=400e-9 C2_BANK_Mm15_M=1 C2_BANK_Mm15_Nf=1
-.param C2_BANK_Mm13_L=40e-9 C2_BANK_Mm13_W=6e-6 C2_BANK_Mm13_M=1 C2_BANK_Mm13_Nf=12
-.param C2_BANK_Mm12_L=40e-9 C2_BANK_Mm12_W=400e-9 C2_BANK_Mm12_M=1 C2_BANK_Mm12_Nf=1
-.param C2_BANK_Mm10_L=40e-9 C2_BANK_Mm10_W=3e-6 C2_BANK_Mm10_M=1 C2_BANK_Mm10_Nf=6
-.param C2_BANK_Mm8_L=40e-9 C2_BANK_Mm8_W=400e-9 C2_BANK_Mm8_M=1 C2_BANK_Mm8_Nf=1
-.param C2_BANK_Mm20_L=40e-9 C2_BANK_Mm20_W=400e-9 C2_BANK_Mm20_M=1 C2_BANK_Mm20_Nf=1
-.param C2_BANK_Mm18_L=40e-9 C2_BANK_Mm18_W=12e-6 C2_BANK_Mm18_M=1 C2_BANK_Mm18_Nf=24
-.param C2_BANK_Mm23_L=40e-9 C2_BANK_Mm23_W=400e-9 C2_BANK_Mm23_M=1 C2_BANK_Mm23_Nf=1
-.param C2_BANK_Mm11_L=40e-9 C2_BANK_Mm11_W=400e-9 C2_BANK_Mm11_M=1 C2_BANK_Mm11_Nf=1
-.param C2_BANK_Mm6_L=40e-9 C2_BANK_Mm6_W=3e-6 C2_BANK_Mm6_M=1 C2_BANK_Mm6_Nf=6
-.param C2_BANK_Mm2_L=40e-9 C2_BANK_Mm2_W=1.5e-6 C2_BANK_Mm2_M=1 C2_BANK_Mm2_Nf=3
-.param C2_BANK_Mm4_L=40e-9 C2_BANK_Mm4_W=400e-9 C2_BANK_Mm4_M=1 C2_BANK_Mm4_Nf=1
-.param C2_BANK_Mm5_L=40e-9 C2_BANK_Mm5_W=400e-9 C2_BANK_Mm5_M=1 C2_BANK_Mm5_Nf=1
-.param C2_BANK_Mm0_L=40e-9 C2_BANK_Mm0_W=1.5e-6 C2_BANK_Mm0_M=1 C2_BANK_Mm0_Nf=3
-.param C2_BANK_Mm22_L=40e-9 C2_BANK_Mm22_W=12e-6 C2_BANK_Mm22_M=1 C2_BANK_Mm22_Nf=24
-.param C2_BANK_Mm16_L=40e-9 C2_BANK_Mm16_W=12e-6 C2_BANK_Mm16_M=1 C2_BANK_Mm16_Nf=12
-.param C2_BANK_Mm14_L=40e-9 C2_BANK_Mm14_W=12e-6 C2_BANK_Mm14_M=1 C2_BANK_Mm14_Nf=12
-.param C2_BANK_Mm9_L=40e-9 C2_BANK_Mm9_W=6e-6 C2_BANK_Mm9_M=1 C2_BANK_Mm9_Nf=6
-.param C2_BANK_Mm7_L=40e-9 C2_BANK_Mm7_W=6e-6 C2_BANK_Mm7_M=1 C2_BANK_Mm7_Nf=6
-.param C2_BANK_Mm19_L=40e-9 C2_BANK_Mm19_W=24e-6 C2_BANK_Mm19_M=1 C2_BANK_Mm19_Nf=24
-.param C2_BANK_Mm1_L=40e-9 C2_BANK_Mm1_W=3e-6 C2_BANK_Mm1_M=1 C2_BANK_Mm1_Nf=3
-.param C2_BANK_Mm21_L=40e-9 C2_BANK_Mm21_W=24e-6 C2_BANK_Mm21_M=1 C2_BANK_Mm21_Nf=24
-.param C2_BANK_Mm3_L=40e-9 C2_BANK_Mm3_W=3e-6 C2_BANK_Mm3_M=1 C2_BANK_Mm3_Nf=3
-.param C1_BANK_Mm17_L=40e-9 C1_BANK_Mm17_W=40e-6 C1_BANK_Mm17_M=1 C1_BANK_Mm17_Nf=80
-.param C1_BANK_Mm15_L=40e-9 C1_BANK_Mm15_W=400e-9 C1_BANK_Mm15_M=1 C1_BANK_Mm15_Nf=1
-.param C1_BANK_Mm13_L=40e-9 C1_BANK_Mm13_W=40e-6 C1_BANK_Mm13_M=1 C1_BANK_Mm13_Nf=80
-.param C1_BANK_Mm12_L=40e-9 C1_BANK_Mm12_W=400e-9 C1_BANK_Mm12_M=1 C1_BANK_Mm12_Nf=1
-.param C1_BANK_Mm10_L=40e-9 C1_BANK_Mm10_W=20e-6 C1_BANK_Mm10_M=1 C1_BANK_Mm10_Nf=40
-.param C1_BANK_Mm8_L=40e-9 C1_BANK_Mm8_W=400e-9 C1_BANK_Mm8_M=1 C1_BANK_Mm8_Nf=1
-.param C1_BANK_Mm20_L=40e-9 C1_BANK_Mm20_W=400e-9 C1_BANK_Mm20_M=1 C1_BANK_Mm20_Nf=1
-.param C1_BANK_Mm18_L=40e-9 C1_BANK_Mm18_W=80e-6 C1_BANK_Mm18_M=1 C1_BANK_Mm18_Nf=160
-.param C1_BANK_Mm23_L=40e-9 C1_BANK_Mm23_W=400e-9 C1_BANK_Mm23_M=1 C1_BANK_Mm23_Nf=1
-.param C1_BANK_Mm11_L=40e-9 C1_BANK_Mm11_W=400e-9 C1_BANK_Mm11_M=1 C1_BANK_Mm11_Nf=1
-.param C1_BANK_Mm6_L=40e-9 C1_BANK_Mm6_W=20e-6 C1_BANK_Mm6_M=1 C1_BANK_Mm6_Nf=40
-.param C1_BANK_Mm2_L=40e-9 C1_BANK_Mm2_W=10e-6 C1_BANK_Mm2_M=1 C1_BANK_Mm2_Nf=20
-.param C1_BANK_Mm4_L=40e-9 C1_BANK_Mm4_W=400e-9 C1_BANK_Mm4_M=1 C1_BANK_Mm4_Nf=1
-.param C1_BANK_Mm5_L=40e-9 C1_BANK_Mm5_W=400e-9 C1_BANK_Mm5_M=1 C1_BANK_Mm5_Nf=1
-.param C1_BANK_Mm0_L=40e-9 C1_BANK_Mm0_W=10e-6 C1_BANK_Mm0_M=1 C1_BANK_Mm0_Nf=20
-.param C1_BANK_Mm22_L=40e-9 C1_BANK_Mm22_W=80e-6 C1_BANK_Mm22_M=1 C1_BANK_Mm22_Nf=160
-.param C1_BANK_Mm16_L=40e-9 C1_BANK_Mm16_W=80e-6 C1_BANK_Mm16_M=1 C1_BANK_Mm16_Nf=80
-.param C1_BANK_Mm14_L=40e-9 C1_BANK_Mm14_W=80e-6 C1_BANK_Mm14_M=1 C1_BANK_Mm14_Nf=80
-.param C1_BANK_Mm9_L=40e-9 C1_BANK_Mm9_W=40e-6 C1_BANK_Mm9_M=1 C1_BANK_Mm9_Nf=40
-.param C1_BANK_Mm7_L=40e-9 C1_BANK_Mm7_W=40e-6 C1_BANK_Mm7_M=1 C1_BANK_Mm7_Nf=40
-.param C1_BANK_Mm19_L=40e-9 C1_BANK_Mm19_W=160e-6 C1_BANK_Mm19_M=1 C1_BANK_Mm19_Nf=160
-.param C1_BANK_Mm1_L=40e-9 C1_BANK_Mm1_W=20e-6 C1_BANK_Mm1_M=1 C1_BANK_Mm1_Nf=20
-.param C1_BANK_Mm21_L=40e-9 C1_BANK_Mm21_W=160e-6 C1_BANK_Mm21_M=1 C1_BANK_Mm21_Nf=160
-.param C1_BANK_Mm3_L=40e-9 C1_BANK_Mm3_W=20e-6 C1_BANK_Mm3_M=1 C1_BANK_Mm3_Nf=20
-.param DIGITAL_TOP_flat_Mm0_L=1e-6 DIGITAL_TOP_flat_Mm0_W=1.05e-6 DIGITAL_TOP_flat_Mm0_M=1 DIGITAL_TOP_flat_Mm0_Nf=1
-.param DIGITAL_TOP_flat_Mm22_L=1e-6 DIGITAL_TOP_flat_Mm22_W=1.05e-6 DIGITAL_TOP_flat_Mm22_M=1 DIGITAL_TOP_flat_Mm22_Nf=1
-.param DIGITAL_TOP_flat_Mm16_L=40e-9 DIGITAL_TOP_flat_Mm16_W=1.44e-6 DIGITAL_TOP_flat_Mm16_M=1 DIGITAL_TOP_flat_Mm16_Nf=4
-.param DIGITAL_TOP_flat_Mm17_L=40e-9 DIGITAL_TOP_flat_Mm17_W=1.44e-6 DIGITAL_TOP_flat_Mm17_M=1 DIGITAL_TOP_flat_Mm17_Nf=4
-.param DIGITAL_TOP_flat_Mm4_L=40e-9 DIGITAL_TOP_flat_Mm4_W=1.92e-6 DIGITAL_TOP_flat_Mm4_M=1 DIGITAL_TOP_flat_Mm4_Nf=4
-.param DIGITAL_TOP_flat_Mm3_L=40e-9 DIGITAL_TOP_flat_Mm3_W=1.92e-6 DIGITAL_TOP_flat_Mm3_M=1 DIGITAL_TOP_flat_Mm3_Nf=4
-.param DIGITAL_TOP_flat_Mm7_L=40e-9 DIGITAL_TOP_flat_Mm7_W=6.9e-6 DIGITAL_TOP_flat_Mm7_M=1 DIGITAL_TOP_flat_Mm7_Nf=15
-.param DIGITAL_TOP_flat_Mm5_L=40e-9 DIGITAL_TOP_flat_Mm5_W=14.4e-6 DIGITAL_TOP_flat_Mm5_M=1 DIGITAL_TOP_flat_Mm5_Nf=15
-.param DIGITAL_TOP_flat_Mm6_L=40e-9 DIGITAL_TOP_flat_Mm6_W=14.4e-6 DIGITAL_TOP_flat_Mm6_M=1 DIGITAL_TOP_flat_Mm6_Nf=15
-.param DIGITAL_TOP_flat_Mm8_L=40e-9 DIGITAL_TOP_flat_Mm8_W=1.92e-6 DIGITAL_TOP_flat_Mm8_M=1 DIGITAL_TOP_flat_Mm8_Nf=4
-.param DIGITAL_TOP_flat_Mm18_L=40e-9 DIGITAL_TOP_flat_Mm18_W=1.92e-6 DIGITAL_TOP_flat_Mm18_M=1 DIGITAL_TOP_flat_Mm18_Nf=4
-.param DIGITAL_TOP_flat_Mm15_L=40e-9 DIGITAL_TOP_flat_Mm15_W=1.92e-6 DIGITAL_TOP_flat_Mm15_M=1 DIGITAL_TOP_flat_Mm15_Nf=4
-.param DIGITAL_TOP_flat_Mm2_L=40e-9 DIGITAL_TOP_flat_Mm2_W=1.92e-6 DIGITAL_TOP_flat_Mm2_M=1 DIGITAL_TOP_flat_Mm2_Nf=4
-.param DIGITAL_TOP_flat_Mm1_L=40e-9 DIGITAL_TOP_flat_Mm1_W=1.92e-6 DIGITAL_TOP_flat_Mm1_M=1 DIGITAL_TOP_flat_Mm1_Nf=4
-.param DIGITAL_TOP_flat_Mm12_L=40e-9 DIGITAL_TOP_flat_Mm12_W=1.92e-6 DIGITAL_TOP_flat_Mm12_M=1 DIGITAL_TOP_flat_Mm12_Nf=4
-.param DIGITAL_TOP_flat_Mm14_L=40e-9 DIGITAL_TOP_flat_Mm14_W=3.84e-6 DIGITAL_TOP_flat_Mm14_M=1 DIGITAL_TOP_flat_Mm14_Nf=8
-.param DIGITAL_TOP_flat_Mm13_L=40e-9 DIGITAL_TOP_flat_Mm13_W=3.84e-6 DIGITAL_TOP_flat_Mm13_M=1 DIGITAL_TOP_flat_Mm13_Nf=8
-.param wrapper_m1_L=280e-9 wrapper_m1_W=280e-9 wrapper_m1_M=1 wrapper_m1_Nf=1
-.param wrapper_m0_L=280e-9 wrapper_m0_W=280e-9 wrapper_m0_M=1 wrapper_m0_Nf=1
+.param cap_Gm2_v5_Practice_schematic_xc0_L=2.538 cap_Gm2_v5_Practice_schematic_xc0_W=2.538
+.param cap_Gm2_v5_Practice_schematic_xc1_L=2.538 cap_Gm2_v5_Practice_schematic_xc1_W=2.538
+.param res_Gm2_v5_Practice_schematic_xr11_L=16.5 res_Gm2_v5_Practice_schematic_xr11_W=1
+.param res_Gm2_v5_Practice_schematic_xr12_L=16.5 res_Gm2_v5_Practice_schematic_xr12_W=1
+.param res_Gm1_v5_Practice_schematic_xr12_L=16.5 res_Gm1_v5_Practice_schematic_xr12_W=1
+.param res_Gm1_v5_Practice_schematic_xr11_L=16.5 res_Gm1_v5_Practice_schematic_xr11_W=1
+.param cap_Gm1_v5_Practice_schematic_xc1_L=2.538 cap_Gm1_v5_Practice_schematic_xc1_W=2.538
+.param cap_Gm1_v5_Practice_schematic_xc0_L=2.538 cap_Gm1_v5_Practice_schematic_xc0_W=2.538
+.param res_C_DAC_CTDSM_DEC2016_schematic_xr27_L=49.8 res_C_DAC_CTDSM_DEC2016_schematic_xr27_W=3
+.param res_C_DAC_CTDSM_DEC2016_schematic_xr64_L=46.68 res_C_DAC_CTDSM_DEC2016_schematic_xr64_W=3
+.param cap_C2_BANK_xc14_L=5.163 cap_C2_BANK_xc14_W=5.163
+.param cap_C2_BANK_xc11_L=28.19 cap_C2_BANK_xc11_W=28.19
+.param cap_C2_BANK_xc16_3__L=5.163 cap_C2_BANK_xc16_3__W=5.163
+.param cap_C2_BANK_xc16_2__L=5.163 cap_C2_BANK_xc16_2__W=5.163
+.param cap_C2_BANK_xc16_1__L=5.163 cap_C2_BANK_xc16_1__W=5.163
+.param cap_C2_BANK_xc16_0__L=5.163 cap_C2_BANK_xc16_0__W=5.163
+.param cap_C2_BANK_xc15_1__L=5.163 cap_C2_BANK_xc15_1__W=5.163
+.param cap_C2_BANK_xc15_0__L=5.163 cap_C2_BANK_xc15_0__W=5.163
+.param cap_C2_BANK_xc17_7__L=5.163 cap_C2_BANK_xc17_7__W=5.163
+.param cap_C2_BANK_xc17_6__L=5.163 cap_C2_BANK_xc17_6__W=5.163
+.param cap_C2_BANK_xc17_5__L=5.163 cap_C2_BANK_xc17_5__W=5.163
+.param cap_C2_BANK_xc17_4__L=5.163 cap_C2_BANK_xc17_4__W=5.163
+.param cap_C2_BANK_xc17_3__L=5.163 cap_C2_BANK_xc17_3__W=5.163
+.param cap_C2_BANK_xc17_2__L=5.163 cap_C2_BANK_xc17_2__W=5.163
+.param cap_C2_BANK_xc17_1__L=5.163 cap_C2_BANK_xc17_1__W=5.163
+.param cap_C2_BANK_xc17_0__L=5.163 cap_C2_BANK_xc17_0__W=5.163
+.param cap_C1_BANK_xc16_7__L=11.47 cap_C1_BANK_xc16_7__W=11.47
+.param cap_C1_BANK_xc16_6__L=11.47 cap_C1_BANK_xc16_6__W=11.47
+.param cap_C1_BANK_xc16_5__L=11.47 cap_C1_BANK_xc16_5__W=11.47
+.param cap_C1_BANK_xc16_4__L=11.47 cap_C1_BANK_xc16_4__W=11.47
+.param cap_C1_BANK_xc16_3__L=11.47 cap_C1_BANK_xc16_3__W=11.47
+.param cap_C1_BANK_xc16_2__L=11.47 cap_C1_BANK_xc16_2__W=11.47
+.param cap_C1_BANK_xc16_1__L=11.47 cap_C1_BANK_xc16_1__W=11.47
+.param cap_C1_BANK_xc16_0__L=11.47 cap_C1_BANK_xc16_0__W=11.47
+.param cap_C1_BANK_xc15_3__L=11.47 cap_C1_BANK_xc15_3__W=11.47
+.param cap_C1_BANK_xc15_2__L=11.47 cap_C1_BANK_xc15_2__W=11.47
+.param cap_C1_BANK_xc15_1__L=11.47 cap_C1_BANK_xc15_1__W=11.47
+.param cap_C1_BANK_xc15_0__L=11.47 cap_C1_BANK_xc15_0__W=11.47
+.param cap_C1_BANK_xc14_1__L=11.47 cap_C1_BANK_xc14_1__W=11.47
+.param cap_C1_BANK_xc14_0__L=11.47 cap_C1_BANK_xc14_0__W=11.47
+.param cap_C1_BANK_xc13_L=11.47 cap_C1_BANK_xc13_W=11.47
+.param cap_C1_BANK_xc1_3__L=32.4 cap_C1_BANK_xc1_3__W=32.4
+.param cap_C1_BANK_xc1_2__L=32.4 cap_C1_BANK_xc1_2__W=32.4
+.param cap_C1_BANK_xc1_1__L=32.4 cap_C1_BANK_xc1_1__W=32.4
+.param cap_C1_BANK_xc1_0__L=32.4 cap_C1_BANK_xc1_0__W=32.4
+.param res_INPUT_RES_xr16_L=49.8 res_INPUT_RES_xr16_W=3
+.param res_DAC3_xr27_L=49.8 res_DAC3_xr27_W=3
+.param res_DAC3_xr64_L=46.68 res_DAC3_xr64_W=3
+.param res_DAC1_xr19_L=49.8 res_DAC1_xr19_W=3
+.param res_DAC1_xr48_L=49.8 res_DAC1_xr48_W=3
+.param cap_CAP2_RES2_xc0_L=31.62 cap_CAP2_RES2_xc0_W=31.62
+.param res_CAP2_RES2_xr51_L=49.8 res_CAP2_RES2_xr51_W=3
+.param res_CAP2_RES2_xr25_L=49.8 res_CAP2_RES2_xr25_W=3
+.param cap_CAP1_xc1_3__L=36.2 cap_CAP1_xc1_3__W=36.2
+.param cap_CAP1_xc1_2__L=36.2 cap_CAP1_xc1_2__W=36.2
+.param cap_CAP1_xc1_1__L=36.2 cap_CAP1_xc1_1__W=36.2
+.param cap_CAP1_xc1_0__L=36.2 cap_CAP1_xc1_0__W=36.2
+.param Gm2_v5_Practice_schematic_Mm20_L=9 Gm2_v5_Practice_schematic_Mm20_W=7 Gm2_v5_Practice_schematic_Mm20_M=1 Gm2_v5_Practice_schematic_Mm20_Nf=1
+.param Gm2_v5_Practice_schematic_Mm18_L=9 Gm2_v5_Practice_schematic_Mm18_W=7 Gm2_v5_Practice_schematic_Mm18_M=1 Gm2_v5_Practice_schematic_Mm18_Nf=1
+.param Gm2_v5_Practice_schematic_Mm0_L=0.4 Gm2_v5_Practice_schematic_Mm0_W=1.75 Gm2_v5_Practice_schematic_Mm0_M=1 Gm2_v5_Practice_schematic_Mm0_Nf=2
+.param Gm2_v5_Practice_schematic_Mm24_L=0.4 Gm2_v5_Practice_schematic_Mm24_W=1.75 Gm2_v5_Practice_schematic_Mm24_M=1 Gm2_v5_Practice_schematic_Mm24_Nf=2
+.param Gm2_v5_Practice_schematic_Mm23_L=0.4 Gm2_v5_Practice_schematic_Mm23_W=3.5 Gm2_v5_Practice_schematic_Mm23_M=1 Gm2_v5_Practice_schematic_Mm23_Nf=4
+.param Gm2_v5_Practice_schematic_Mm14_L=0.4 Gm2_v5_Practice_schematic_Mm14_W=3.5 Gm2_v5_Practice_schematic_Mm14_M=1 Gm2_v5_Practice_schematic_Mm14_Nf=4
+.param Gm2_v5_Practice_schematic_Mm22_L=0.4 Gm2_v5_Practice_schematic_Mm22_W=7.8 Gm2_v5_Practice_schematic_Mm22_M=1 Gm2_v5_Practice_schematic_Mm22_Nf=4
+.param Gm2_v5_Practice_schematic_Mm12_L=5.5 Gm2_v5_Practice_schematic_Mm12_W=5.25 Gm2_v5_Practice_schematic_Mm12_M=1 Gm2_v5_Practice_schematic_Mm12_Nf=1
+.param Gm2_v5_Practice_schematic_Mm11_L=5.5 Gm2_v5_Practice_schematic_Mm11_W=5.25 Gm2_v5_Practice_schematic_Mm11_M=1 Gm2_v5_Practice_schematic_Mm11_Nf=1
+.param Gm2_v5_Practice_schematic_Mm13_L=0.4 Gm2_v5_Practice_schematic_Mm13_W=2.9 Gm2_v5_Practice_schematic_Mm13_M=1 Gm2_v5_Practice_schematic_Mm13_Nf=4
+.param Gm2_v5_Practice_schematic_Mm21_L=0.4 Gm2_v5_Practice_schematic_Mm21_W=2.9 Gm2_v5_Practice_schematic_Mm21_M=1 Gm2_v5_Practice_schematic_Mm21_Nf=4
+.param Gm1_v5_Practice_schematic_Mm8_L=0.4 Gm1_v5_Practice_schematic_Mm8_W=10.75 Gm1_v5_Practice_schematic_Mm8_M=1 Gm1_v5_Practice_schematic_Mm8_Nf=4
+.param Gm1_v5_Practice_schematic_Mm2_L=8.25 Gm1_v5_Practice_schematic_Mm2_W=7.4 Gm1_v5_Practice_schematic_Mm2_M=1 Gm1_v5_Practice_schematic_Mm2_Nf=1
+.param Gm1_v5_Practice_schematic_Mm4_L=8.25 Gm1_v5_Practice_schematic_Mm4_W=7.4 Gm1_v5_Practice_schematic_Mm4_M=1 Gm1_v5_Practice_schematic_Mm4_Nf=1
+.param Gm1_v5_Practice_schematic_Mm12_L=0.3 Gm1_v5_Practice_schematic_Mm12_W=1.45 Gm1_v5_Practice_schematic_Mm12_M=1 Gm1_v5_Practice_schematic_Mm12_Nf=1
+.param Gm1_v5_Practice_schematic_Mm11_L=0.3 Gm1_v5_Practice_schematic_Mm11_W=5.85 Gm1_v5_Practice_schematic_Mm11_M=1 Gm1_v5_Practice_schematic_Mm11_Nf=4
+.param Gm1_v5_Practice_schematic_Mm15_L=0.3 Gm1_v5_Practice_schematic_Mm15_W=1.45 Gm1_v5_Practice_schematic_Mm15_M=1 Gm1_v5_Practice_schematic_Mm15_Nf=1
+.param Gm1_v5_Practice_schematic_Mm14_L=0.3 Gm1_v5_Practice_schematic_Mm14_W=5.85 Gm1_v5_Practice_schematic_Mm14_M=1 Gm1_v5_Practice_schematic_Mm14_Nf=4
+.param Gm1_v5_Practice_schematic_Mm3_L=5.5 Gm1_v5_Practice_schematic_Mm3_W=6.25 Gm1_v5_Practice_schematic_Mm3_M=1 Gm1_v5_Practice_schematic_Mm3_Nf=1
+.param Gm1_v5_Practice_schematic_Mm0_L=5.5 Gm1_v5_Practice_schematic_Mm0_W=6.25 Gm1_v5_Practice_schematic_Mm0_M=1 Gm1_v5_Practice_schematic_Mm0_Nf=1
+.param Gm1_v5_Practice_schematic_Mm26_L=0.6 Gm1_v5_Practice_schematic_Mm26_W=8.5 Gm1_v5_Practice_schematic_Mm26_M=1 Gm1_v5_Practice_schematic_Mm26_Nf=8
+.param Gm1_v5_Practice_schematic_Mm27_L=0.6 Gm1_v5_Practice_schematic_Mm27_W=8.5 Gm1_v5_Practice_schematic_Mm27_M=1 Gm1_v5_Practice_schematic_Mm27_Nf=8
+.param DFCNQD2BWP_LVT_M0_L=0.1 DFCNQD2BWP_LVT_M0_W=0.4 DFCNQD2BWP_LVT_M0_M=1 DFCNQD2BWP_LVT_M0_Nf=1
+.param DFCNQD2BWP_LVT_Mmi4_L=0.1 DFCNQD2BWP_LVT_Mmi4_W=0.8 DFCNQD2BWP_LVT_Mmi4_M=1 DFCNQD2BWP_LVT_Mmi4_Nf=1
+.param DFCNQD2BWP_LVT_M1_L=0.1 DFCNQD2BWP_LVT_M1_W=0.5 DFCNQD2BWP_LVT_M1_M=1 DFCNQD2BWP_LVT_M1_Nf=1
+.param DFCNQD2BWP_LVT_M2_L=0.1 DFCNQD2BWP_LVT_M2_W=0.4 DFCNQD2BWP_LVT_M2_M=1 DFCNQD2BWP_LVT_M2_Nf=1
+.param DFCNQD2BWP_LVT_Mmi29_L=0.1 DFCNQD2BWP_LVT_Mmi29_W=0.3 DFCNQD2BWP_LVT_Mmi29_M=1 DFCNQD2BWP_LVT_Mmi29_Nf=1
+.param DFCNQD2BWP_LVT_Mmi15_L=0.1 DFCNQD2BWP_LVT_Mmi15_W=0.4 DFCNQD2BWP_LVT_Mmi15_M=1 DFCNQD2BWP_LVT_Mmi15_Nf=1
+.param DFCNQD2BWP_LVT_M3_L=0.1 DFCNQD2BWP_LVT_M3_W=0.5 DFCNQD2BWP_LVT_M3_M=1 DFCNQD2BWP_LVT_M3_Nf=1
+.param DFCNQD2BWP_LVT_M4_L=0.1 DFCNQD2BWP_LVT_M4_W=0.5 DFCNQD2BWP_LVT_M4_M=1 DFCNQD2BWP_LVT_M4_Nf=1
+.param DFCNQD2BWP_LVT_M5_L=0.1 DFCNQD2BWP_LVT_M5_W=0.4 DFCNQD2BWP_LVT_M5_M=1 DFCNQD2BWP_LVT_M5_Nf=1
+.param DFCNQD2BWP_LVT_Mmi5_L=0.1 DFCNQD2BWP_LVT_Mmi5_W=0.8 DFCNQD2BWP_LVT_Mmi5_M=1 DFCNQD2BWP_LVT_Mmi5_Nf=1
+.param DFCNQD2BWP_LVT_Mmi49_L=0.1 DFCNQD2BWP_LVT_Mmi49_W=0.3 DFCNQD2BWP_LVT_Mmi49_M=1 DFCNQD2BWP_LVT_Mmi49_Nf=1
+.param DFCNQD2BWP_LVT_M6_L=0.1 DFCNQD2BWP_LVT_M6_W=0.5 DFCNQD2BWP_LVT_M6_M=1 DFCNQD2BWP_LVT_M6_Nf=1
+.param DFCNQD2BWP_LVT_Mmi26_L=0.1 DFCNQD2BWP_LVT_Mmi26_W=0.3 DFCNQD2BWP_LVT_Mmi26_M=1 DFCNQD2BWP_LVT_Mmi26_Nf=1
+.param DFCNQD2BWP_LVT_Mmi48_L=0.1 DFCNQD2BWP_LVT_Mmi48_W=0.3 DFCNQD2BWP_LVT_Mmi48_M=1 DFCNQD2BWP_LVT_Mmi48_Nf=1
+.param DFCNQD2BWP_LVT_M7_L=0.1 DFCNQD2BWP_LVT_M7_W=0.8 DFCNQD2BWP_LVT_M7_M=1 DFCNQD2BWP_LVT_M7_Nf=1
+.param DFCNQD2BWP_LVT_M8_L=0.1 DFCNQD2BWP_LVT_M8_W=0.8 DFCNQD2BWP_LVT_M8_M=1 DFCNQD2BWP_LVT_M8_Nf=1
+.param DFCNQD2BWP_LVT_Mmi47_L=0.1 DFCNQD2BWP_LVT_Mmi47_W=0.3 DFCNQD2BWP_LVT_Mmi47_M=1 DFCNQD2BWP_LVT_Mmi47_Nf=1
+.param DFCNQD2BWP_LVT_Mmi33_L=0.1 DFCNQD2BWP_LVT_Mmi33_W=0.3 DFCNQD2BWP_LVT_Mmi33_M=1 DFCNQD2BWP_LVT_Mmi33_Nf=1
+.param DFCNQD2BWP_LVT_M9_L=0.1 DFCNQD2BWP_LVT_M9_W=1 DFCNQD2BWP_LVT_M9_M=1 DFCNQD2BWP_LVT_M9_Nf=1
+.param DFCNQD2BWP_LVT_M10_L=0.1 DFCNQD2BWP_LVT_M10_W=0.9 DFCNQD2BWP_LVT_M10_M=1 DFCNQD2BWP_LVT_M10_Nf=1
+.param DFCNQD2BWP_LVT_Mmi43_L=0.1 DFCNQD2BWP_LVT_Mmi43_W=0.3 DFCNQD2BWP_LVT_Mmi43_M=1 DFCNQD2BWP_LVT_Mmi43_Nf=1
+.param DFCNQD2BWP_LVT_Mmi6_L=0.1 DFCNQD2BWP_LVT_Mmi6_W=0.85 DFCNQD2BWP_LVT_Mmi6_M=1 DFCNQD2BWP_LVT_Mmi6_Nf=1
+.param DFCNQD2BWP_LVT_M11_L=0.1 DFCNQD2BWP_LVT_M11_W=1 DFCNQD2BWP_LVT_M11_M=1 DFCNQD2BWP_LVT_M11_Nf=1
+.param DFCNQD2BWP_LVT_M12_L=0.1 DFCNQD2BWP_LVT_M12_W=0.9 DFCNQD2BWP_LVT_M12_M=1 DFCNQD2BWP_LVT_M12_Nf=1
+.param DFCNQD2BWP_LVT_M13_L=0.1 DFCNQD2BWP_LVT_M13_W=0.9 DFCNQD2BWP_LVT_M13_M=1 DFCNQD2BWP_LVT_M13_Nf=1
+.param DFCNQD2BWP_LVT_Mmi44_L=0.1 DFCNQD2BWP_LVT_Mmi44_W=0.3 DFCNQD2BWP_LVT_Mmi44_M=1 DFCNQD2BWP_LVT_Mmi44_Nf=1
+.param DFCNQD2BWP_LVT_M14_L=0.1 DFCNQD2BWP_LVT_M14_W=0.9 DFCNQD2BWP_LVT_M14_M=1 DFCNQD2BWP_LVT_M14_Nf=1
+.param DFCNQD2BWP_LVT_M15_L=0.1 DFCNQD2BWP_LVT_M15_W=0.45 DFCNQD2BWP_LVT_M15_M=1 DFCNQD2BWP_LVT_M15_Nf=1
+.param DFCNQD2BWP_LVT_M16_L=0.1 DFCNQD2BWP_LVT_M16_W=0.5 DFCNQD2BWP_LVT_M16_M=1 DFCNQD2BWP_LVT_M16_Nf=1
+.param DFCNQD2BWP_LVT_Mmi16_L=0.1 DFCNQD2BWP_LVT_Mmi16_W=0.45 DFCNQD2BWP_LVT_Mmi16_M=1 DFCNQD2BWP_LVT_Mmi16_Nf=1
+.param DFCNQD2BWP_LVT_M17_L=0.1 DFCNQD2BWP_LVT_M17_W=0.5 DFCNQD2BWP_LVT_M17_M=1 DFCNQD2BWP_LVT_M17_Nf=1
+.param DFCNQD2BWP_LVT_Mmi32_L=0.1 DFCNQD2BWP_LVT_Mmi32_W=0.3 DFCNQD2BWP_LVT_Mmi32_M=1 DFCNQD2BWP_LVT_Mmi32_Nf=1
+.param DFCNQD2BWP_LVT_Mmi45_L=0.1 DFCNQD2BWP_LVT_Mmi45_W=0.3 DFCNQD2BWP_LVT_Mmi45_M=1 DFCNQD2BWP_LVT_Mmi45_Nf=1
+.param DFCNQD2BWP_LVT_Mmi7_L=0.1 DFCNQD2BWP_LVT_Mmi7_W=0.85 DFCNQD2BWP_LVT_Mmi7_M=1 DFCNQD2BWP_LVT_Mmi7_Nf=1
+.param DFCNQD2BWP_LVT_schematic_M0_L=0.1 DFCNQD2BWP_LVT_schematic_M0_W=0.4 DFCNQD2BWP_LVT_schematic_M0_M=1 DFCNQD2BWP_LVT_schematic_M0_Nf=1
+.param DFCNQD2BWP_LVT_schematic_Mmi4_L=0.1 DFCNQD2BWP_LVT_schematic_Mmi4_W=0.8 DFCNQD2BWP_LVT_schematic_Mmi4_M=1 DFCNQD2BWP_LVT_schematic_Mmi4_Nf=1
+.param DFCNQD2BWP_LVT_schematic_M1_L=0.1 DFCNQD2BWP_LVT_schematic_M1_W=0.5 DFCNQD2BWP_LVT_schematic_M1_M=1 DFCNQD2BWP_LVT_schematic_M1_Nf=1
+.param DFCNQD2BWP_LVT_schematic_M2_L=0.1 DFCNQD2BWP_LVT_schematic_M2_W=0.4 DFCNQD2BWP_LVT_schematic_M2_M=1 DFCNQD2BWP_LVT_schematic_M2_Nf=1
+.param DFCNQD2BWP_LVT_schematic_Mmi29_L=0.1 DFCNQD2BWP_LVT_schematic_Mmi29_W=0.3 DFCNQD2BWP_LVT_schematic_Mmi29_M=1 DFCNQD2BWP_LVT_schematic_Mmi29_Nf=1
+.param DFCNQD2BWP_LVT_schematic_Mmi15_L=0.1 DFCNQD2BWP_LVT_schematic_Mmi15_W=0.4 DFCNQD2BWP_LVT_schematic_Mmi15_M=1 DFCNQD2BWP_LVT_schematic_Mmi15_Nf=1
+.param DFCNQD2BWP_LVT_schematic_M3_L=0.1 DFCNQD2BWP_LVT_schematic_M3_W=0.5 DFCNQD2BWP_LVT_schematic_M3_M=1 DFCNQD2BWP_LVT_schematic_M3_Nf=1
+.param DFCNQD2BWP_LVT_schematic_M4_L=0.1 DFCNQD2BWP_LVT_schematic_M4_W=0.5 DFCNQD2BWP_LVT_schematic_M4_M=1 DFCNQD2BWP_LVT_schematic_M4_Nf=1
+.param DFCNQD2BWP_LVT_schematic_M5_L=0.1 DFCNQD2BWP_LVT_schematic_M5_W=0.4 DFCNQD2BWP_LVT_schematic_M5_M=1 DFCNQD2BWP_LVT_schematic_M5_Nf=1
+.param DFCNQD2BWP_LVT_schematic_Mmi5_L=0.1 DFCNQD2BWP_LVT_schematic_Mmi5_W=0.8 DFCNQD2BWP_LVT_schematic_Mmi5_M=1 DFCNQD2BWP_LVT_schematic_Mmi5_Nf=1
+.param DFCNQD2BWP_LVT_schematic_Mmi49_L=0.1 DFCNQD2BWP_LVT_schematic_Mmi49_W=0.3 DFCNQD2BWP_LVT_schematic_Mmi49_M=1 DFCNQD2BWP_LVT_schematic_Mmi49_Nf=1
+.param DFCNQD2BWP_LVT_schematic_M6_L=0.1 DFCNQD2BWP_LVT_schematic_M6_W=0.5 DFCNQD2BWP_LVT_schematic_M6_M=1 DFCNQD2BWP_LVT_schematic_M6_Nf=1
+.param DFCNQD2BWP_LVT_schematic_Mmi26_L=0.1 DFCNQD2BWP_LVT_schematic_Mmi26_W=0.3 DFCNQD2BWP_LVT_schematic_Mmi26_M=1 DFCNQD2BWP_LVT_schematic_Mmi26_Nf=1
+.param DFCNQD2BWP_LVT_schematic_Mmi48_L=0.1 DFCNQD2BWP_LVT_schematic_Mmi48_W=0.3 DFCNQD2BWP_LVT_schematic_Mmi48_M=1 DFCNQD2BWP_LVT_schematic_Mmi48_Nf=1
+.param DFCNQD2BWP_LVT_schematic_M7_L=0.1 DFCNQD2BWP_LVT_schematic_M7_W=0.8 DFCNQD2BWP_LVT_schematic_M7_M=1 DFCNQD2BWP_LVT_schematic_M7_Nf=1
+.param DFCNQD2BWP_LVT_schematic_M8_L=0.1 DFCNQD2BWP_LVT_schematic_M8_W=0.8 DFCNQD2BWP_LVT_schematic_M8_M=1 DFCNQD2BWP_LVT_schematic_M8_Nf=1
+.param DFCNQD2BWP_LVT_schematic_Mmi47_L=0.1 DFCNQD2BWP_LVT_schematic_Mmi47_W=0.3 DFCNQD2BWP_LVT_schematic_Mmi47_M=1 DFCNQD2BWP_LVT_schematic_Mmi47_Nf=1
+.param DFCNQD2BWP_LVT_schematic_Mmi33_L=0.1 DFCNQD2BWP_LVT_schematic_Mmi33_W=0.3 DFCNQD2BWP_LVT_schematic_Mmi33_M=1 DFCNQD2BWP_LVT_schematic_Mmi33_Nf=1
+.param DFCNQD2BWP_LVT_schematic_M9_L=0.1 DFCNQD2BWP_LVT_schematic_M9_W=1 DFCNQD2BWP_LVT_schematic_M9_M=1 DFCNQD2BWP_LVT_schematic_M9_Nf=1
+.param DFCNQD2BWP_LVT_schematic_M10_L=0.1 DFCNQD2BWP_LVT_schematic_M10_W=0.9 DFCNQD2BWP_LVT_schematic_M10_M=1 DFCNQD2BWP_LVT_schematic_M10_Nf=1
+.param DFCNQD2BWP_LVT_schematic_Mmi43_L=0.1 DFCNQD2BWP_LVT_schematic_Mmi43_W=0.3 DFCNQD2BWP_LVT_schematic_Mmi43_M=1 DFCNQD2BWP_LVT_schematic_Mmi43_Nf=1
+.param DFCNQD2BWP_LVT_schematic_Mmi6_L=0.1 DFCNQD2BWP_LVT_schematic_Mmi6_W=0.85 DFCNQD2BWP_LVT_schematic_Mmi6_M=1 DFCNQD2BWP_LVT_schematic_Mmi6_Nf=1
+.param DFCNQD2BWP_LVT_schematic_M11_L=0.1 DFCNQD2BWP_LVT_schematic_M11_W=1 DFCNQD2BWP_LVT_schematic_M11_M=1 DFCNQD2BWP_LVT_schematic_M11_Nf=1
+.param DFCNQD2BWP_LVT_schematic_M12_L=0.1 DFCNQD2BWP_LVT_schematic_M12_W=0.9 DFCNQD2BWP_LVT_schematic_M12_M=1 DFCNQD2BWP_LVT_schematic_M12_Nf=1
+.param DFCNQD2BWP_LVT_schematic_M13_L=0.1 DFCNQD2BWP_LVT_schematic_M13_W=0.9 DFCNQD2BWP_LVT_schematic_M13_M=1 DFCNQD2BWP_LVT_schematic_M13_Nf=1
+.param DFCNQD2BWP_LVT_schematic_Mmi44_L=0.1 DFCNQD2BWP_LVT_schematic_Mmi44_W=0.3 DFCNQD2BWP_LVT_schematic_Mmi44_M=1 DFCNQD2BWP_LVT_schematic_Mmi44_Nf=1
+.param DFCNQD2BWP_LVT_schematic_M14_L=0.1 DFCNQD2BWP_LVT_schematic_M14_W=0.9 DFCNQD2BWP_LVT_schematic_M14_M=1 DFCNQD2BWP_LVT_schematic_M14_Nf=1
+.param DFCNQD2BWP_LVT_schematic_M15_L=0.1 DFCNQD2BWP_LVT_schematic_M15_W=0.45 DFCNQD2BWP_LVT_schematic_M15_M=1 DFCNQD2BWP_LVT_schematic_M15_Nf=1
+.param DFCNQD2BWP_LVT_schematic_M16_L=0.1 DFCNQD2BWP_LVT_schematic_M16_W=0.5 DFCNQD2BWP_LVT_schematic_M16_M=1 DFCNQD2BWP_LVT_schematic_M16_Nf=1
+.param DFCNQD2BWP_LVT_schematic_Mmi16_L=0.1 DFCNQD2BWP_LVT_schematic_Mmi16_W=0.45 DFCNQD2BWP_LVT_schematic_Mmi16_M=1 DFCNQD2BWP_LVT_schematic_Mmi16_Nf=1
+.param DFCNQD2BWP_LVT_schematic_M17_L=0.1 DFCNQD2BWP_LVT_schematic_M17_W=0.5 DFCNQD2BWP_LVT_schematic_M17_M=1 DFCNQD2BWP_LVT_schematic_M17_Nf=1
+.param DFCNQD2BWP_LVT_schematic_Mmi32_L=0.1 DFCNQD2BWP_LVT_schematic_Mmi32_W=0.3 DFCNQD2BWP_LVT_schematic_Mmi32_M=1 DFCNQD2BWP_LVT_schematic_Mmi32_Nf=1
+.param DFCNQD2BWP_LVT_schematic_Mmi45_L=0.1 DFCNQD2BWP_LVT_schematic_Mmi45_W=0.3 DFCNQD2BWP_LVT_schematic_Mmi45_M=1 DFCNQD2BWP_LVT_schematic_Mmi45_Nf=1
+.param DFCNQD2BWP_LVT_schematic_Mmi7_L=0.1 DFCNQD2BWP_LVT_schematic_Mmi7_W=0.85 DFCNQD2BWP_LVT_schematic_Mmi7_M=1 DFCNQD2BWP_LVT_schematic_Mmi7_Nf=1
+.param myComparator_v3_CTDSM_DEC2016_schematic_Mm0_L=2.5 myComparator_v3_CTDSM_DEC2016_schematic_Mm0_W=2.6 myComparator_v3_CTDSM_DEC2016_schematic_Mm0_M=1 myComparator_v3_CTDSM_DEC2016_schematic_Mm0_Nf=1
+.param myComparator_v3_CTDSM_DEC2016_schematic_Mm22_L=2.5 myComparator_v3_CTDSM_DEC2016_schematic_Mm22_W=2.6 myComparator_v3_CTDSM_DEC2016_schematic_Mm22_M=1 myComparator_v3_CTDSM_DEC2016_schematic_Mm22_Nf=1
+.param myComparator_v3_CTDSM_DEC2016_schematic_Mm16_L=0.1 myComparator_v3_CTDSM_DEC2016_schematic_Mm16_W=3.6 myComparator_v3_CTDSM_DEC2016_schematic_Mm16_M=1 myComparator_v3_CTDSM_DEC2016_schematic_Mm16_Nf=4
+.param myComparator_v3_CTDSM_DEC2016_schematic_Mm17_L=0.1 myComparator_v3_CTDSM_DEC2016_schematic_Mm17_W=3.6 myComparator_v3_CTDSM_DEC2016_schematic_Mm17_M=1 myComparator_v3_CTDSM_DEC2016_schematic_Mm17_Nf=4
+.param myComparator_v3_CTDSM_DEC2016_schematic_Mm4_L=0.1 myComparator_v3_CTDSM_DEC2016_schematic_Mm4_W=4.8 myComparator_v3_CTDSM_DEC2016_schematic_Mm4_M=1 myComparator_v3_CTDSM_DEC2016_schematic_Mm4_Nf=4
+.param myComparator_v3_CTDSM_DEC2016_schematic_Mm3_L=0.1 myComparator_v3_CTDSM_DEC2016_schematic_Mm3_W=4.8 myComparator_v3_CTDSM_DEC2016_schematic_Mm3_M=1 myComparator_v3_CTDSM_DEC2016_schematic_Mm3_Nf=4
+.param myComparator_v3_CTDSM_DEC2016_schematic_Mm7_L=0.1 myComparator_v3_CTDSM_DEC2016_schematic_Mm7_W=17.25 myComparator_v3_CTDSM_DEC2016_schematic_Mm7_M=1 myComparator_v3_CTDSM_DEC2016_schematic_Mm7_Nf=15
+.param myComparator_v3_CTDSM_DEC2016_schematic_Mm5_L=0.1 myComparator_v3_CTDSM_DEC2016_schematic_Mm5_W=36 myComparator_v3_CTDSM_DEC2016_schematic_Mm5_M=1 myComparator_v3_CTDSM_DEC2016_schematic_Mm5_Nf=15
+.param myComparator_v3_CTDSM_DEC2016_schematic_Mm6_L=0.1 myComparator_v3_CTDSM_DEC2016_schematic_Mm6_W=36 myComparator_v3_CTDSM_DEC2016_schematic_Mm6_M=1 myComparator_v3_CTDSM_DEC2016_schematic_Mm6_Nf=15
+.param myComparator_v3_CTDSM_DEC2016_schematic_Mm8_L=0.1 myComparator_v3_CTDSM_DEC2016_schematic_Mm8_W=4.8 myComparator_v3_CTDSM_DEC2016_schematic_Mm8_M=1 myComparator_v3_CTDSM_DEC2016_schematic_Mm8_Nf=4
+.param myComparator_v3_CTDSM_DEC2016_schematic_Mm18_L=0.1 myComparator_v3_CTDSM_DEC2016_schematic_Mm18_W=4.8 myComparator_v3_CTDSM_DEC2016_schematic_Mm18_M=1 myComparator_v3_CTDSM_DEC2016_schematic_Mm18_Nf=4
+.param myComparator_v3_CTDSM_DEC2016_schematic_Mm15_L=0.1 myComparator_v3_CTDSM_DEC2016_schematic_Mm15_W=4.8 myComparator_v3_CTDSM_DEC2016_schematic_Mm15_M=1 myComparator_v3_CTDSM_DEC2016_schematic_Mm15_Nf=4
+.param myComparator_v3_CTDSM_DEC2016_schematic_Mm2_L=0.1 myComparator_v3_CTDSM_DEC2016_schematic_Mm2_W=4.8 myComparator_v3_CTDSM_DEC2016_schematic_Mm2_M=1 myComparator_v3_CTDSM_DEC2016_schematic_Mm2_Nf=4
+.param myComparator_v3_CTDSM_DEC2016_schematic_Mm1_L=0.1 myComparator_v3_CTDSM_DEC2016_schematic_Mm1_W=4.8 myComparator_v3_CTDSM_DEC2016_schematic_Mm1_M=1 myComparator_v3_CTDSM_DEC2016_schematic_Mm1_Nf=4
+.param myComparator_v3_CTDSM_DEC2016_schematic_Mm12_L=0.1 myComparator_v3_CTDSM_DEC2016_schematic_Mm12_W=4.8 myComparator_v3_CTDSM_DEC2016_schematic_Mm12_M=1 myComparator_v3_CTDSM_DEC2016_schematic_Mm12_Nf=4
+.param myComparator_v3_CTDSM_DEC2016_schematic_Mm14_L=0.1 myComparator_v3_CTDSM_DEC2016_schematic_Mm14_W=9.6 myComparator_v3_CTDSM_DEC2016_schematic_Mm14_M=1 myComparator_v3_CTDSM_DEC2016_schematic_Mm14_Nf=8
+.param myComparator_v3_CTDSM_DEC2016_schematic_Mm13_L=0.1 myComparator_v3_CTDSM_DEC2016_schematic_Mm13_W=9.6 myComparator_v3_CTDSM_DEC2016_schematic_Mm13_M=1 myComparator_v3_CTDSM_DEC2016_schematic_Mm13_Nf=8
+.param NR2D8BWP_LVT_M0_L=0.2 NR2D8BWP_LVT_M0_W=12.4 NR2D8BWP_LVT_M0_M=1 NR2D8BWP_LVT_M0_Nf=2
+.param NR2D8BWP_LVT_M1_L=0.2 NR2D8BWP_LVT_M1_W=12.4 NR2D8BWP_LVT_M1_M=1 NR2D8BWP_LVT_M1_Nf=2
+.param NR2D8BWP_LVT_M2_L=0.2 NR2D8BWP_LVT_M2_W=16.4 NR2D8BWP_LVT_M2_M=1 NR2D8BWP_LVT_M2_Nf=2
+.param NR2D8BWP_LVT_M3_L=0.2 NR2D8BWP_LVT_M3_W=16.4 NR2D8BWP_LVT_M3_M=1 NR2D8BWP_LVT_M3_Nf=2
+.param INVD4BWP_LVT_m0_L=0.1 INVD4BWP_LVT_m0_W=0.8 INVD4BWP_LVT_m0_M=1 INVD4BWP_LVT_m0_Nf=1
+.param INVD4BWP_LVT_m1_L=0.1 INVD4BWP_LVT_m1_W=0.8 INVD4BWP_LVT_m1_M=1 INVD4BWP_LVT_m1_Nf=1
+.param INVD4BWP_LVT_m2_L=0.1 INVD4BWP_LVT_m2_W=1 INVD4BWP_LVT_m2_M=1 INVD4BWP_LVT_m2_Nf=1
+.param INVD4BWP_LVT_m3_L=0.1 INVD4BWP_LVT_m3_W=1 INVD4BWP_LVT_m3_M=1 INVD4BWP_LVT_m3_Nf=1
+.param C2_BANK_Mm17_L=0.1 C2_BANK_Mm17_W=15 C2_BANK_Mm17_M=1 C2_BANK_Mm17_Nf=12
+.param C2_BANK_Mm15_L=0.1 C2_BANK_Mm15_W=1 C2_BANK_Mm15_M=1 C2_BANK_Mm15_Nf=1
+.param C2_BANK_Mm13_L=0.1 C2_BANK_Mm13_W=15 C2_BANK_Mm13_M=1 C2_BANK_Mm13_Nf=12
+.param C2_BANK_Mm12_L=0.1 C2_BANK_Mm12_W=1 C2_BANK_Mm12_M=1 C2_BANK_Mm12_Nf=1
+.param C2_BANK_Mm10_L=0.1 C2_BANK_Mm10_W=7.5 C2_BANK_Mm10_M=1 C2_BANK_Mm10_Nf=6
+.param C2_BANK_Mm8_L=0.1 C2_BANK_Mm8_W=1 C2_BANK_Mm8_M=1 C2_BANK_Mm8_Nf=1
+.param C2_BANK_Mm20_L=0.1 C2_BANK_Mm20_W=1 C2_BANK_Mm20_M=1 C2_BANK_Mm20_Nf=1
+.param C2_BANK_Mm18_L=0.1 C2_BANK_Mm18_W=30 C2_BANK_Mm18_M=1 C2_BANK_Mm18_Nf=24
+.param C2_BANK_Mm23_L=0.1 C2_BANK_Mm23_W=1 C2_BANK_Mm23_M=1 C2_BANK_Mm23_Nf=1
+.param C2_BANK_Mm11_L=0.1 C2_BANK_Mm11_W=1 C2_BANK_Mm11_M=1 C2_BANK_Mm11_Nf=1
+.param C2_BANK_Mm6_L=0.1 C2_BANK_Mm6_W=7.5 C2_BANK_Mm6_M=1 C2_BANK_Mm6_Nf=6
+.param C2_BANK_Mm2_L=0.1 C2_BANK_Mm2_W=3.75 C2_BANK_Mm2_M=1 C2_BANK_Mm2_Nf=3
+.param C2_BANK_Mm4_L=0.1 C2_BANK_Mm4_W=1 C2_BANK_Mm4_M=1 C2_BANK_Mm4_Nf=1
+.param C2_BANK_Mm5_L=0.1 C2_BANK_Mm5_W=1 C2_BANK_Mm5_M=1 C2_BANK_Mm5_Nf=1
+.param C2_BANK_Mm0_L=0.1 C2_BANK_Mm0_W=3.75 C2_BANK_Mm0_M=1 C2_BANK_Mm0_Nf=3
+.param C2_BANK_Mm22_L=0.1 C2_BANK_Mm22_W=30 C2_BANK_Mm22_M=1 C2_BANK_Mm22_Nf=24
+.param C2_BANK_Mm16_L=0.1 C2_BANK_Mm16_W=30 C2_BANK_Mm16_M=1 C2_BANK_Mm16_Nf=12
+.param C2_BANK_Mm14_L=0.1 C2_BANK_Mm14_W=30 C2_BANK_Mm14_M=1 C2_BANK_Mm14_Nf=12
+.param C2_BANK_Mm9_L=0.1 C2_BANK_Mm9_W=15 C2_BANK_Mm9_M=1 C2_BANK_Mm9_Nf=6
+.param C2_BANK_Mm7_L=0.1 C2_BANK_Mm7_W=15 C2_BANK_Mm7_M=1 C2_BANK_Mm7_Nf=6
+.param C2_BANK_Mm19_L=0.1 C2_BANK_Mm19_W=60 C2_BANK_Mm19_M=1 C2_BANK_Mm19_Nf=24
+.param C2_BANK_Mm1_L=0.1 C2_BANK_Mm1_W=7.5 C2_BANK_Mm1_M=1 C2_BANK_Mm1_Nf=3
+.param C2_BANK_Mm21_L=0.1 C2_BANK_Mm21_W=60 C2_BANK_Mm21_M=1 C2_BANK_Mm21_Nf=24
+.param C2_BANK_Mm3_L=0.1 C2_BANK_Mm3_W=7.5 C2_BANK_Mm3_M=1 C2_BANK_Mm3_Nf=3
+.param C1_BANK_Mm17_L=0.1 C1_BANK_Mm17_W=100 C1_BANK_Mm17_M=1 C1_BANK_Mm17_Nf=80
+.param C1_BANK_Mm15_L=0.1 C1_BANK_Mm15_W=1 C1_BANK_Mm15_M=1 C1_BANK_Mm15_Nf=1
+.param C1_BANK_Mm13_L=0.1 C1_BANK_Mm13_W=100 C1_BANK_Mm13_M=1 C1_BANK_Mm13_Nf=80
+.param C1_BANK_Mm12_L=0.1 C1_BANK_Mm12_W=1 C1_BANK_Mm12_M=1 C1_BANK_Mm12_Nf=1
+.param C1_BANK_Mm10_L=0.1 C1_BANK_Mm10_W=50 C1_BANK_Mm10_M=1 C1_BANK_Mm10_Nf=40
+.param C1_BANK_Mm8_L=0.1 C1_BANK_Mm8_W=1 C1_BANK_Mm8_M=1 C1_BANK_Mm8_Nf=1
+.param C1_BANK_Mm20_L=0.1 C1_BANK_Mm20_W=1 C1_BANK_Mm20_M=1 C1_BANK_Mm20_Nf=1
+.param C1_BANK_Mm18_L=0.1 C1_BANK_Mm18_W=100 C1_BANK_Mm18_M=2 C1_BANK_Mm18_Nf=160
+.param C1_BANK_Mm23_L=0.1 C1_BANK_Mm23_W=1 C1_BANK_Mm23_M=1 C1_BANK_Mm23_Nf=1
+.param C1_BANK_Mm11_L=0.1 C1_BANK_Mm11_W=1 C1_BANK_Mm11_M=1 C1_BANK_Mm11_Nf=1
+.param C1_BANK_Mm6_L=0.1 C1_BANK_Mm6_W=50 C1_BANK_Mm6_M=1 C1_BANK_Mm6_Nf=40
+.param C1_BANK_Mm2_L=0.1 C1_BANK_Mm2_W=25 C1_BANK_Mm2_M=1 C1_BANK_Mm2_Nf=20
+.param C1_BANK_Mm4_L=0.1 C1_BANK_Mm4_W=1 C1_BANK_Mm4_M=1 C1_BANK_Mm4_Nf=1
+.param C1_BANK_Mm5_L=0.1 C1_BANK_Mm5_W=1 C1_BANK_Mm5_M=1 C1_BANK_Mm5_Nf=1
+.param C1_BANK_Mm0_L=0.1 C1_BANK_Mm0_W=25 C1_BANK_Mm0_M=1 C1_BANK_Mm0_Nf=20
+.param C1_BANK_Mm22_L=0.1 C1_BANK_Mm22_W=100 C1_BANK_Mm22_M=2 C1_BANK_Mm22_Nf=160
+.param C1_BANK_Mm16_L=0.1 C1_BANK_Mm16_W=100 C1_BANK_Mm16_M=2 C1_BANK_Mm16_Nf=80
+.param C1_BANK_Mm14_L=0.1 C1_BANK_Mm14_W=100 C1_BANK_Mm14_M=2 C1_BANK_Mm14_Nf=80
+.param C1_BANK_Mm9_L=0.1 C1_BANK_Mm9_W=100 C1_BANK_Mm9_M=1 C1_BANK_Mm9_Nf=40
+.param C1_BANK_Mm7_L=0.1 C1_BANK_Mm7_W=100 C1_BANK_Mm7_M=1 C1_BANK_Mm7_Nf=40
+.param C1_BANK_Mm19_L=0.1 C1_BANK_Mm19_W=100 C1_BANK_Mm19_M=4 C1_BANK_Mm19_Nf=160
+.param C1_BANK_Mm1_L=0.1 C1_BANK_Mm1_W=50 C1_BANK_Mm1_M=1 C1_BANK_Mm1_Nf=20
+.param C1_BANK_Mm21_L=0.1 C1_BANK_Mm21_W=100 C1_BANK_Mm21_M=4 C1_BANK_Mm21_Nf=160
+.param C1_BANK_Mm3_L=0.1 C1_BANK_Mm3_W=50 C1_BANK_Mm3_M=1 C1_BANK_Mm3_Nf=20
+.param DIGITAL_TOP_flat_Mm0_L=2.5 DIGITAL_TOP_flat_Mm0_W=2.6 DIGITAL_TOP_flat_Mm0_M=1 DIGITAL_TOP_flat_Mm0_Nf=1
+.param DIGITAL_TOP_flat_Mm22_L=2.5 DIGITAL_TOP_flat_Mm22_W=2.6 DIGITAL_TOP_flat_Mm22_M=1 DIGITAL_TOP_flat_Mm22_Nf=1
+.param DIGITAL_TOP_flat_Mm16_L=0.1 DIGITAL_TOP_flat_Mm16_W=3.6 DIGITAL_TOP_flat_Mm16_M=1 DIGITAL_TOP_flat_Mm16_Nf=4
+.param DIGITAL_TOP_flat_Mm17_L=0.1 DIGITAL_TOP_flat_Mm17_W=3.6 DIGITAL_TOP_flat_Mm17_M=1 DIGITAL_TOP_flat_Mm17_Nf=4
+.param DIGITAL_TOP_flat_Mm4_L=0.1 DIGITAL_TOP_flat_Mm4_W=4.8 DIGITAL_TOP_flat_Mm4_M=1 DIGITAL_TOP_flat_Mm4_Nf=4
+.param DIGITAL_TOP_flat_Mm3_L=0.1 DIGITAL_TOP_flat_Mm3_W=4.8 DIGITAL_TOP_flat_Mm3_M=1 DIGITAL_TOP_flat_Mm3_Nf=4
+.param DIGITAL_TOP_flat_Mm7_L=0.1 DIGITAL_TOP_flat_Mm7_W=17.25 DIGITAL_TOP_flat_Mm7_M=1 DIGITAL_TOP_flat_Mm7_Nf=15
+.param DIGITAL_TOP_flat_Mm5_L=0.1 DIGITAL_TOP_flat_Mm5_W=36 DIGITAL_TOP_flat_Mm5_M=1 DIGITAL_TOP_flat_Mm5_Nf=15
+.param DIGITAL_TOP_flat_Mm6_L=0.1 DIGITAL_TOP_flat_Mm6_W=36 DIGITAL_TOP_flat_Mm6_M=1 DIGITAL_TOP_flat_Mm6_Nf=15
+.param DIGITAL_TOP_flat_Mm8_L=0.1 DIGITAL_TOP_flat_Mm8_W=4.8 DIGITAL_TOP_flat_Mm8_M=1 DIGITAL_TOP_flat_Mm8_Nf=4
+.param DIGITAL_TOP_flat_Mm18_L=0.1 DIGITAL_TOP_flat_Mm18_W=4.8 DIGITAL_TOP_flat_Mm18_M=1 DIGITAL_TOP_flat_Mm18_Nf=4
+.param DIGITAL_TOP_flat_Mm15_L=0.1 DIGITAL_TOP_flat_Mm15_W=4.8 DIGITAL_TOP_flat_Mm15_M=1 DIGITAL_TOP_flat_Mm15_Nf=4
+.param DIGITAL_TOP_flat_Mm2_L=0.1 DIGITAL_TOP_flat_Mm2_W=4.8 DIGITAL_TOP_flat_Mm2_M=1 DIGITAL_TOP_flat_Mm2_Nf=4
+.param DIGITAL_TOP_flat_Mm1_L=0.1 DIGITAL_TOP_flat_Mm1_W=4.8 DIGITAL_TOP_flat_Mm1_M=1 DIGITAL_TOP_flat_Mm1_Nf=4
+.param DIGITAL_TOP_flat_Mm12_L=0.1 DIGITAL_TOP_flat_Mm12_W=4.8 DIGITAL_TOP_flat_Mm12_M=1 DIGITAL_TOP_flat_Mm12_Nf=4
+.param DIGITAL_TOP_flat_Mm14_L=0.1 DIGITAL_TOP_flat_Mm14_W=9.6 DIGITAL_TOP_flat_Mm14_M=1 DIGITAL_TOP_flat_Mm14_Nf=8
+.param DIGITAL_TOP_flat_Mm13_L=0.1 DIGITAL_TOP_flat_Mm13_W=9.6 DIGITAL_TOP_flat_Mm13_M=1 DIGITAL_TOP_flat_Mm13_Nf=8
+.param wrapper_m1_L=0.7 wrapper_m1_W=0.7 wrapper_m1_M=1 wrapper_m1_Nf=1
+.param wrapper_m0_L=0.7 wrapper_m0_W=0.7 wrapper_m0_M=1 wrapper_m0_Nf=1
 
 
 * --- CIRCUIT DEFINITION ---
@@ -219,18 +278,18 @@
 .subckt Gm2_v5_Practice_schematic ibias vdd vim vip vom vop vss
 Mm20 vdd ibias vdd vdd pmos_lvt L={Gm2_v5_Practice_schematic_Mm20_L} W={Gm2_v5_Practice_schematic_Mm20_W} M={Gm2_v5_Practice_schematic_Mm20_M} Nf={Gm2_v5_Practice_schematic_Mm20_Nf}
 Mm18 vdd ibias vdd vdd pmos_lvt L={Gm2_v5_Practice_schematic_Mm18_L} W={Gm2_v5_Practice_schematic_Mm18_W} M={Gm2_v5_Practice_schematic_Mm18_M} Nf={Gm2_v5_Practice_schematic_Mm18_Nf}
-xc0 ntail2 vop cfmom_2t nr=46 lr=1e-6 w=70e-9 s=70e-9 stm=2 spm=6 multi=1 ftip=140e-9
-xc1 ntail2 vom cfmom_2t nr=46 lr=1e-6 w=70e-9 s=70e-9 stm=2 spm=6 multi=1 ftip=140e-9
+xc0 ntail2 vop cfmom_2t nr=46 stm=2 spm=6 multi=1 ftip=140e-9 L={cap_Gm2_v5_Practice_schematic_xc0_L} W={cap_Gm2_v5_Practice_schematic_xc0_W}
+xc1 ntail2 vom cfmom_2t nr=46 stm=2 spm=6 multi=1 ftip=140e-9 L={cap_Gm2_v5_Practice_schematic_xc1_L} W={cap_Gm2_v5_Practice_schematic_xc1_W}
 Mm0 ibias ibias vdd vdd pmos_rvt L={Gm2_v5_Practice_schematic_Mm0_L} W={Gm2_v5_Practice_schematic_Mm0_W} M={Gm2_v5_Practice_schematic_Mm0_M} Nf={Gm2_v5_Practice_schematic_Mm0_Nf}
 Mm24 ibias ibias vdd vdd pmos_rvt L={Gm2_v5_Practice_schematic_Mm24_L} W={Gm2_v5_Practice_schematic_Mm24_W} M={Gm2_v5_Practice_schematic_Mm24_M} Nf={Gm2_v5_Practice_schematic_Mm24_Nf}
 Mm23 vop ibias vdd vdd pmos_rvt L={Gm2_v5_Practice_schematic_Mm23_L} W={Gm2_v5_Practice_schematic_Mm23_W} M={Gm2_v5_Practice_schematic_Mm23_M} Nf={Gm2_v5_Practice_schematic_Mm23_Nf}
 Mm14 vom ibias vdd vdd pmos_rvt L={Gm2_v5_Practice_schematic_Mm14_L} W={Gm2_v5_Practice_schematic_Mm14_W} M={Gm2_v5_Practice_schematic_Mm14_M} Nf={Gm2_v5_Practice_schematic_Mm14_Nf}
 **Series configuration of R11
-xr11 vom ntail2 vss rppolywo_m lr=6.6e-6 wr=400e-9 multi=1 m=1 series=9 segspace=250e-9
+xr11 vom ntail2 vss rppolywo_m lr={res_Gm2_v5_Practice_schematic_xr11_L} wr={res_Gm2_v5_Practice_schematic_xr11_W} multi=1 m=1 series=9 segspace=250e-9
 **End of R11
 
 **Series configuration of R12
-xr12 ntail2 vop vss rppolywo_m lr=6.6e-6 wr=400e-9 multi=1 m=1 series=9 segspace=250e-9
+xr12 ntail2 vop vss rppolywo_m lr={res_Gm2_v5_Practice_schematic_xr12_L} wr={res_Gm2_v5_Practice_schematic_xr12_W} multi=1 m=1 series=9 segspace=250e-9
 **End of R12
 
 Mm22 net100 ntail2 vss vss nmos_rvt L={Gm2_v5_Practice_schematic_Mm22_L} W={Gm2_v5_Practice_schematic_Mm22_W} M={Gm2_v5_Practice_schematic_Mm22_M} Nf={Gm2_v5_Practice_schematic_Mm22_Nf}
@@ -254,19 +313,19 @@ Mm11 vom ibias vdd vdd pmos_lvt L={Gm1_v5_Practice_schematic_Mm11_L} W={Gm1_v5_P
 Mm15 ibias ibias vdd vdd pmos_lvt L={Gm1_v5_Practice_schematic_Mm15_L} W={Gm1_v5_Practice_schematic_Mm15_W} M={Gm1_v5_Practice_schematic_Mm15_M} Nf={Gm1_v5_Practice_schematic_Mm15_Nf}
 Mm14 vop ibias vdd vdd pmos_lvt L={Gm1_v5_Practice_schematic_Mm14_L} W={Gm1_v5_Practice_schematic_Mm14_W} M={Gm1_v5_Practice_schematic_Mm14_M} Nf={Gm1_v5_Practice_schematic_Mm14_Nf}
 **Series configuration of R12
-xr12 ntail1 vop vss rppolywo_m lr=6.6e-6 wr=400e-9 multi=1 m=1 series=9 segspace=250e-9
+xr12 ntail1 vop vss rppolywo_m lr={res_Gm1_v5_Practice_schematic_xr12_L} wr={res_Gm1_v5_Practice_schematic_xr12_W} multi=1 m=1 series=9 segspace=250e-9
 **End of R12
 
 **Series configuration of R11
-xr11 vom ntail1 vss rppolywo_m lr=6.6e-6 wr=400e-9 multi=1 m=1 series=9 segspace=250e-9
+xr11 vom ntail1 vss rppolywo_m lr={res_Gm1_v5_Practice_schematic_xr11_L} wr={res_Gm1_v5_Practice_schematic_xr11_W} multi=1 m=1 series=9 segspace=250e-9
 **End of R11
 
 Mm3 vss ntail1 vss vss nmos_lvt L={Gm1_v5_Practice_schematic_Mm3_L} W={Gm1_v5_Practice_schematic_Mm3_W} M={Gm1_v5_Practice_schematic_Mm3_M} Nf={Gm1_v5_Practice_schematic_Mm3_Nf}
 Mm0 vss ntail1 vss vss nmos_lvt L={Gm1_v5_Practice_schematic_Mm0_L} W={Gm1_v5_Practice_schematic_Mm0_W} M={Gm1_v5_Practice_schematic_Mm0_M} Nf={Gm1_v5_Practice_schematic_Mm0_Nf}
 Mm26 vop vim net08 vss nmos_lvt L={Gm1_v5_Practice_schematic_Mm26_L} W={Gm1_v5_Practice_schematic_Mm26_W} M={Gm1_v5_Practice_schematic_Mm26_M} Nf={Gm1_v5_Practice_schematic_Mm26_Nf}
 Mm27 vom vip net08 vss nmos_lvt L={Gm1_v5_Practice_schematic_Mm27_L} W={Gm1_v5_Practice_schematic_Mm27_W} M={Gm1_v5_Practice_schematic_Mm27_M} Nf={Gm1_v5_Practice_schematic_Mm27_Nf}
-xc1 ntail1 vop cfmom_2t nr=46 lr=1e-6 w=70e-9 s=70e-9 stm=2 spm=6 multi=1 ftip=140e-9
-xc0 ntail1 vom cfmom_2t nr=46 lr=1e-6 w=70e-9 s=70e-9 stm=2 spm=6 multi=1 ftip=140e-9
+xc1 ntail1 vop cfmom_2t nr=46 stm=2 spm=6 multi=1 ftip=140e-9 L={cap_Gm1_v5_Practice_schematic_xc1_L} W={cap_Gm1_v5_Practice_schematic_xc1_W}
+xc0 ntail1 vom cfmom_2t nr=46 stm=2 spm=6 multi=1 ftip=140e-9 L={cap_Gm1_v5_Practice_schematic_xc0_L} W={cap_Gm1_v5_Practice_schematic_xc0_W}
 .ends Gm1_v5_Practice_schematic
 ** End of subcircuit definition.
 ** Library name: 2019_CTDSM_MAGICAL
@@ -315,11 +374,11 @@ Mmi7 net120 net81 vdd vdd pmos_lvt L={DFCNQD2BWP_LVT_Mmi7_L} W={DFCNQD2BWP_LVT_M
 ** View name: schematic
 .subckt C_DAC_CTDSM_DEC2016_schematic clkb in r3 r4 rstb vdd vss
 **Series configuration of R27
-xr27 r3 net10 vss rppolywo_m lr=19.92e-6 wr=1.2e-6 multi=1 m=1 series=18 segspace=250e-9
+xr27 r3 net10 vss rppolywo_m lr={res_C_DAC_CTDSM_DEC2016_schematic_xr27_L} wr={res_C_DAC_CTDSM_DEC2016_schematic_xr27_W} multi=1 m=1 series=18 segspace=250e-9
 **End of R27
 
 **Series configuration of R64
-xr64 r4 in vss rppolywo_m lr=18.67e-6 wr=1.2e-6 multi=1 m=1 series=4 segspace=250e-9
+xr64 r4 in vss rppolywo_m lr={res_C_DAC_CTDSM_DEC2016_schematic_xr64_L} wr={res_C_DAC_CTDSM_DEC2016_schematic_xr64_W} multi=1 m=1 series=4 segspace=250e-9
 **End of R64
 
 xi94 in clkb rstb net10 vdd vss DFCNQD2BWP_LVT
@@ -446,22 +505,22 @@ Mm4 net029 db_1_ vss vss nmos_lvt L={C2_BANK_Mm4_L} W={C2_BANK_Mm4_W} M={C2_BANK
 Mm5 net041 db_1_ vss vss nmos_lvt L={C2_BANK_Mm5_L} W={C2_BANK_Mm5_W} M={C2_BANK_Mm5_M} Nf={C2_BANK_Mm5_Nf}
 Mm0 a d_1_ net029 vss nmos_lvt L={C2_BANK_Mm0_L} W={C2_BANK_Mm0_W} M={C2_BANK_Mm0_M} Nf={C2_BANK_Mm0_Nf}
 Mm22 b d_4_ net061 vss nmos_lvt L={C2_BANK_Mm22_L} W={C2_BANK_Mm22_W} M={C2_BANK_Mm22_M} Nf={C2_BANK_Mm22_Nf}
-xc14 net029 net041 cfmom_2t nr=14 lr=13.6e-6 w=70e-9 s=70e-9 stm=2 spm=5 multi=1 ftip=140e-9
-xc11 a b cfmom_2t nr=270 lr=21.02e-6 w=70e-9 s=70e-9 stm=2 spm=5 multi=1 ftip=140e-9
-xc16_3_ net027 net062 cfmom_2t nr=14 lr=13.6e-6 w=70e-9 s=70e-9 stm=2 spm=5 multi=1 ftip=140e-9
-xc16_2_ net027 net062 cfmom_2t nr=14 lr=13.6e-6 w=70e-9 s=70e-9 stm=2 spm=5 multi=1 ftip=140e-9
-xc16_1_ net027 net062 cfmom_2t nr=14 lr=13.6e-6 w=70e-9 s=70e-9 stm=2 spm=5 multi=1 ftip=140e-9
-xc16_0_ net027 net062 cfmom_2t nr=14 lr=13.6e-6 w=70e-9 s=70e-9 stm=2 spm=5 multi=1 ftip=140e-9
-xc15_1_ net028 net063 cfmom_2t nr=14 lr=13.6e-6 w=70e-9 s=70e-9 stm=2 spm=5 multi=1 ftip=140e-9
-xc15_0_ net028 net063 cfmom_2t nr=14 lr=13.6e-6 w=70e-9 s=70e-9 stm=2 spm=5 multi=1 ftip=140e-9
-xc17_7_ net026 net061 cfmom_2t nr=14 lr=13.6e-6 w=70e-9 s=70e-9 stm=2 spm=5 multi=1 ftip=140e-9
-xc17_6_ net026 net061 cfmom_2t nr=14 lr=13.6e-6 w=70e-9 s=70e-9 stm=2 spm=5 multi=1 ftip=140e-9
-xc17_5_ net026 net061 cfmom_2t nr=14 lr=13.6e-6 w=70e-9 s=70e-9 stm=2 spm=5 multi=1 ftip=140e-9
-xc17_4_ net026 net061 cfmom_2t nr=14 lr=13.6e-6 w=70e-9 s=70e-9 stm=2 spm=5 multi=1 ftip=140e-9
-xc17_3_ net026 net061 cfmom_2t nr=14 lr=13.6e-6 w=70e-9 s=70e-9 stm=2 spm=5 multi=1 ftip=140e-9
-xc17_2_ net026 net061 cfmom_2t nr=14 lr=13.6e-6 w=70e-9 s=70e-9 stm=2 spm=5 multi=1 ftip=140e-9
-xc17_1_ net026 net061 cfmom_2t nr=14 lr=13.6e-6 w=70e-9 s=70e-9 stm=2 spm=5 multi=1 ftip=140e-9
-xc17_0_ net026 net061 cfmom_2t nr=14 lr=13.6e-6 w=70e-9 s=70e-9 stm=2 spm=5 multi=1 ftip=140e-9
+xc14 net029 net041 cfmom_2t nr=14 stm=2 spm=5 multi=1 ftip=140e-9 L={cap_C2_BANK_xc14_L} W={cap_C2_BANK_xc14_W}
+xc11 a b cfmom_2t nr=270 stm=2 spm=5 multi=1 ftip=140e-9 L={cap_C2_BANK_xc11_L} W={cap_C2_BANK_xc11_W}
+xc16_3_ net027 net062 cfmom_2t nr=14 stm=2 spm=5 multi=1 ftip=140e-9 L={cap_C2_BANK_xc16_3__L} W={cap_C2_BANK_xc16_3__W}
+xc16_2_ net027 net062 cfmom_2t nr=14 stm=2 spm=5 multi=1 ftip=140e-9 L={cap_C2_BANK_xc16_2__L} W={cap_C2_BANK_xc16_2__W}
+xc16_1_ net027 net062 cfmom_2t nr=14 stm=2 spm=5 multi=1 ftip=140e-9 L={cap_C2_BANK_xc16_1__L} W={cap_C2_BANK_xc16_1__W}
+xc16_0_ net027 net062 cfmom_2t nr=14 stm=2 spm=5 multi=1 ftip=140e-9 L={cap_C2_BANK_xc16_0__L} W={cap_C2_BANK_xc16_0__W}
+xc15_1_ net028 net063 cfmom_2t nr=14 stm=2 spm=5 multi=1 ftip=140e-9 L={cap_C2_BANK_xc15_1__L} W={cap_C2_BANK_xc15_1__W}
+xc15_0_ net028 net063 cfmom_2t nr=14 stm=2 spm=5 multi=1 ftip=140e-9 L={cap_C2_BANK_xc15_0__L} W={cap_C2_BANK_xc15_0__W}
+xc17_7_ net026 net061 cfmom_2t nr=14 stm=2 spm=5 multi=1 ftip=140e-9 L={cap_C2_BANK_xc17_7__L} W={cap_C2_BANK_xc17_7__W}
+xc17_6_ net026 net061 cfmom_2t nr=14 stm=2 spm=5 multi=1 ftip=140e-9 L={cap_C2_BANK_xc17_6__L} W={cap_C2_BANK_xc17_6__W}
+xc17_5_ net026 net061 cfmom_2t nr=14 stm=2 spm=5 multi=1 ftip=140e-9 L={cap_C2_BANK_xc17_5__L} W={cap_C2_BANK_xc17_5__W}
+xc17_4_ net026 net061 cfmom_2t nr=14 stm=2 spm=5 multi=1 ftip=140e-9 L={cap_C2_BANK_xc17_4__L} W={cap_C2_BANK_xc17_4__W}
+xc17_3_ net026 net061 cfmom_2t nr=14 stm=2 spm=5 multi=1 ftip=140e-9 L={cap_C2_BANK_xc17_3__L} W={cap_C2_BANK_xc17_3__W}
+xc17_2_ net026 net061 cfmom_2t nr=14 stm=2 spm=5 multi=1 ftip=140e-9 L={cap_C2_BANK_xc17_2__L} W={cap_C2_BANK_xc17_2__W}
+xc17_1_ net026 net061 cfmom_2t nr=14 stm=2 spm=5 multi=1 ftip=140e-9 L={cap_C2_BANK_xc17_1__L} W={cap_C2_BANK_xc17_1__W}
+xc17_0_ net026 net061 cfmom_2t nr=14 stm=2 spm=5 multi=1 ftip=140e-9 L={cap_C2_BANK_xc17_0__L} W={cap_C2_BANK_xc17_0__W}
 Mm16 net027 db_3_ a vdd pmos_lvt L={C2_BANK_Mm16_L} W={C2_BANK_Mm16_W} M={C2_BANK_Mm16_M} Nf={C2_BANK_Mm16_Nf}
 Mm14 net062 db_3_ b vdd pmos_lvt L={C2_BANK_Mm14_L} W={C2_BANK_Mm14_W} M={C2_BANK_Mm14_M} Nf={C2_BANK_Mm14_Nf}
 Mm9 net063 db_2_ b vdd pmos_lvt L={C2_BANK_Mm9_L} W={C2_BANK_Mm9_W} M={C2_BANK_Mm9_M} Nf={C2_BANK_Mm9_Nf}
@@ -497,25 +556,25 @@ Mm4 net029 db_1_ vss vss nmos_lvt L={C1_BANK_Mm4_L} W={C1_BANK_Mm4_W} M={C1_BANK
 Mm5 net041 db_1_ vss vss nmos_lvt L={C1_BANK_Mm5_L} W={C1_BANK_Mm5_W} M={C1_BANK_Mm5_M} Nf={C1_BANK_Mm5_Nf}
 Mm0 a d_1_ net029 vss nmos_lvt L={C1_BANK_Mm0_L} W={C1_BANK_Mm0_W} M={C1_BANK_Mm0_M} Nf={C1_BANK_Mm0_Nf}
 Mm22 b d_4_ net061 vss nmos_lvt L={C1_BANK_Mm22_L} W={C1_BANK_Mm22_W} M={C1_BANK_Mm22_M} Nf={C1_BANK_Mm22_Nf}
-xc16_7_ net026 net061 cfmom_2t nr=94 lr=10e-6 w=70e-9 s=70e-9 stm=2 spm=5 multi=1 ftip=140e-9
-xc16_6_ net026 net061 cfmom_2t nr=94 lr=10e-6 w=70e-9 s=70e-9 stm=2 spm=5 multi=1 ftip=140e-9
-xc16_5_ net026 net061 cfmom_2t nr=94 lr=10e-6 w=70e-9 s=70e-9 stm=2 spm=5 multi=1 ftip=140e-9
-xc16_4_ net026 net061 cfmom_2t nr=94 lr=10e-6 w=70e-9 s=70e-9 stm=2 spm=5 multi=1 ftip=140e-9
-xc16_3_ net026 net061 cfmom_2t nr=94 lr=10e-6 w=70e-9 s=70e-9 stm=2 spm=5 multi=1 ftip=140e-9
-xc16_2_ net026 net061 cfmom_2t nr=94 lr=10e-6 w=70e-9 s=70e-9 stm=2 spm=5 multi=1 ftip=140e-9
-xc16_1_ net026 net061 cfmom_2t nr=94 lr=10e-6 w=70e-9 s=70e-9 stm=2 spm=5 multi=1 ftip=140e-9
-xc16_0_ net026 net061 cfmom_2t nr=94 lr=10e-6 w=70e-9 s=70e-9 stm=2 spm=5 multi=1 ftip=140e-9
-xc15_3_ net027 net062 cfmom_2t nr=94 lr=10e-6 w=70e-9 s=70e-9 stm=2 spm=5 multi=1 ftip=140e-9
-xc15_2_ net027 net062 cfmom_2t nr=94 lr=10e-6 w=70e-9 s=70e-9 stm=2 spm=5 multi=1 ftip=140e-9
-xc15_1_ net027 net062 cfmom_2t nr=94 lr=10e-6 w=70e-9 s=70e-9 stm=2 spm=5 multi=1 ftip=140e-9
-xc15_0_ net027 net062 cfmom_2t nr=94 lr=10e-6 w=70e-9 s=70e-9 stm=2 spm=5 multi=1 ftip=140e-9
-xc14_1_ net028 net063 cfmom_2t nr=94 lr=10e-6 w=70e-9 s=70e-9 stm=2 spm=5 multi=1 ftip=140e-9
-xc14_0_ net028 net063 cfmom_2t nr=94 lr=10e-6 w=70e-9 s=70e-9 stm=2 spm=5 multi=1 ftip=140e-9
-xc13 net029 net041 cfmom_2t nr=94 lr=10e-6 w=70e-9 s=70e-9 stm=2 spm=5 multi=1 ftip=140e-9
-xc1_3_ a b cfmom_2t nr=210 lr=35.7e-6 w=70e-9 s=70e-9 stm=2 spm=5 multi=1 ftip=140e-9
-xc1_2_ a b cfmom_2t nr=210 lr=35.7e-6 w=70e-9 s=70e-9 stm=2 spm=5 multi=1 ftip=140e-9
-xc1_1_ a b cfmom_2t nr=210 lr=35.7e-6 w=70e-9 s=70e-9 stm=2 spm=5 multi=1 ftip=140e-9
-xc1_0_ a b cfmom_2t nr=210 lr=35.7e-6 w=70e-9 s=70e-9 stm=2 spm=5 multi=1 ftip=140e-9
+xc16_7_ net026 net061 cfmom_2t nr=94 stm=2 spm=5 multi=1 ftip=140e-9 L={cap_C1_BANK_xc16_7__L} W={cap_C1_BANK_xc16_7__W}
+xc16_6_ net026 net061 cfmom_2t nr=94 stm=2 spm=5 multi=1 ftip=140e-9 L={cap_C1_BANK_xc16_6__L} W={cap_C1_BANK_xc16_6__W}
+xc16_5_ net026 net061 cfmom_2t nr=94 stm=2 spm=5 multi=1 ftip=140e-9 L={cap_C1_BANK_xc16_5__L} W={cap_C1_BANK_xc16_5__W}
+xc16_4_ net026 net061 cfmom_2t nr=94 stm=2 spm=5 multi=1 ftip=140e-9 L={cap_C1_BANK_xc16_4__L} W={cap_C1_BANK_xc16_4__W}
+xc16_3_ net026 net061 cfmom_2t nr=94 stm=2 spm=5 multi=1 ftip=140e-9 L={cap_C1_BANK_xc16_3__L} W={cap_C1_BANK_xc16_3__W}
+xc16_2_ net026 net061 cfmom_2t nr=94 stm=2 spm=5 multi=1 ftip=140e-9 L={cap_C1_BANK_xc16_2__L} W={cap_C1_BANK_xc16_2__W}
+xc16_1_ net026 net061 cfmom_2t nr=94 stm=2 spm=5 multi=1 ftip=140e-9 L={cap_C1_BANK_xc16_1__L} W={cap_C1_BANK_xc16_1__W}
+xc16_0_ net026 net061 cfmom_2t nr=94 stm=2 spm=5 multi=1 ftip=140e-9 L={cap_C1_BANK_xc16_0__L} W={cap_C1_BANK_xc16_0__W}
+xc15_3_ net027 net062 cfmom_2t nr=94 stm=2 spm=5 multi=1 ftip=140e-9 L={cap_C1_BANK_xc15_3__L} W={cap_C1_BANK_xc15_3__W}
+xc15_2_ net027 net062 cfmom_2t nr=94 stm=2 spm=5 multi=1 ftip=140e-9 L={cap_C1_BANK_xc15_2__L} W={cap_C1_BANK_xc15_2__W}
+xc15_1_ net027 net062 cfmom_2t nr=94 stm=2 spm=5 multi=1 ftip=140e-9 L={cap_C1_BANK_xc15_1__L} W={cap_C1_BANK_xc15_1__W}
+xc15_0_ net027 net062 cfmom_2t nr=94 stm=2 spm=5 multi=1 ftip=140e-9 L={cap_C1_BANK_xc15_0__L} W={cap_C1_BANK_xc15_0__W}
+xc14_1_ net028 net063 cfmom_2t nr=94 stm=2 spm=5 multi=1 ftip=140e-9 L={cap_C1_BANK_xc14_1__L} W={cap_C1_BANK_xc14_1__W}
+xc14_0_ net028 net063 cfmom_2t nr=94 stm=2 spm=5 multi=1 ftip=140e-9 L={cap_C1_BANK_xc14_0__L} W={cap_C1_BANK_xc14_0__W}
+xc13 net029 net041 cfmom_2t nr=94 stm=2 spm=5 multi=1 ftip=140e-9 L={cap_C1_BANK_xc13_L} W={cap_C1_BANK_xc13_W}
+xc1_3_ a b cfmom_2t nr=210 stm=2 spm=5 multi=1 ftip=140e-9 L={cap_C1_BANK_xc1_3__L} W={cap_C1_BANK_xc1_3__W}
+xc1_2_ a b cfmom_2t nr=210 stm=2 spm=5 multi=1 ftip=140e-9 L={cap_C1_BANK_xc1_2__L} W={cap_C1_BANK_xc1_2__W}
+xc1_1_ a b cfmom_2t nr=210 stm=2 spm=5 multi=1 ftip=140e-9 L={cap_C1_BANK_xc1_1__L} W={cap_C1_BANK_xc1_1__W}
+xc1_0_ a b cfmom_2t nr=210 stm=2 spm=5 multi=1 ftip=140e-9 L={cap_C1_BANK_xc1_0__L} W={cap_C1_BANK_xc1_0__W}
 Mm16 net027 db_3_ a vdd pmos_lvt L={C1_BANK_Mm16_L} W={C1_BANK_Mm16_W} M={C1_BANK_Mm16_M} Nf={C1_BANK_Mm16_Nf}
 Mm14 net062 db_3_ b vdd pmos_lvt L={C1_BANK_Mm14_L} W={C1_BANK_Mm14_W} M={C1_BANK_Mm14_M} Nf={C1_BANK_Mm14_Nf}
 Mm9 net063 db_2_ b vdd pmos_lvt L={C1_BANK_Mm9_L} W={C1_BANK_Mm9_W} M={C1_BANK_Mm9_M} Nf={C1_BANK_Mm9_Nf}
@@ -565,7 +624,7 @@ Mm13 crossp crossn vddd vddd pmos_lvt L={DIGITAL_TOP_flat_Mm13_L} W={DIGITAL_TOP
 
 
 .subckt INPUT_RES vss vi vo
-xr16 vi vo vss rppolywo_m lr=19.92e-6 wr=1.2e-6 multi=1 m=1 para=2 segspace=250e-9
+xr16 vi vo vss rppolywo_m lr={res_INPUT_RES_xr16_L} wr={res_INPUT_RES_xr16_W} multi=1 m=1 para=2 segspace=250e-9
 .ends INPUT_RES
 
 .subckt wrapper vss clkb1 clkb2
@@ -574,30 +633,30 @@ m0 vss clkb1 vss vss nmos_rvt L={wrapper_m0_L} W={wrapper_m0_W} M={wrapper_m0_M}
 .ends wrapper
 
 .subckt DAC3 clkb in r3 r4 rstb vdd vss out
-xr27 r3 net10 vss rppolywo_m lr=19.92e-6 wr=1.2e-6 multi=1 m=1 series=18 segspace=250e-9
-xr64 r4 in vss rppolywo_m lr=18.67e-6 wr=1.2e-6 multi=1 m=1 series=4 segspace=250e-9
+xr27 r3 net10 vss rppolywo_m lr={res_DAC3_xr27_L} wr={res_DAC3_xr27_W} multi=1 m=1 series=18 segspace=250e-9
+xr64 r4 in vss rppolywo_m lr={res_DAC3_xr64_L} wr={res_DAC3_xr64_W} multi=1 m=1 series=4 segspace=250e-9
 xi94 in clkb rstb net10 vdd vss DFCNQD2BWP_LVT
 xi97 out clkb rstb in vdd vss DFCNQD2BWP_LVT
 .ends DAC3
 
 .subckt DAC1 clk in r1 r2 rstb vdd vss out
-xr19 net3 r1 vss rppolywo_m lr=19.92e-6 wr=1.2e-6 multi=1 m=1 series=1 segspace=250e-9
-xr48 in r2 vss rppolywo_m lr=19.92e-6 wr=1.2e-6 multi=1 m=1 series=1 segspace=250e-9
+xr19 net3 r1 vss rppolywo_m lr={res_DAC1_xr19_L} wr={res_DAC1_xr19_W} multi=1 m=1 series=1 segspace=250e-9
+xr48 in r2 vss rppolywo_m lr={res_DAC1_xr48_L} wr={res_DAC1_xr48_W} multi=1 m=1 series=1 segspace=250e-9
 xi86 in clk rstb net3 vdd vss DFCNQD2BWP_LVT
 xi88 out clk rstb in vdd vss DFCNQD2BWP_LVT
 .ends DAC1
 
 .subckt CAP2_RES2 vo2m vo2p vss
-xc0 net074 net073 cfmom_2t nr=210 lr=34e-6 w=70e-9 s=70e-9 stm=2 spm=5 multi=1 ftip=140e-9
-xr51 vo2m net073 vss rppolywo_m lr=19.92e-6 wr=1.2e-6 multi=1 m=1 para=5 segspace=250e-9
-xr25 vo2p net074 vss rppolywo_m lr=19.92e-6 wr=1.2e-6 multi=1 m=1 para=5 segspace=250e-9
+xc0 net074 net073 cfmom_2t nr=210 stm=2 spm=5 multi=1 ftip=140e-9 L={cap_CAP2_RES2_xc0_L} W={cap_CAP2_RES2_xc0_W}
+xr51 vo2m net073 vss rppolywo_m lr={res_CAP2_RES2_xr51_L} wr={res_CAP2_RES2_xr51_W} multi=1 m=1 para=5 segspace=250e-9
+xr25 vo2p net074 vss rppolywo_m lr={res_CAP2_RES2_xr25_L} wr={res_CAP2_RES2_xr25_W} multi=1 m=1 para=5 segspace=250e-9
 .ends CAP2_RES2
 
 .subckt CAP1 vo1p vo1m
-xc1_3_ vo1p vo1m cfmom_2t nr=260 lr=36e-6 w=70e-9 s=70e-9 stm=2 spm=5 multi=1 ftip=140e-9
-xc1_2_ vo1p vo1m cfmom_2t nr=260 lr=36e-6 w=70e-9 s=70e-9 stm=2 spm=5 multi=1 ftip=140e-9
-xc1_1_ vo1p vo1m cfmom_2t nr=260 lr=36e-6 w=70e-9 s=70e-9 stm=2 spm=5 multi=1 ftip=140e-9
-xc1_0_ vo1p vo1m cfmom_2t nr=260 lr=36e-6 w=70e-9 s=70e-9 stm=2 spm=5 multi=1 ftip=140e-9
+xc1_3_ vo1p vo1m cfmom_2t nr=260 stm=2 spm=5 multi=1 ftip=140e-9 L={cap_CAP1_xc1_3__L} W={cap_CAP1_xc1_3__W}
+xc1_2_ vo1p vo1m cfmom_2t nr=260 stm=2 spm=5 multi=1 ftip=140e-9 L={cap_CAP1_xc1_2__L} W={cap_CAP1_xc1_2__W}
+xc1_1_ vo1p vo1m cfmom_2t nr=260 stm=2 spm=5 multi=1 ftip=140e-9 L={cap_CAP1_xc1_1__L} W={cap_CAP1_xc1_1__W}
+xc1_0_ vo1p vo1m cfmom_2t nr=260 stm=2 spm=5 multi=1 ftip=140e-9 L={cap_CAP1_xc1_0__L} W={cap_CAP1_xc1_0__W}
 .ends CAP1
 
 ** End of subcircuit definition.

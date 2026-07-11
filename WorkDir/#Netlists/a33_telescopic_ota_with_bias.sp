@@ -9,46 +9,48 @@
 *   Device types : nmos_rvt pmos_rvt
 *   Passives     : 0 resistors, 0 capacitors
 * Note: Converted from FinFET-style to CMOS-style netlist.
-*       Device sizes are placeholders — optimizer generates new sizes.
+* SIZES CONVERTED 2026-07-10 scale=7.14286 source_L_ref=0.014um
+*       Device/passive sizes are scaled from the real source-netlist values
+*       (see marker above) -- not random placeholders.
 * ============================================================
 
 * --- DEVICE PARAMETERS ---
-.param m9_L=20e-9 m9_W=12 m9_Nf=6
-.param m9s_L=20e-9 m9s_W=12 m9s_Nf=6
-.param m8_L=20e-9 m8_W=12 m8_Nf=6
-.param m8s_L=20e-9 m8s_W=12 m8s_Nf=6
-.param m5_L=20e-9 m5_W=5 m5_Nf=4
-.param m5s_L=20e-9 m5s_W=5 m5s_Nf=4
-.param m4_L=20e-9 m4_W=5 m4_Nf=20
-.param m4s_L=20e-9 m4s_W=5 m4s_Nf=20
-.param m3_L=20e-9 m3_W=10 m3_Nf=14
-.param m3s_L=20e-9 m3s_W=10 m3s_Nf=14
-.param m0_L=20e-9 m0_W=10 m0_Nf=14
-.param m0s_L=20e-9 m0s_W=10 m0s_Nf=14
-.param m7_L=20e-9 m7_W=8 m7_Nf=12
-.param m7s_L=20e-9 m7s_W=8 m7s_Nf=12
-.param m6_L=20e-9 m6_W=8 m6_Nf=12
-.param m6s_L=20e-9 m6s_W=8 m6s_Nf=12
-.param m2_L=20e-9 m2_W=12 m2_Nf=4
-.param m2s_L=20e-9 m2s_W=12 m2s_Nf=4
-.param m1_L=20e-9 m1_W=12 m1_Nf=4
-.param m1s_L=20e-9 m1s_W=12 m1s_Nf=4
-.param m10_L=20e-9 m10_W=3 m10_Nf=2
-.param m10s_L=20e-9 m10s_W=3 m10s_Nf=2
-.param m11_L=20e-9 m11_W=5 m11_Nf=2
-.param m11s_L=20e-9 m11s_W=5 m11s_Nf=2
-.param m15_L=20e-9 m15_W=5 m15_Nf=2
-.param m15s_L=20e-9 m15s_W=5 m15s_Nf=2
-.param m16_L=20e-9 m16_W=5 m16_Nf=2
-.param m16s_L=20e-9 m16s_W=5 m16s_Nf=2
-.param m17_L=20e-9 m17_W=5 m17_Nf=2
-.param m17s_L=20e-9 m17s_W=5 m17s_Nf=2
-.param m12_L=20e-9 m12_W=5 m12_Nf=2
-.param m12s_L=20e-9 m12s_W=5 m12s_Nf=2
-.param m13_L=20e-9 m13_W=3 m13_Nf=2
-.param m13s_L=20e-9 m13s_W=3 m13s_Nf=2
-.param m14_L=20e-9 m14_W=5 m14_Nf=2
-.param m14s_L=20e-9 m14s_W=5 m14s_Nf=2
+.param m9_L=0.15 m9_W=85.7 m9_Nf=6
+.param m9s_L=0.15 m9s_W=85.7 m9s_Nf=6
+.param m8_L=0.15 m8_W=85.7 m8_Nf=6
+.param m8s_L=0.15 m8s_W=85.7 m8s_Nf=6
+.param m5_L=0.15 m5_W=35.7 m5_Nf=4
+.param m5s_L=0.15 m5s_W=35.7 m5s_Nf=4
+.param m4_L=0.15 m4_W=35.7 m4_Nf=20
+.param m4s_L=0.15 m4s_W=35.7 m4s_Nf=20
+.param m3_L=0.15 m3_W=71.45 m3_Nf=14
+.param m3s_L=0.15 m3s_W=71.45 m3s_Nf=14
+.param m0_L=0.15 m0_W=71.45 m0_Nf=14
+.param m0s_L=0.15 m0s_W=71.45 m0s_Nf=14
+.param m7_L=0.15 m7_W=57.15 m7_Nf=12
+.param m7s_L=0.15 m7s_W=57.15 m7s_Nf=12
+.param m6_L=0.15 m6_W=57.15 m6_Nf=12
+.param m6s_L=0.15 m6s_W=57.15 m6s_Nf=12
+.param m2_L=0.15 m2_W=85.7 m2_Nf=4
+.param m2s_L=0.15 m2s_W=85.7 m2s_Nf=4
+.param m1_L=0.15 m1_W=85.7 m1_Nf=4
+.param m1s_L=0.15 m1s_W=85.7 m1s_Nf=4
+.param m10_L=0.15 m10_W=21.45 m10_Nf=2
+.param m10s_L=0.15 m10s_W=21.45 m10s_Nf=2
+.param m11_L=0.15 m11_W=35.7 m11_Nf=2
+.param m11s_L=0.15 m11s_W=35.7 m11s_Nf=2
+.param m15_L=0.15 m15_W=35.7 m15_Nf=2
+.param m15s_L=0.15 m15s_W=35.7 m15s_Nf=2
+.param m16_L=0.15 m16_W=35.7 m16_Nf=2
+.param m16s_L=0.15 m16s_W=35.7 m16s_Nf=2
+.param m17_L=0.15 m17_W=35.7 m17_Nf=2
+.param m17s_L=0.15 m17s_W=35.7 m17s_Nf=2
+.param m12_L=0.15 m12_W=35.7 m12_Nf=2
+.param m12s_L=0.15 m12s_W=35.7 m12s_Nf=2
+.param m13_L=0.15 m13_W=21.45 m13_Nf=2
+.param m13s_L=0.15 m13s_W=21.45 m13s_Nf=2
+.param m14_L=0.15 m14_W=35.7 m14_Nf=2
+.param m14s_L=0.15 m14s_W=35.7 m14s_Nf=2
 
 
 * --- CIRCUIT DEFINITION ---

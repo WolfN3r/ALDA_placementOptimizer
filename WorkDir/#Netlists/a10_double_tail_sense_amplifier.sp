@@ -9,24 +9,26 @@
 *   Device types : nmos_rvt pmos_rvt
 *   Passives     : 0 resistors, 0 capacitors
 * Note: Converted from FinFET-style to CMOS-style netlist.
-*       Device sizes are placeholders — optimizer generates new sizes.
+* SIZES CONVERTED 2026-07-10 scale=7.14286 source_L_ref=0.014um
+*       Device/passive sizes are scaled from the real source-netlist values
+*       (see marker above) -- not random placeholders.
 * ============================================================
 
 * --- DEVICE PARAMETERS ---
-.param MTAIL_P_1_W=2 MTAIL_P_1_L=60e-9 MTAIL_P_1_Nf=12
-.param MTAIL_P_2_W=2 MTAIL_P_2_L=60e-9 MTAIL_P_2_Nf=12
-.param MINV_P_P_W=2 MINV_P_P_L=60e-9 MINV_P_P_Nf=12
-.param MINV_P_N_W=2 MINV_P_N_L=60e-9 MINV_P_N_Nf=12
-.param MLOAD_P_W=2 MLOAD_P_L=60e-9 MLOAD_P_Nf=16
-.param MLOAD_N_W=2 MLOAD_N_L=60e-9 MLOAD_N_Nf=16
-.param MRESET_P_W=2 MRESET_P_L=60e-9 MRESET_P_Nf=8
-.param MRESET_N_W=2 MRESET_N_L=60e-9 MRESET_N_Nf=8
-.param MINV_N_P_W=2 MINV_N_P_L=60e-9 MINV_N_P_Nf=8
-.param MINV_N_N_W=2 MINV_N_N_L=60e-9 MINV_N_N_Nf=8
-.param MIN_P_W=2 MIN_P_L=60e-9 MIN_P_Nf=12
-.param MIN_N_W=2 MIN_N_L=60e-9 MIN_N_Nf=12
-.param MTAIL_2_W=2 MTAIL_2_L=60e-9 MTAIL_2_Nf=8
-.param MTAIL_1_W=2 MTAIL_1_L=60e-9 MTAIL_1_Nf=8
+.param MTAIL_P_1_W=14.3 MTAIL_P_1_L=0.45 MTAIL_P_1_Nf=12
+.param MTAIL_P_2_W=14.3 MTAIL_P_2_L=0.45 MTAIL_P_2_Nf=12
+.param MINV_P_P_W=14.3 MINV_P_P_L=0.45 MINV_P_P_Nf=12
+.param MINV_P_N_W=14.3 MINV_P_N_L=0.45 MINV_P_N_Nf=12
+.param MLOAD_P_W=14.3 MLOAD_P_L=0.45 MLOAD_P_Nf=16
+.param MLOAD_N_W=14.3 MLOAD_N_L=0.45 MLOAD_N_Nf=16
+.param MRESET_P_W=14.3 MRESET_P_L=0.45 MRESET_P_Nf=8
+.param MRESET_N_W=14.3 MRESET_N_L=0.45 MRESET_N_Nf=8
+.param MINV_N_P_W=14.3 MINV_N_P_L=0.45 MINV_N_P_Nf=8
+.param MINV_N_N_W=14.3 MINV_N_N_L=0.45 MINV_N_N_Nf=8
+.param MIN_P_W=14.3 MIN_P_L=0.45 MIN_P_Nf=12
+.param MIN_N_W=14.3 MIN_N_L=0.45 MIN_N_Nf=12
+.param MTAIL_2_W=14.3 MTAIL_2_L=0.45 MTAIL_2_Nf=8
+.param MTAIL_1_W=14.3 MTAIL_1_L=0.45 MTAIL_1_Nf=8
 
 
 * --- CIRCUIT DEFINITION ---

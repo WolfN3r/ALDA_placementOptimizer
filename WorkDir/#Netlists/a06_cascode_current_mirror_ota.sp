@@ -9,30 +9,32 @@
 *   Device types : nmos_rvt pmos_rvt
 *   Passives     : 0 resistors, 0 capacitors
 * Note: Converted from FinFET-style to CMOS-style netlist.
-*       Device sizes are placeholders — optimizer generates new sizes.
+* SIZES CONVERTED 2026-07-10 scale=7.14286 source_L_ref=0.014um
+*       Device/passive sizes are scaled from the real source-netlist values
+*       (see marker above) -- not random placeholders.
 * ============================================================
 
 * --- DEVICE PARAMETERS ---
-.param m25_L=20e-9 m25_W=12 m25_Nf=2
-.param m24_L=20e-9 m24_W=12 m24_Nf=2
-.param m17_L=20e-9 m17_W=8 m17_Nf=4
-.param m16_L=20e-9 m16_W=8 m16_Nf=2
-.param m15_L=20e-9 m15_W=8 m15_Nf=4
-.param m14_L=20e-9 m14_W=8 m14_Nf=2
-.param m11_L=20e-9 m11_W=8 m11_Nf=4
-.param m10_L=20e-9 m10_W=8 m10_Nf=4
-.param m1nup_L=20e-9 m1nup_W=2 m1nup_Nf=2
-.param m1ndown_L=20e-9 m1ndown_W=3 m1ndown_Nf=2
-.param m1pup_L=20e-9 m1pup_W=3 m1pup_Nf=2
-.param m1pdown_L=20e-9 m1pdown_W=3 m1pdown_Nf=2
-.param m27_L=20e-9 m27_W=10 m27_Nf=6
-.param m26_L=20e-9 m26_W=10 m26_Nf=6
-.param m23_L=20e-9 m23_W=12 m23_Nf=10
-.param m22_L=20e-9 m22_W=12 m22_Nf=10
-.param m21_L=20e-9 m21_W=3 m21_Nf=2
-.param m20_L=20e-9 m20_W=5 m20_Nf=2
-.param m19_L=20e-9 m19_W=3 m19_Nf=2
-.param m18_L=20e-9 m18_W=5 m18_Nf=2
+.param m25_L=0.15 m25_W=85.7 m25_Nf=2
+.param m24_L=0.15 m24_W=85.7 m24_Nf=2
+.param m17_L=0.15 m17_W=57.15 m17_Nf=4
+.param m16_L=0.15 m16_W=57.15 m16_Nf=2
+.param m15_L=0.15 m15_W=57.15 m15_Nf=4
+.param m14_L=0.15 m14_W=57.15 m14_Nf=2
+.param m11_L=0.15 m11_W=57.15 m11_Nf=4
+.param m10_L=0.15 m10_W=57.15 m10_Nf=4
+.param m1nup_L=0.15 m1nup_W=14.3 m1nup_Nf=2
+.param m1ndown_L=0.15 m1ndown_W=21.45 m1ndown_Nf=2
+.param m1pup_L=0.15 m1pup_W=21.45 m1pup_Nf=2
+.param m1pdown_L=0.15 m1pdown_W=21.45 m1pdown_Nf=2
+.param m27_L=0.15 m27_W=71.45 m27_Nf=6
+.param m26_L=0.15 m26_W=71.45 m26_Nf=6
+.param m23_L=0.15 m23_W=85.7 m23_Nf=10
+.param m22_L=0.15 m22_W=85.7 m22_Nf=10
+.param m21_L=0.15 m21_W=21.45 m21_Nf=2
+.param m20_L=0.15 m20_W=35.7 m20_Nf=2
+.param m19_L=0.15 m19_W=21.45 m19_Nf=2
+.param m18_L=0.15 m18_W=35.7 m18_Nf=2
 
 
 * --- CIRCUIT DEFINITION ---

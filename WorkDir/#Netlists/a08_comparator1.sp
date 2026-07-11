@@ -9,29 +9,31 @@
 *   Device types : nmos_rvt pmos_rvt
 *   Passives     : 0 resistors, 0 capacitors
 * Note: Converted from FinFET-style to CMOS-style netlist.
-*       Device sizes are placeholders — optimizer generates new sizes.
+* SIZES CONVERTED 2026-07-10 scale=7.14286 source_L_ref=0.014um
+*       Device/passive sizes are scaled from the real source-netlist values
+*       (see marker above) -- not random placeholders.
 * ============================================================
 
 * --- DEVICE PARAMETERS ---
-.param INVERTER_1_m0_M=1 INVERTER_1_m0_L=14n INVERTER_1_m0_W=2
-.param INVERTER_1_m1_M=1 INVERTER_1_m1_L=14n INVERTER_1_m1_W=3
-.param INVERTER_2_m0_M=1 INVERTER_2_m0_L=14n INVERTER_2_m0_W=4
-.param INVERTER_2_m1_M=1 INVERTER_2_m1_L=14n INVERTER_2_m1_W=6
-.param NAND_1_m1_M=1 NAND_1_m1_L=14n NAND_1_m1_W=4
-.param NAND_1_m3_M=1 NAND_1_m3_L=14n NAND_1_m3_W=4
-.param NAND_1_m4_M=1 NAND_1_m4_L=14n NAND_1_m4_W=6
-.param comparator_m0_M=1 comparator_m0_L=14n comparator_m0_W=4
-.param comparator_m1_M=1 comparator_m1_L=14n comparator_m1_W=4
-.param comparator_m2_M=1 comparator_m2_L=14n comparator_m2_W=4
-.param comparator_m3_M=1 comparator_m3_L=14n comparator_m3_W=4
-.param comparator_m4_M=1 comparator_m4_L=14n comparator_m4_W=4
-.param comparator_m5_M=1 comparator_m5_L=14n comparator_m5_W=4
-.param comparator_m6_M=1 comparator_m6_L=14n comparator_m6_W=4
-.param comparator_m7_M=1 comparator_m7_L=14n comparator_m7_W=4
-.param comparator_m8_M=1 comparator_m8_L=14n comparator_m8_W=6
-.param comparator_m9_M=1 comparator_m9_L=14n comparator_m9_W=6
-.param comparator_m10_M=1 comparator_m10_L=14n comparator_m10_W=6
-.param comparator_m11_M=1 comparator_m11_L=14n comparator_m11_W=6
+.param INVERTER_1_m0_M=1 INVERTER_1_m0_L=0.1 INVERTER_1_m0_W=14.3
+.param INVERTER_1_m1_M=1 INVERTER_1_m1_L=0.1 INVERTER_1_m1_W=21.45
+.param INVERTER_2_m0_M=1 INVERTER_2_m0_L=0.1 INVERTER_2_m0_W=28.55
+.param INVERTER_2_m1_M=1 INVERTER_2_m1_L=0.1 INVERTER_2_m1_W=42.85
+.param NAND_1_m1_M=1 NAND_1_m1_L=0.1 NAND_1_m1_W=28.55
+.param NAND_1_m3_M=1 NAND_1_m3_L=0.1 NAND_1_m3_W=28.55
+.param NAND_1_m4_M=1 NAND_1_m4_L=0.1 NAND_1_m4_W=42.85
+.param comparator_m0_M=1 comparator_m0_L=0.1 comparator_m0_W=28.55
+.param comparator_m1_M=1 comparator_m1_L=0.1 comparator_m1_W=28.55
+.param comparator_m2_M=1 comparator_m2_L=0.1 comparator_m2_W=28.55
+.param comparator_m3_M=1 comparator_m3_L=0.1 comparator_m3_W=28.55
+.param comparator_m4_M=1 comparator_m4_L=0.1 comparator_m4_W=28.55
+.param comparator_m5_M=1 comparator_m5_L=0.1 comparator_m5_W=28.55
+.param comparator_m6_M=1 comparator_m6_L=0.1 comparator_m6_W=28.55
+.param comparator_m7_M=1 comparator_m7_L=0.1 comparator_m7_W=28.55
+.param comparator_m8_M=1 comparator_m8_L=0.1 comparator_m8_W=42.85
+.param comparator_m9_M=1 comparator_m9_L=0.1 comparator_m9_W=42.85
+.param comparator_m10_M=1 comparator_m10_L=0.1 comparator_m10_W=42.85
+.param comparator_m11_M=1 comparator_m11_L=0.1 comparator_m11_W=42.85
 
 
 * --- CIRCUIT DEFINITION ---

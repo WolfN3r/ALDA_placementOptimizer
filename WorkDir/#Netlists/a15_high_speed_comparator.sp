@@ -9,25 +9,27 @@
 *   Device types : nmos_rvt pmos_rvt
 *   Passives     : 0 resistors, 0 capacitors
 * Note: Converted from FinFET-style to CMOS-style netlist.
-*       Device sizes are placeholders — optimizer generates new sizes.
+* SIZES CONVERTED 2026-07-10 scale=7.14286 source_L_ref=0.014um
+*       Device/passive sizes are scaled from the real source-netlist values
+*       (see marker above) -- not random placeholders.
 * ============================================================
 
 * --- DEVICE PARAMETERS ---
-.param mn0_W=6 mn0_Nf=2 mn0_L=14e-9 mn0_M=8
-.param mn1_W=6 mn1_Nf=2 mn1_L=14e-9 mn1_M=16
-.param mn2_W=6 mn2_Nf=2 mn2_L=14e-9 mn2_M=16
-.param mn3_W=6 mn3_Nf=2 mn3_L=14e-9 mn3_M=8
-.param mn4_W=6 mn4_Nf=2 mn4_L=14e-9 mn4_M=8
-.param mp5_W=6 mp5_Nf=2 mp5_L=14e-9 mp5_M=4
-.param mp6_W=6 mp6_Nf=2 mp6_L=14e-9 mp6_M=4
-.param mp7_W=6 mp7_Nf=2 mp7_L=14e-9 mp7_M=1
-.param mp8_W=6 mp8_Nf=2 mp8_L=14e-9 mp8_M=1
-.param mp9_W=6 mp9_Nf=2 mp9_L=14e-9 mp9_M=1
-.param mp10_W=6 mp10_Nf=2 mp10_L=14e-9 mp10_M=1
-.param mp11_W=6 mp11_Nf=2 mp11_L=14e-9 mp11_M=1
-.param mn13_W=6 mn13_Nf=2 mn13_L=14e-9 mn13_M=1
-.param mp12_W=6 mp12_Nf=2 mp12_L=14e-9 mp12_M=1
-.param mn14_W=6 mn14_Nf=2 mn14_L=14e-9 mn14_M=1
+.param mn0_W=42.85 mn0_Nf=2 mn0_L=0.1 mn0_M=8
+.param mn1_W=42.85 mn1_Nf=2 mn1_L=0.1 mn1_M=16
+.param mn2_W=42.85 mn2_Nf=2 mn2_L=0.1 mn2_M=16
+.param mn3_W=42.85 mn3_Nf=2 mn3_L=0.1 mn3_M=8
+.param mn4_W=42.85 mn4_Nf=2 mn4_L=0.1 mn4_M=8
+.param mp5_W=42.85 mp5_Nf=2 mp5_L=0.1 mp5_M=4
+.param mp6_W=42.85 mp6_Nf=2 mp6_L=0.1 mp6_M=4
+.param mp7_W=42.85 mp7_Nf=2 mp7_L=0.1 mp7_M=1
+.param mp8_W=42.85 mp8_Nf=2 mp8_L=0.1 mp8_M=1
+.param mp9_W=42.85 mp9_Nf=2 mp9_L=0.1 mp9_M=1
+.param mp10_W=42.85 mp10_Nf=2 mp10_L=0.1 mp10_M=1
+.param mp11_W=42.85 mp11_Nf=2 mp11_L=0.1 mp11_M=1
+.param mn13_W=42.85 mn13_Nf=2 mn13_L=0.1 mn13_M=1
+.param mp12_W=42.85 mp12_Nf=2 mp12_L=0.1 mp12_M=1
+.param mn14_W=42.85 mn14_Nf=2 mn14_L=0.1 mn14_M=1
 
 
 * --- CIRCUIT DEFINITION ---

@@ -9,24 +9,26 @@
 *   Device types : nmos_rvt pmos_rvt
 *   Passives     : 0 resistors, 0 capacitors
 * Note: Converted from FinFET-style to CMOS-style netlist.
-*       Device sizes are placeholders — optimizer generates new sizes.
+* SIZES CONVERTED 2026-07-10 scale=7.14286 source_L_ref=0.014um
+*       Device/passive sizes are scaled from the real source-netlist values
+*       (see marker above) -- not random placeholders.
 * ============================================================
 
 * --- DEVICE PARAMETERS ---
-.param p_stack_4_mi4_L=40n p_stack_4_mi4_W=4 p_stack_4_mi4_Nf=2
-.param p_stack_4_mi3_L=40n p_stack_4_mi3_W=4 p_stack_4_mi3_Nf=2
-.param p_stack_4_mi2_L=40n p_stack_4_mi2_W=4 p_stack_4_mi2_Nf=2
-.param p_stack_4_mi1_L=40n p_stack_4_mi1_W=4 p_stack_4_mi1_Nf=2
-.param p_stack_2_mi2_L=40n p_stack_2_mi2_W=4 p_stack_2_mi2_Nf=2
-.param p_stack_2_mi1_L=40n p_stack_2_mi1_W=4 p_stack_2_mi1_Nf=2
-.param n_stack_4_mi1_L=40n n_stack_4_mi1_W=4 n_stack_4_mi1_Nf=2
-.param n_stack_4_mi2_L=40n n_stack_4_mi2_W=4 n_stack_4_mi2_Nf=2
-.param n_stack_4_mi3_L=40n n_stack_4_mi3_W=4 n_stack_4_mi3_Nf=2
-.param n_stack_4_mi4_L=40n n_stack_4_mi4_W=4 n_stack_4_mi4_Nf=2
-.param n_stack_2_mi1_L=40n n_stack_2_mi1_W=4 n_stack_2_mi1_Nf=2
-.param n_stack_2_mi2_L=40n n_stack_2_mi2_W=4 n_stack_2_mi2_Nf=2
-.param unity_gain_buffers_mmn42_L=40n unity_gain_buffers_mmn42_W=4 unity_gain_buffers_mmn42_Nf=2 unity_gain_buffers_mmn42_M=16
-.param unity_gain_buffers_mmp33_L=40n unity_gain_buffers_mmp33_W=4 unity_gain_buffers_mmp33_Nf=2 unity_gain_buffers_mmp33_M=16
+.param p_stack_4_mi4_L=0.3 p_stack_4_mi4_W=28.55 p_stack_4_mi4_Nf=2
+.param p_stack_4_mi3_L=0.3 p_stack_4_mi3_W=28.55 p_stack_4_mi3_Nf=2
+.param p_stack_4_mi2_L=0.3 p_stack_4_mi2_W=28.55 p_stack_4_mi2_Nf=2
+.param p_stack_4_mi1_L=0.3 p_stack_4_mi1_W=28.55 p_stack_4_mi1_Nf=2
+.param p_stack_2_mi2_L=0.3 p_stack_2_mi2_W=28.55 p_stack_2_mi2_Nf=2
+.param p_stack_2_mi1_L=0.3 p_stack_2_mi1_W=28.55 p_stack_2_mi1_Nf=2
+.param n_stack_4_mi1_L=0.3 n_stack_4_mi1_W=28.55 n_stack_4_mi1_Nf=2
+.param n_stack_4_mi2_L=0.3 n_stack_4_mi2_W=28.55 n_stack_4_mi2_Nf=2
+.param n_stack_4_mi3_L=0.3 n_stack_4_mi3_W=28.55 n_stack_4_mi3_Nf=2
+.param n_stack_4_mi4_L=0.3 n_stack_4_mi4_W=28.55 n_stack_4_mi4_Nf=2
+.param n_stack_2_mi1_L=0.3 n_stack_2_mi1_W=28.55 n_stack_2_mi1_Nf=2
+.param n_stack_2_mi2_L=0.3 n_stack_2_mi2_W=28.55 n_stack_2_mi2_Nf=2
+.param unity_gain_buffers_mmn42_L=0.3 unity_gain_buffers_mmn42_W=28.55 unity_gain_buffers_mmn42_Nf=2 unity_gain_buffers_mmn42_M=16
+.param unity_gain_buffers_mmp33_L=0.3 unity_gain_buffers_mmp33_W=28.55 unity_gain_buffers_mmp33_Nf=2 unity_gain_buffers_mmp33_M=16
 
 
 * --- CIRCUIT DEFINITION ---
