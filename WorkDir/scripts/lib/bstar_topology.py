@@ -1,14 +1,45 @@
 """
 B*-tree topology — supports both SA and GA optimizers.
 
-Internal state: binary tree where left-child = x-neighbour, right-child = y-neighbour.
-decode() uses DFS pre-order with a typed contour (skyline) to derive block coordinates.
+Two-level structure, following Chang et al. (2000) B*-trees and Lin, Chang &
+Lin (2009) ASF-/HB*-trees:
 
-SA operators follow Lin, Yi & Chang (2001):
-  Op1 (_op_variant) — change active variant (size/rotation) of one block.
-  Op2 (_op_swap)    — exchange block assignments of two nodes.
-  Op3 (_op_move)    — detach one node, re-insert via push-down.
-  Extra (_op_rotate) — flip left/right children of one node (project addition).
+  outer tree   — plain B*-tree over free (non-symmetric) blocks, plus at most
+                 one HIERARCHY NODE when the netlist has a shared-axis
+                 symmetry group (aggressive mode). left-child = x-neighbour,
+                 right-child = y-neighbour, same as any other node.
+  inner tree   — only inside the hierarchy node: an ASF-B*-tree over
+                 REPRESENTATIVE nodes of the shared symmetry axis (one pair
+                 member, or one self-symmetric block). Mirrors are never
+                 given tree nodes — their position is derived by mirroring
+                 after the representative tree is packed (_pack_island()).
+
+decode() packs the inner tree once (_pack_island), then runs one ordinary
+DFS+contour pass over the outer tree; wherever it reaches the hierarchy
+node it stamps every island member's position and pushes each member's own
+bbox into the shared contour (instead of one padded bounding box), so free
+blocks placed afterwards see the island's true rectilinear top silhouette —
+this is the "contour node" mechanism from Lin 2009, reused directly through
+the existing typed-contour machinery rather than reified as its own tree
+nodes (this project only ever has one shared axis per run — see
+.claude/plans/bstar_symmetry_island_reimplementation.md §5.2 for why the
+paper's general multi-segment contour-node bookkeeping isn't needed here).
+
+SA operators:
+  Outer tree (Chang 2000 Op1-3):
+    _op_variant     — change active variant (size/rotation) of one block.
+    _op_swap_outer  — exchange block assignments of two free-tree nodes.
+    _op_move_outer  — detach one node, re-insert via push-down.
+  Inner tree (Lin 2009 Op2-4, restricted to the representative sub-tree):
+    _op_swap_inner  — exchange two pair reps, or reorder two self-sym reps
+                       along the spine (Property 1 preserved by construction).
+    _op_move_inner  — detach/reinsert a pair rep; self-sym reps never move
+                       via this operator (spine reordering is a swap, not a
+                       move — see plan §4b/§5.3) and reinsertion never
+                       splices a node between two spine members.
+    _op_change_rep  — swap which side of a pair/self-sym has the tree node.
+  Symmetry-type conversion (paper Op5) is intentionally not implemented:
+  every axis in this project is vertical by construction.
 
 perturb(temperature) expects temperature in [0, 1] (normalised fraction,
   1 = hot start, 0 = cold end).  The SA optimiser is responsible for
@@ -21,7 +52,14 @@ import random
 from typing import Any, Callable
 
 from topology_base import TopologyBase, SAMixin, GAMixin
-from spacing import compute_block_spacing, is_wpe_pair
+from spacing import compute_block_spacing, is_wpe_pair, SpacingResult
+
+
+# =============================================================================
+# CONSTANTS
+# =============================================================================
+_HIERARCHY_MOVE_WEIGHT = 0.2   # Lin 2009 §V-A: moving/swapping a whole island
+                                # is "a big jump" — down-weight its selection.
 
 
 # =============================================================================
@@ -29,8 +67,13 @@ from spacing import compute_block_spacing, is_wpe_pair
 # =============================================================================
 
 class _Node:
-    """One node in the B*-tree. Holds block assignment and tree links."""
-    __slots__ = ("block_id", "variant_idx", "left", "right", "parent")
+    """One node in a B*-tree (outer or inner). Holds block assignment and tree links.
+
+    is_hierarchy=True marks the (at most one) outer node that wraps the
+    shared-axis symmetry island; its block_id is the sentinel
+    BStarTopology._ISLAND_ID and does not index into self._blocks.
+    """
+    __slots__ = ("block_id", "variant_idx", "left", "right", "parent", "is_hierarchy")
 
     def __init__(self, block_id: str, variant_idx: int) -> None:
         self.block_id:    str          = block_id
@@ -38,6 +81,7 @@ class _Node:
         self.left:   "_Node | None"   = None   # x-child (placed to the right)
         self.right:  "_Node | None"   = None   # y-child (placed above)
         self.parent: "_Node | None"   = None
+        self.is_hierarchy: bool        = False
 
 
 # =============================================================================
@@ -48,15 +92,25 @@ def _contour_query(
     contour: list[tuple[float, float, float, float, str]],
     x_l: float,
     x_r: float,
-    dt_new: str,
+    dts_new: frozenset[str],
     ch: float,
 ) -> float:
     """
-    2-D contour query — return the y-floor for a new block (type dt_new,
-    x-range [x_l, x_r], height ch) that satisfies *all* pairwise DRC spacing.
+    2-D contour query — return the y-floor for a new node (candidate device
+    types dts_new — a single-element set for a regular block, or the full
+    set of device types present in the symmetry island when the incoming
+    node is the hierarchy node) whose x-range is [x_l, x_r] and height ch,
+    satisfying *all* pairwise DRC spacing against every existing segment.
 
-    Each contour segment is a 5-tuple (x_l, x_r, y_bot, y_top, dt).
-    Three cases per segment:
+    Each contour segment is a 5-tuple (x_l, x_r, y_bot, y_top, dt). For
+    dts_new with more than one member (island case), the effective height is
+    the max over all candidate device types — the safe (never-too-tight)
+    choice, since the exact island member nearest a given outer segment can
+    vary by SA perturbation and isn't worth tracking precisely (see plan
+    §5.2). For a single-block query this degenerates to the original
+    single-device-type computation.
+
+    Three cases per (segment, dt_new) pair:
 
     x-overlap (x_gap == 0):
         Standard 1-D skyline — y_floor = y_top + y_spacing.
@@ -79,43 +133,40 @@ def _contour_query(
         new block's y-range cannot actually overlap the segment.
     """
     max_h = 0.0
-    blk_new = {"device_type": dt_new}
     for (cx_l, cx_r, cy_bot, cy_top, cy_dt) in contour:
         blk_seg = {"device_type": cy_dt}
-        sp      = compute_block_spacing(blk_seg, blk_new)
         x_gap   = max(0.0, max(x_l - cx_r, cx_l - x_r))
 
-        if x_gap < 1e-9:
-            # Standard y-spacing (1-D skyline)
-            effective = cy_top + sp.y_spacing
+        for dt_new in dts_new:
+            blk_new = {"device_type": dt_new}
+            sp      = compute_block_spacing(blk_seg, blk_new)
 
-        elif is_wpe_pair(blk_seg, blk_new):
-            # WPE corner clearance for diagonal pairs
-            req_corner = max(sp.x_spacing, sp.y_spacing)
-            if x_gap < req_corner:
-                effective = (
-                    cy_top
-                    + math.sqrt(max(0.0, req_corner ** 2 - x_gap ** 2))
-                    + 1e-6   # IEEE rounding guard
-                )
-            else:
-                effective = 0.0  # x-gap already satisfies corner distance
+            if x_gap < 1e-9:
+                effective = cy_top + sp.y_spacing
 
-        elif x_gap < sp.x_spacing:
-            # Non-WPE with insufficient x-gap: DRC fires only when y-bands
-            # overlap.  Using max_h as the running y-floor estimate, check
-            # whether [max_h, max_h+ch] and [cy_bot, cy_top] intersect.
-            y_overlap = min(max_h + ch, cy_top) - max(max_h, cy_bot)
-            if y_overlap > 1e-9:
-                effective = cy_top + 1e-6  # push above → diagonal → no DRC
+            elif is_wpe_pair(blk_seg, blk_new):
+                req_corner = max(sp.x_spacing, sp.y_spacing)
+                if x_gap < req_corner:
+                    effective = (
+                        cy_top
+                        + math.sqrt(max(0.0, req_corner ** 2 - x_gap ** 2))
+                        + 1e-6
+                    )
+                else:
+                    effective = 0.0
+
+            elif x_gap < sp.x_spacing:
+                y_overlap = min(max_h + ch, cy_top) - max(max_h, cy_bot)
+                if y_overlap > 1e-9:
+                    effective = cy_top + 1e-6
+                else:
+                    effective = 0.0
+
             else:
                 effective = 0.0
 
-        else:
-            effective = 0.0  # non-WPE, x-gap already sufficient
-
-        if effective > max_h:
-            max_h = effective
+            if effective > max_h:
+                max_h = effective
     return max_h
 
 
@@ -128,6 +179,20 @@ def _contour_update(
     dt: str,
 ) -> None:
     contour.append((x_l, x_r, y_bot, y_top, dt))
+
+
+def _spacing_multi(dts_a: frozenset[str], dts_b: frozenset[str]) -> SpacingResult:
+    """Componentwise-max SpacingResult over every (dt_a, dt_b) pair — the
+    safe generalisation of compute_block_spacing() used whenever one side
+    is the symmetry island (multiple device types) rather than one block."""
+    x = 0.0
+    y = 0.0
+    for dt_a in dts_a:
+        for dt_b in dts_b:
+            sp = compute_block_spacing({"device_type": dt_a}, {"device_type": dt_b})
+            x = max(x, sp.x_spacing)
+            y = max(y, sp.y_spacing)
+    return SpacingResult(x_spacing=x, y_spacing=y)
 
 
 # =============================================================================
@@ -159,15 +224,19 @@ class BStarTopology(TopologyBase, SAMixin, GAMixin):
     Capabilities: SA (perturb/undo) and GA (mutate/crossover/random_init).
     """
 
+    _ISLAND_ID = "__ISLAND__"   # sentinel outer block_id for the hierarchy node
+
     def __init__(self, blocks: dict, nets: list, sym_groups: list | None = None) -> None:
         self._blocks: dict = blocks
         self._nets:   list = nets
         self._root:  _Node | None = None
-        self._nodes: list[_Node]  = []
+        self._nodes: list[_Node]  = []          # outer tree: free blocks + hierarchy node
+        self._inner_root: _Node | None = None
+        self._inner_nodes: list[_Node] = []     # inner ASF-tree: representative nodes only
         self._sym_groups: list    = sym_groups or []
         # Symmetry lookups — populated by _build_sym_lookups()
         #   _partner[bid]     : partner block_id, or None for non-symmetric blocks
-        #   _is_rep[bid]      : True → block has a tree node; False → mirror derived in decode()
+        #   _is_rep[bid]      : True → block currently has the inner tree node
         #   _is_self_sym[bid] : True → self-symmetric (block maps to itself across the axis)
         self._partner:     dict[str, str | None] = {}
         self._is_rep:      dict[str, bool]        = {}
@@ -184,6 +253,13 @@ class BStarTopology(TopologyBase, SAMixin, GAMixin):
         Convention: for each pair (a, b), the *first* listed index (a) is the
         representative that gets a tree node; b is the mirror and has no node.
         _op_change_rep() can swap this assignment at SA-perturbation time.
+
+        All entries across every group in self._sym_groups are merged into
+        one flat set of lookups — this project's aggressive mode always
+        means "share one common axis," never several independently-aligned
+        axes (confirmed: symmetry_detector.py's Union-Find already merges
+        everything on one axis into a single compound), so one shared
+        representative tree per run is sufficient (see plan §3).
         """
         for bid in self._blocks:
             self._partner.setdefault(bid, None)
@@ -205,337 +281,334 @@ class BStarTopology(TopologyBase, SAMixin, GAMixin):
                     self._is_self_sym[bid] = True
                     self._is_rep[bid]      = True  # self-sym IS in the tree
 
-    def _apply_symmetry(
+    def _block_dims(self, bid: str, variant_idx: int) -> tuple[float, float, str]:
+        block   = self._blocks[bid]
+        variant = block["variants"][variant_idx]
+        bb      = variant["main_bbox"]
+        return bb["x_max"], bb["y_max"], block.get("device_type", "")
+
+    def _rep_variant_idx(self, bid: str, rep_node_map: dict[str, _Node]) -> int:
+        """Variant index to use for block `bid` inside the island: its own
+        node's variant if it has one (a rep), else its rep partner's."""
+        node = rep_node_map.get(bid)
+        if node is not None:
+            return node.variant_idx
+        rep_bid = self._partner.get(bid)
+        node = rep_node_map.get(rep_bid) if rep_bid else None
+        return node.variant_idx if node is not None else 0
+
+    def _pack_island(
         self,
-        positions: dict[str, tuple[float, float]],
-    ) -> dict[str, tuple[float, float]]:
-        """Mirror each symmetric pair about a vertical axis (A | A') and shift so all x ≥ 0.
-
-        Axis at x=0 (left boundary of rep placement):
-          mirror left edge = −(x_rep + w_rep)   [negative pre-shift]
-          axis_x = max(x_rep + w_rep) over paired reps
-          gap_x  = max same-type x_spacing over all pairs (PDK DRC rule)
-
-        Shift logic (ensures gap_x between every mirror and its rep):
-          mirrors shift by axis_x         → mirrors in [0, axis_x]
-          paired reps shift by axis_x+gap_x → reps in [axis_x+gap_x, ...]
-          closest pair gap = 2*x_rep + gap_x ≥ gap_x = required spacing ✓
-
-        Self-symmetric modules are centered on the physical axis midpoint:
-          x_axis_mid = axis_x + gap_x/2
-          x_ss_final = x_axis_mid − w_ss/2
+    ) -> tuple[dict[str, tuple[float, float]], list[tuple[float, float, float, float, str]], float, float, frozenset[str]]:
         """
-        all_positions = dict(positions)
-        node_map = {n.block_id: n for n in self._nodes}
+        Pack the shared-axis symmetry island (Lin 2009 §III, ASF-B*-tree):
+        DFS+contour over representative nodes only, then derive mirror and
+        self-symmetric positions via the mirror formula. Returns:
+          - local (x, y) position of every island member (reps + mirrors),
+          - that member's own bbox as an (x_l, x_r, y_bot, y_top, dt) segment
+            — collectively these segments ARE the island's true silhouette,
+            reused directly as extra outer-contour entries by decode(),
+          - island width/height,
+          - the set of device types present in the island.
+        All positions/segments are in the island's own local space, shifted
+        so its own bottom-left corner is (0, 0) — consistent with how the
+        outer DFS treats every node's (cx, cy) as its own bottom-left corner.
+        """
+        if self._inner_root is None:
+            return {}, [], 0.0, 0.0, frozenset()
 
-        def _wh(bid: str, node: "_Node") -> tuple[float, float]:
-            block   = self._blocks[bid]
-            variant = block["variants"][node.variant_idx]
-            bb      = variant["main_bbox"]
-            return bb["x_max"], bb["y_max"]
+        rep_node_map = {n.block_id: n for n in self._inner_nodes}
 
-        # Two-pass algorithm:
-        # PASS 1 — compute per-group geometry (axis_x, gap_x) without writing positions.
-        #           Derive global_x_shift = max(axis_x_g) so all groups share one origin.
-        # PASS 2 — assign final positions using global_x_shift for a unified coordinate
-        #           system.  This preserves DFS-computed inter-block spacings across groups.
+        # 1. Standard B*-tree DFS+contour over representative nodes.
+        rep_pos:  dict[str, tuple[float, float]] = {}
+        node_geom: dict[str, tuple[float, float, float, float]] = {}
+        contour:  list[tuple[float, float, float, float, str]] = []
 
-        group_bids_all: set[str] = set()
-        group_info: list[dict]   = []   # one entry per group (vertical axis only)
-        global_x_shift = 0.0
-        global_gap_x   = 0.0
+        root = self._inner_root
+        rw, rh, rdt = self._block_dims(root.block_id, root.variant_idx)
+        rep_pos[root.block_id]  = (0.0, 0.0)
+        node_geom[root.block_id] = (0.0, 0.0, rw, rh)
+        _contour_update(contour, 0.0, rw, 0.0, rh, rdt)
 
-        # --- PASS 1 ---
-        for group in self._sym_groups:
-            axis      = group.get("axis", "vertical")
-            pairs     = group.get("pairs", [])
-            self_syms = [str(s) for s in group.get("self_symmetric", [])]
-            for pair in pairs:
-                group_bids_all.add(str(pair[0]))
-                group_bids_all.add(str(pair[1]))
-            for ss in self_syms:
-                group_bids_all.add(ss)
+        stack: list[_Node] = []
+        if root.right: stack.append(root.right)
+        if root.left:  stack.append(root.left)
+        while stack:
+            node   = stack.pop()
+            parent = node.parent
+            px, py, pw, ph = node_geom[parent.block_id]
+            _, _, p_dt = self._block_dims(parent.block_id, parent.variant_idx)
+            cw, ch, c_dt = self._block_dims(node.block_id, node.variant_idx)
 
-            if axis != "vertical":
-                logger.warning("B*-tree: group axis '%s' is not supported — treating as vertical", axis)
+            if node is parent.left:
+                sp = compute_block_spacing({"device_type": p_dt}, {"device_type": c_dt})
+                cx = px + pw + sp.x_spacing
+                cy = _contour_query(contour, cx, cx + cw, frozenset({c_dt}), ch)
+                cy = max(cy, py)
+            else:
+                cx = px
+                cy = _contour_query(contour, cx, cx + cw, frozenset({c_dt}), ch)
 
-            axis_x = 0.0
-            for pair in pairs:
-                id_first  = str(pair[0])
-                id_second = str(pair[1])
-                id_rep = id_first if self._is_rep.get(id_first, True) else id_second
-                node = node_map.get(id_rep)
-                if node is None or id_rep not in positions:
-                    continue
-                w_rep, _ = _wh(id_rep, node)
-                x_rep, _ = positions[id_rep]
-                axis_x = max(axis_x, x_rep + w_rep)
-            for ss_bid in self_syms:
-                node = node_map.get(ss_bid)
-                if node is None or ss_bid not in positions:
-                    continue
-                w_ss, _ = _wh(ss_bid, node)
-                x_ss, _ = positions[ss_bid]
-                axis_x = max(axis_x, x_ss + w_ss)
+            rep_pos[node.block_id]  = (cx, cy)
+            node_geom[node.block_id] = (cx, cy, cw, ch)
+            _contour_update(contour, cx, cx + cw, cy, cy + ch, c_dt)
 
-            gap_x = 0.0
-            for pair in pairs:
-                id_first  = str(pair[0])
-                id_second = str(pair[1])
-                id_rep = id_first if self._is_rep.get(id_first, True) else id_second
-                if id_rep in self._blocks:
-                    sp = compute_block_spacing(self._blocks[id_rep],
-                                               self._blocks[id_rep])
-                    gap_x = max(gap_x, sp.x_spacing)
+            if node.right: stack.append(node.right)
+            if node.left:  stack.append(node.left)
 
-            global_x_shift = max(global_x_shift, axis_x)
-            global_gap_x   = max(global_gap_x,   gap_x)
-            group_info.append({"axis": "vertical", "pairs": pairs,
-                               "self_syms": self_syms, "gap_x": gap_x})
+        # 2. Axis geometry (mirrors bstar_topology.md's Bug-1/Bug-2 fixes,
+        #    now scoped to the single merged island instead of per-group).
+        axis_x = 0.0
+        gap_x  = 0.0
+        for bid, (x, _y) in rep_pos.items():
+            w, _h, _dt = self._block_dims(bid, self._rep_variant_idx(bid, rep_node_map))
+            axis_x = max(axis_x, x + w)
+            if not self._is_self_sym.get(bid, False):
+                sp = compute_block_spacing(self._blocks[bid], self._blocks[bid])
+                gap_x = max(gap_x, sp.x_spacing)
+        axis_mid = axis_x + gap_x / 2.0
 
-        # --- PASS 2 ---
-        for gi in group_info:
-            axis      = gi["axis"]
-            pairs     = gi["pairs"]
-            self_syms = gi["self_syms"]
+        # 3. Final local positions for every island member.
+        all_pos: dict[str, tuple[float, float]] = {}
+        for bid, (x, y) in rep_pos.items():
+            w, _h, _dt = self._block_dims(bid, self._rep_variant_idx(bid, rep_node_map))
+            if self._is_self_sym.get(bid, False):
+                all_pos[bid] = (axis_mid - w / 2.0, y)
+                continue
+            all_pos[bid] = (x + axis_x + gap_x, y)
+            partner = self._partner.get(bid)
+            if partner and partner != bid:
+                all_pos[partner] = (axis_x - (x + w), y)
 
-            if axis == "vertical":
-                gap_x    = gi["gap_x"]
-                axis_mid = global_x_shift + gap_x / 2.0
+        # 4. Normalize to the island's own bottom-left corner and build the
+        #    per-member segment list (root is always at local y=0, so
+        #    min_y is trivially 0; min_x may not be).
+        min_x = min(x for x, _y in all_pos.values())
+        segments: list[tuple[float, float, float, float, str]] = []
+        dts: set[str] = set()
+        max_x = 0.0
+        max_y = 0.0
+        norm_pos: dict[str, tuple[float, float]] = {}
+        for bid, (x, y) in all_pos.items():
+            nx, ny = x - min_x, y
+            w, h, dt = self._block_dims(bid, self._rep_variant_idx(bid, rep_node_map))
+            norm_pos[bid] = (nx, ny)
+            segments.append((nx, nx + w, ny, ny + h, dt))
+            dts.add(dt)
+            max_x = max(max_x, nx + w)
+            max_y = max(max_y, ny + h)
 
-                for pair in pairs:
-                    id_first  = str(pair[0])
-                    id_second = str(pair[1])
-                    if self._is_rep.get(id_first, True):
-                        id_rep, id_mir = id_first, id_second
-                    else:
-                        id_rep, id_mir = id_second, id_first
-                    node = node_map.get(id_rep)
-                    if node is None or id_rep not in positions:
-                        continue
-                    w_rep, _     = _wh(id_rep, node)
-                    x_rep, y_rep = positions[id_rep]
-                    # Pre-shift mirror (axis at x=0): mirror left = -(x_rep + w_rep)
-                    all_positions[id_mir] = (-(x_rep + w_rep), y_rep)
-
-                for pair in pairs:
-                    for bid in (str(pair[0]), str(pair[1])):
-                        if bid not in all_positions:
-                            continue
-                        x, y = all_positions[bid]
-                        if self._is_rep.get(bid, True) and self._partner.get(bid) != bid:
-                            # Rep: global_x_shift + gap_x  (gap at axis guaranteed)
-                            all_positions[bid] = (x + global_x_shift + gap_x, y)
-                        else:
-                            # Mirror: global_x_shift (mirror zone [0, global_x_shift])
-                            all_positions[bid] = (x + global_x_shift, y)
-
-                for ss_bid in self_syms:
-                    if ss_bid not in all_positions or ss_bid not in node_map:
-                        continue
-                    w_ss, _ = _wh(ss_bid, node_map[ss_bid])
-                    _, y_ss = all_positions[ss_bid]
-                    all_positions[ss_bid] = (axis_mid - w_ss / 2.0, y_ss)
-
-        # Non-group (asymmetric) blocks: use global_x_shift + global_gap_x so they
-        # receive exactly the same shift as paired reps, preserving all DFS-computed
-        # inter-block spacings.  This moves them fully into the rep zone and away
-        # from the mirror zone [0, global_x_shift].
-        if global_x_shift > 0.0 or global_gap_x > 0.0:
-            x_shift_ng = global_x_shift + global_gap_x
-            for bid in list(all_positions.keys()):
-                if bid not in group_bids_all:
-                    x, y = all_positions[bid]
-                    all_positions[bid] = (x + x_shift_ng, y)
-
-        return all_positions
+        return norm_pos, segments, max_x, max_y, frozenset(dts)
 
     # ------------------------------------------------------------------
     # TopologyBase
     # ------------------------------------------------------------------
 
-    def seed(self, blocks: dict, mode: str = "random") -> None:
-        """Build a valid binary tree from the block list.
+    def _random_binary_tree(self, nodes: list[_Node], mode: str) -> _Node:
+        """Plain Chang-2000 random B*-tree build over `nodes` (nodes[0] becomes root)."""
+        if mode == "random":
+            random.shuffle(nodes)
+        root = nodes[0]
+        root.parent = None
+        for i, node in enumerate(nodes[1:], start=1):
+            candidates = [n for n in nodes[:i] if n.left is None or n.right is None]
+            parent = random.choice(candidates) if mode == "random" else candidates[0]
+            free_left, free_right = parent.left is None, parent.right is None
+            if free_left and free_right:
+                go_left = random.random() < 0.5 if mode == "random" else True
+            else:
+                go_left = free_left
+            if go_left:
+                parent.left = node
+            else:
+                parent.right = node
+            node.parent = parent
+        return root
 
-        Property 1 (ASF-B*-tree, vertical axis): the representative of every
-        self-symmetric module must be on the rightmost branch of the tree so
-        that it abuts the symmetry axis (x = 0 in DFS space).  We enforce this
-        in the initial seed by splitting nodes into two groups:
-
-          group A — self-symmetric representatives  → placed first (root + right-spine)
-          group B — all other representatives       → placed as left subtrees
-
-        With group-A nodes on the right-spine (y-children), their x-coordinate
-        in DFS equals the root's x = 0, which is exactly the axis boundary.
-        Pair-rep nodes placed as x-children land at x ≥ w_ss + DRC-spacing, so
-        they never overlap with the self-sym block after _apply_symmetry centres
-        the self-sym on the axis midpoint.
-
-        The same invariant must be maintained during SA perturbations:
-          _op_swap and _op_move skip self-symmetric nodes to avoid displacing
-          them off the rightmost branch.
-        """
-        self._blocks = blocks
-        self._build_sym_lookups()   # rebuild after blocks update
-        ids = [
-            bid for bid, b in blocks.items()
-            if "error" not in b and self._is_rep.get(bid, True)
-        ]
-        if not ids:
-            self._root  = None
-            self._nodes = []
+    def _seed_inner(self, rep_ids: list[str], mode: str) -> None:
+        """Build the ASF-B*-tree over representative nodes (Property 1:
+        self-symmetric reps chained onto the rightmost branch first)."""
+        if not rep_ids:
+            self._inner_root  = None
+            self._inner_nodes = []
             return
 
-        # Separate self-sym and regular nodes; randomise only the regular group
-        ss_ids   = [bid for bid in ids if self._is_self_sym.get(bid)]
-        reg_ids  = [bid for bid in ids if not self._is_self_sym.get(bid)]
+        ss_ids  = [bid for bid in rep_ids if self._is_self_sym.get(bid)]
+        reg_ids = [bid for bid in rep_ids if not self._is_self_sym.get(bid)]
         if mode == "random":
             random.shuffle(reg_ids)
-        # Self-sym nodes FIRST so they form the root / rightmost-branch spine
         ordered_ids = ss_ids + reg_ids
 
-        # Each block gets one node; pick default (first valid) variant
         nodes = [_Node(bid, self._default_variant_idx(bid)) for bid in ordered_ids]
+        root = nodes[0]
+        root.parent = None
+        rightmost_tail = root
 
-        self._root = nodes[0]
-        self._root.parent = None
-
-        # Track the rightmost branch tail so we can extend it for self-sym nodes
-        rightmost_tail = self._root
-
-        for node in nodes[1:]:
-            is_ss = self._is_self_sym.get(node.block_id, False)
-
-            if is_ss:
-                # Property 1: self-sym must go on the rightmost branch (y-child chain).
-                # Walk to the end of the rightmost branch and attach as right-child.
+        for i, node in enumerate(nodes[1:], start=1):
+            if self._is_self_sym.get(node.block_id, False):
                 while rightmost_tail.right is not None:
                     rightmost_tail = rightmost_tail.right
                 rightmost_tail.right = node
                 node.parent = rightmost_tail
                 rightmost_tail = node
             else:
-                # Regular rep: find any node with a free slot.
-                candidates = [
-                    n for n in nodes[:nodes.index(node)]
-                    if n.left is None or n.right is None
-                ]
+                candidates = [n for n in nodes[:i] if n.left is None or n.right is None]
                 parent = random.choice(candidates) if mode == "random" else candidates[0]
-
-                free_left  = parent.left  is None
-                free_right = parent.right is None
+                free_left, free_right = parent.left is None, parent.right is None
                 if free_left and free_right:
                     go_left = random.random() < 0.5 if mode == "random" else True
                 else:
                     go_left = free_left
-
                 if go_left:
                     parent.left = node
                 else:
                     parent.right = node
-            node.parent = parent
+                node.parent = parent
 
-        self._nodes = nodes
+        self._inner_root  = root
+        self._inner_nodes = nodes
+
+    def seed(self, blocks: dict, mode: str = "random") -> None:
+        """Build a valid outer tree (free blocks + at most one hierarchy
+        node) and, if any symmetry pairs/self-symmetric blocks exist, an
+        inner ASF-B*-tree of their representatives."""
+        self._blocks = blocks
+        self._build_sym_lookups()   # rebuild after blocks update
+
+        valid_ids = [bid for bid, b in blocks.items() if "error" not in b]
+        sym_ids   = {bid for bid in valid_ids if self._partner.get(bid) is not None}
+        rep_ids   = [bid for bid in valid_ids if bid in sym_ids and self._is_rep.get(bid, True)]
+        free_ids  = [bid for bid in valid_ids if bid not in sym_ids]
+
+        self._seed_inner(rep_ids, mode)
+
+        outer_nodes: list[_Node] = []
+        if rep_ids:
+            island_node = _Node(self._ISLAND_ID, 0)
+            island_node.is_hierarchy = True
+            outer_nodes.append(island_node)
+        outer_nodes += [_Node(bid, self._default_variant_idx(bid)) for bid in free_ids]
+
+        if not outer_nodes:
+            self._root  = None
+            self._nodes = []
+            return
+
+        self._nodes = outer_nodes
+        self._root  = self._random_binary_tree(outer_nodes, mode)
 
     def decode(self) -> dict[str, tuple[float, float]]:
         """
-        DFS pre-order traversal → block (x, y) positions.
-        Typed contour tracks effective height per device-type pair.
-
-        x-child: cx = parent.x + parent.w + x_spacing(parent→child)
-                 cy = max(parent.y, contour_query(child_x_range, child_dt))
-        y-child: cx = parent.x
-                 cy = contour_query(child_x_range, child_dt)
-                 [contour_query already includes y_spacing — do NOT add it again]
+        DFS pre-order traversal over the outer tree → block (x, y) positions.
+        The hierarchy node (if any) is packed once via _pack_island() before
+        the traversal starts; wherever the traversal reaches it, every
+        island member's absolute position is stamped and each member's own
+        bbox is pushed into the shared contour, so later nodes see the
+        island's true rectilinear top silhouette rather than a padded
+        bounding box (Lin 2009's contour-node mechanism, folded directly
+        into the existing typed contour — see module docstring).
         """
         if self._root is None:
             return {}
 
+        island_pos, island_segments, island_w, island_h, island_dts = self._pack_island()
+
         positions: dict[str, tuple[float, float]] = {}
-        # contour entries: (x_left, x_right, y_bot, y_top, device_type)
         contour: list[tuple[float, float, float, float, str]] = []
-        node_geom: dict[str, tuple[float, float, float, float]] = {}  # block_id → (x,y,w,h)
+        node_geom: dict[str, tuple[float, float, float, float]] = {}
 
-        def _get_block_dims(node: _Node) -> tuple[float, float, str]:
-            block   = self._blocks[node.block_id]
-            variant = block["variants"][node.variant_idx]
-            bb      = variant["main_bbox"]
-            return bb["x_max"], bb["y_max"], block.get("device_type", "")
+        def _dims(node: _Node) -> tuple[float, float, frozenset[str]]:
+            if node.is_hierarchy:
+                return island_w, island_h, island_dts
+            w, h, dt = self._block_dims(node.block_id, node.variant_idx)
+            return w, h, frozenset({dt})
 
-        # Root placed at origin
-        rw, rh, rdt = _get_block_dims(self._root)
-        positions[self._root.block_id] = (0.0, 0.0)
-        node_geom[self._root.block_id] = (0.0, 0.0, rw, rh)
-        _contour_update(contour, 0.0, rw, 0.0, rh, rdt)
+        def _place(node: _Node, cx: float, cy: float, w: float, h: float) -> None:
+            if node.is_hierarchy:
+                for bid, (lx, ly) in island_pos.items():
+                    positions[bid] = (cx + lx, cy + ly)
+                for (sx_l, sx_r, sy_b, sy_t, sdt) in island_segments:
+                    _contour_update(contour, cx + sx_l, cx + sx_r, cy + sy_b, cy + sy_t, sdt)
+            else:
+                positions[node.block_id] = (cx, cy)
+                _, _, dt = self._block_dims(node.block_id, node.variant_idx)
+                _contour_update(contour, cx, cx + w, cy, cy + h, dt)
 
-        # Iterative DFS pre-order (right pushed first → left processed first)
+        def _key(node: _Node) -> str:
+            return self._ISLAND_ID if node.is_hierarchy else node.block_id
+
+        rw, rh, _r_dts = _dims(self._root)
+        _place(self._root, 0.0, 0.0, rw, rh)
+        node_geom[_key(self._root)] = (0.0, 0.0, rw, rh)
+
         dfs_stack: list[_Node] = []
-        if self._root.right:
-            dfs_stack.append(self._root.right)
-        if self._root.left:
-            dfs_stack.append(self._root.left)
+        if self._root.right: dfs_stack.append(self._root.right)
+        if self._root.left:  dfs_stack.append(self._root.left)
 
         while dfs_stack:
-            node = dfs_stack.pop()
+            node   = dfs_stack.pop()
             parent = node.parent
-            px, py, pw, ph = node_geom[parent.block_id]
-            _, _, p_dt = _get_block_dims(parent)
-            cw, ch, c_dt = _get_block_dims(node)
+            px, py, pw, ph = node_geom[_key(parent)]
+            _, _, p_dts = _dims(parent)
+            cw, ch, c_dts = _dims(node)
 
             if node is parent.left:
-                # x-child: placed to the right of parent
-                sp = compute_block_spacing({"device_type": p_dt}, {"device_type": c_dt})
+                sp = _spacing_multi(p_dts, c_dts)
                 cx = px + pw + sp.x_spacing
-                cy = _contour_query(contour, cx, cx + cw, c_dt, ch)
+                cy = _contour_query(contour, cx, cx + cw, c_dts, ch)
                 cy = max(cy, py)   # x-child must not fall below parent's baseline
             else:
-                # y-child: same x-column as parent.
-                # Query uses child width (not parent width) so child's full footprint
-                # is checked.  _contour_query already adds y_spacing — never add again.
                 cx = px
-                cy = _contour_query(contour, cx, cx + cw, c_dt, ch)
+                cy = _contour_query(contour, cx, cx + cw, c_dts, ch)
 
-            positions[node.block_id] = (cx, cy)
-            node_geom[node.block_id] = (cx, cy, cw, ch)
-            _contour_update(contour, cx, cx + cw, cy, cy + ch, c_dt)
+            _place(node, cx, cy, cw, ch)
+            node_geom[_key(node)] = (cx, cy, cw, ch)
 
-            if node.right:
-                dfs_stack.append(node.right)
-            if node.left:
-                dfs_stack.append(node.left)
+            if node.right: dfs_stack.append(node.right)
+            if node.left:  dfs_stack.append(node.left)
 
-        return self._apply_symmetry(positions) if self._sym_groups else positions
+        return positions
 
     def copy_state(self) -> Any:
-        """Return a deep-copyable representation of the tree structure."""
-        if not self._nodes:
-            return ([], -1, {})
-        idx = {id(n): i for i, n in enumerate(self._nodes)}
+        """Return a deep-copyable representation of both tree structures."""
+        outer = self._serialize_tree(self._nodes, self._root)
+        inner = self._serialize_tree(self._inner_nodes, self._inner_root)
+        return (outer, inner, dict(self._is_rep))
+
+    @staticmethod
+    def _serialize_tree(nodes: list[_Node], root: _Node | None) -> tuple[list[tuple], int]:
+        if not nodes:
+            return ([], -1)
+        idx = {id(n): i for i, n in enumerate(nodes)}
         rows = []
-        for n in self._nodes:
+        for n in nodes:
             l = idx[id(n.left)]   if n.left   else -1
             r = idx[id(n.right)]  if n.right  else -1
             p = idx[id(n.parent)] if n.parent else -1
-            rows.append((n.block_id, n.variant_idx, l, r, p))
-        root_idx = idx[id(self._root)]
-        return (rows, root_idx, dict(self._is_rep))
+            rows.append((n.block_id, n.variant_idx, l, r, p, n.is_hierarchy))
+        return (rows, idx[id(root)])
 
-    def restore_state(self, saved: Any) -> None:
-        rows, root_idx = saved[0], saved[1]
-        is_rep_snap    = saved[2] if len(saved) > 2 else None
+    @staticmethod
+    def _deserialize_tree(saved: tuple[list[tuple], int]) -> tuple[list[_Node], _Node | None]:
+        rows, root_idx = saved
         if not rows:
-            self._nodes = []
-            self._root  = None
-            return
-        nodes = [_Node(r[0], r[1]) for r in rows]
-        for i, (bid, vidx, l, r, p) in enumerate(rows):
+            return [], None
+        nodes = []
+        for (bid, vidx, _l, _r, _p, is_h) in rows:
+            n = _Node(bid, vidx)
+            n.is_hierarchy = is_h
+            nodes.append(n)
+        for i, (_bid, _vidx, l, r, p, _is_h) in enumerate(rows):
             nodes[i].left   = nodes[l] if l >= 0 else None
             nodes[i].right  = nodes[r] if r >= 0 else None
             nodes[i].parent = nodes[p] if p >= 0 else None
-        self._nodes = nodes
-        self._root  = nodes[root_idx]
-        if is_rep_snap is not None:
-            self._is_rep = is_rep_snap
+        return nodes, nodes[root_idx]
+
+    def restore_state(self, saved: Any) -> None:
+        outer, inner, is_rep_snap = saved
+        self._nodes, self._root             = self._deserialize_tree(outer)
+        self._inner_nodes, self._inner_root = self._deserialize_tree(inner)
+        self._is_rep = dict(is_rep_snap)
 
     def capabilities(self) -> set[str]:
         return {"SA", "GA"}
@@ -549,26 +622,36 @@ class BStarTopology(TopologyBase, SAMixin, GAMixin):
         Choose and apply one SA operator and return its undo closure.
 
         temperature — normalised fraction in [0, 1].  1 = hot (start of run),
-          0 = cold (end of run).  The SA optimiser maps its internal schedule
-          to this range before calling.  Operator weights shift from structural
-          (swap, move) at high T to fine-grained (rotate, variant) at low T.
+          0 = cold (end of run).  Operator weights shift from structural
+          (swap, move) at high T to fine-grained (variant) at low T, same as
+          before; the inner (island) pool only exists when a hierarchy node
+          is present, and change-rep only when the island has real pairs.
         """
         if not self._nodes:
             return lambda: None
 
         t = min(1.0, max(0.0, temperature))
-        has_pairs = any(self._partner.get(n.block_id) is not None for n in self._nodes)
-        weights = [
-            0.13 + 0.09 * (1 - t),            # _op_rotate:  more at low T
-            0.30 - 0.09 * (1 - t),            # _op_swap
-            0.30 - 0.05 * (1 - t),            # _op_move
-            0.13 + 0.05 * (1 - t),            # _op_variant
-            0.14 if has_pairs else 0.0,        # _op_change_rep: only with sym pairs
+        has_island = self._inner_root is not None
+        has_pairs  = any(
+            self._partner.get(bid) is not None and not self._is_self_sym.get(bid, False)
+            for bid in self._partner
+        )
+
+        ops:     list[Callable[[], Callable[[], None]]] = [self._op_variant, self._op_swap_outer, self._op_move_outer]
+        weights: list[float] = [
+            0.15 + 0.05 * (1 - t),
+            0.30 - 0.07 * (1 - t),
+            0.30 - 0.07 * (1 - t),
         ]
+        if has_island:
+            ops     += [self._op_swap_inner, self._op_move_inner]
+            weights += [0.10 + 0.05 * (1 - t), 0.10 + 0.05 * (1 - t)]
+        if has_pairs:
+            ops.append(self._op_change_rep)
+            weights.append(0.05)
+
         r = random.random() * sum(weights)
         cumulative = 0.0
-        ops = [self._op_rotate, self._op_swap, self._op_move, self._op_variant,
-               self._op_change_rep]
         chosen = ops[-1]
         for op, w in zip(ops, weights):
             cumulative += w
@@ -577,47 +660,75 @@ class BStarTopology(TopologyBase, SAMixin, GAMixin):
                 break
         return chosen()
 
-    def _op_rotate(self) -> Callable[[], None]:
-        """Flip left and right children of a random node (structural perturbation)."""
-        node = random.choice(self._nodes)
-        old_l, old_r = node.left, node.right
-        node.left, node.right = old_r, old_l
+    def _op_variant(self) -> Callable[[], None]:
+        """Change the active variant of a random block — free or representative.
+        Rotation is represented as a separate variant entry — no dedicated
+        rotate operator is needed (Chang 2000 Op1)."""
+        candidates = [n for n in self._nodes if not n.is_hierarchy] + self._inner_nodes
+        if not candidates:
+            return lambda: None
+        node = random.choice(candidates)
+        block    = self._blocks.get(node.block_id, {})
+        variants = block.get("variants", [])
+        if len(variants) <= 1:
+            return lambda: None
+        old_vidx = node.variant_idx
+        new_vidx = random.choice([i for i in range(len(variants)) if i != old_vidx])
+        node.variant_idx = new_vidx
         def undo() -> None:
-            node.left, node.right = old_l, old_r
+            node.variant_idx = old_vidx
         return undo
 
-    def _op_swap(self) -> Callable[[], None]:
-        """
-        Exchange block assignment (block_id, variant_idx) of two random nodes.
-        Clamps variant_idx to the destination block's variant count to prevent
-        out-of-range access when blocks have different numbers of variants.
-        Self-symmetric nodes are excluded: swapping them off the rightmost
-        branch would violate Property 1 (ASF-B*-tree axis constraint).
-        """
-        swappable = [n for n in self._nodes
-                     if not self._is_self_sym.get(n.block_id, False)]
-        if len(swappable) < 2:
-            return lambda: None
-        a, b = random.sample(swappable, 2)
-        old_a_bid,  old_a_vidx = a.block_id, a.variant_idx
-        old_b_bid,  old_b_vidx = b.block_id, b.variant_idx
-
-        n_vars_b = len(self._blocks.get(old_b_bid, {}).get("variants", [1]))
-        n_vars_a = len(self._blocks.get(old_a_bid, {}).get("variants", [1]))
-
-        a.block_id    = old_b_bid
-        a.variant_idx = min(old_b_vidx, max(0, n_vars_b - 1))
-        b.block_id    = old_a_bid
-        b.variant_idx = min(old_a_vidx, max(0, n_vars_a - 1))
-
+    @staticmethod
+    def _swap_content(a: _Node, b: _Node, blocks: dict) -> Callable[[], None]:
+        """Exchange (block_id, variant_idx) between two node objects,
+        clamping variant_idx to the destination's variant count."""
+        old_a_bid, old_a_vidx = a.block_id, a.variant_idx
+        old_b_bid, old_b_vidx = b.block_id, b.variant_idx
+        n_vars_b = len(blocks.get(old_b_bid, {}).get("variants", [1]))
+        n_vars_a = len(blocks.get(old_a_bid, {}).get("variants", [1]))
+        a.block_id, a.variant_idx = old_b_bid, min(old_b_vidx, max(0, n_vars_b - 1))
+        b.block_id, b.variant_idx = old_a_bid, min(old_a_vidx, max(0, n_vars_a - 1))
         def undo() -> None:
             a.block_id, a.variant_idx = old_a_bid, old_a_vidx
             b.block_id, b.variant_idx = old_b_bid, old_b_vidx
         return undo
 
-    def _op_move(self) -> Callable[[], None]:
+    def _op_swap_outer(self) -> Callable[[], None]:
+        """Exchange block assignment of two free (non-hierarchy) outer nodes."""
+        swappable = [n for n in self._nodes if not n.is_hierarchy]
+        if len(swappable) < 2:
+            return lambda: None
+        a, b = random.sample(swappable, 2)
+        return self._swap_content(a, b, self._blocks)
+
+    def _op_swap_inner(self) -> Callable[[], None]:
+        """Exchange two pair representatives freely (Lin 2009 §V-B Case 1),
+        or reorder two self-symmetric representatives along the spine
+        (Case 2) — never mix the two pools, which would move a self-sym
+        node off the rightmost branch or a pair rep onto it."""
+        ss  = [n for n in self._inner_nodes if self._is_self_sym.get(n.block_id, False)]
+        reg = [n for n in self._inner_nodes if not self._is_self_sym.get(n.block_id, False)]
+        pools = [p for p in (ss, reg) if len(p) >= 2]
+        if not pools:
+            return lambda: None
+        pool = random.choice(pools)
+        a, b = random.sample(pool, 2)
+        return self._swap_content(a, b, self._blocks)
+
+    def _move_node(
+        self,
+        n: _Node,
+        pool: list[_Node],
+        forbid_right: Callable[[_Node], bool] | None = None,
+    ) -> Callable[[], None]:
         """
-        Detach a random non-root node and re-insert it via push-down (paper Op3).
+        Detach node `n` and re-insert it via push-down at a random target in
+        `pool` (paper Op2/Op3-move). Shared by the outer and inner trees;
+        `forbid_right` lets the inner tree veto inserting `n` as a target's
+        right child when that would splice a non-spine node between two
+        self-symmetric representatives (breaking Property 1) — see the
+        module docstring and plan §5.3.
 
         Detach cases:
           A. Leaf             → clean removal.
@@ -625,28 +736,13 @@ class BStarTopology(TopologyBase, SAMixin, GAMixin):
           C. Two children L,R → promote L to n's slot; re-insert R via push-down
                                 on a node outside R's subtree (prevents cycles).
 
-        Insert: push-down at a random target node (any node except n itself).
-        Push-down: n becomes target's child; target's old child becomes n's child.
-
         All mutations are preceded by a save; undo replays in reverse order.
         Because the first (chronological) save for any node captures the true
-        original state, reversed replay always restores correctly even if a node
-        is saved more than once.
+        original state, reversed replay always restores correctly even if a
+        node is saved more than once.
         """
-        # Exclude orphaned nodes: a node is valid only if its parent still
-        # forward-links back to it.  Stale parent pointers (from prior
-        # Bug-1-style corruption) would cause n_is_left to be evaluated
-        # incorrectly, detaching the wrong child and deepening corruption.
-        non_root = [
-            nd for nd in self._nodes
-            if nd.parent is not None
-            and (nd.parent.left is nd or nd.parent.right is nd)
-            and not self._is_self_sym.get(nd.block_id, False)  # Property 1
-        ]
-        if not non_root:
-            return lambda: None
+        forbid_right = forbid_right or (lambda _target: False)
 
-        n         = random.choice(non_root)
         n_parent  = n.parent
         n_is_left = (n_parent.left is n)
         n_left    = n.left
@@ -658,11 +754,11 @@ class BStarTopology(TopologyBase, SAMixin, GAMixin):
             saved.append((node, node.left, node.right, node.parent))
 
         def _push_down(target: _Node, node: _Node) -> None:
-            """
-            Insert node as a child of target, pushing target's existing child
-            down as node's child.  node must be a leaf before calling.
-            """
+            """Insert node as a child of target, pushing target's existing
+            child down as node's child. node must be a leaf before calling."""
             go_left = random.random() < 0.5
+            if forbid_right(target):
+                go_left = True
             _save(target)
             _save(node)
             if go_left:
@@ -687,20 +783,16 @@ class BStarTopology(TopologyBase, SAMixin, GAMixin):
                 nd.left, nd.right, nd.parent = ol, or_, op
             return lambda: None
 
-        # --- Save initial states ---
         _save(n)
         _save(n_parent)
 
-        # --- Detach n from the tree ---
         if n_left is None and n_right is None:
-            # Case A: leaf — clean removal
             if n_is_left:
                 n_parent.left  = None
             else:
                 n_parent.right = None
 
         elif n_right is None:
-            # Case B: left child only
             _save(n_left)
             if n_is_left:
                 n_parent.left  = n_left
@@ -709,7 +801,6 @@ class BStarTopology(TopologyBase, SAMixin, GAMixin):
             n_left.parent = n_parent
 
         elif n_left is None:
-            # Case B: right child only
             _save(n_right)
             if n_is_left:
                 n_parent.left  = n_right
@@ -718,12 +809,6 @@ class BStarTopology(TopologyBase, SAMixin, GAMixin):
             n_right.parent = n_parent
 
         else:
-            # Case C: two children — promote left, re-attach right subtree.
-            # n_right is a subtree root with its own children; _push_down must
-            # NOT be used here because it does `node.left = old_child`, which
-            # overwrites one of n_right's existing children and orphans it.
-            # Instead, find a node outside n_right's subtree that has an empty
-            # slot and attach n_right there, preserving its subtree intact.
             _save(n_left)
             if n_is_left:
                 n_parent.left  = n_left
@@ -733,7 +818,7 @@ class BStarTopology(TopologyBase, SAMixin, GAMixin):
 
             r_ids   = {id(nd) for nd in _bfs_subtree(n_right)}
             valid_r = [
-                nd for nd in self._nodes
+                nd for nd in pool
                 if nd is not n
                 and id(nd) not in r_ids
                 and (nd.left is None or nd.right is None)
@@ -749,13 +834,11 @@ class BStarTopology(TopologyBase, SAMixin, GAMixin):
                 ins.right = n_right
             n_right.parent = ins
 
-        # n is now detached — clear all its links before re-inserting
         n.left   = None
         n.right  = None
         n.parent = None
 
-        # --- Re-insert n via push-down ---
-        valid = [nd for nd in self._nodes if nd is not n]
+        valid = [nd for nd in pool if nd is not n]
         if not valid:
             return _abort()
 
@@ -771,39 +854,46 @@ class BStarTopology(TopologyBase, SAMixin, GAMixin):
 
         return undo
 
-    def _op_variant(self) -> Callable[[], None]:
-        """
-        Change the active variant of a random block.
-        Rotation is represented as a separate variant entry — no special
-        rotate operator is needed.
-        Partner blocks (mirrors) derive their variant from their representative's
-        node in _apply_symmetry, so no extra propagation is needed here.
-        """
-        node = random.choice(self._nodes)
-        block    = self._blocks.get(node.block_id, {})
-        variants = block.get("variants", [])
-        if len(variants) <= 1:
+    def _op_move_outer(self) -> Callable[[], None]:
+        """Move a random outer node (free block, or the whole island as one
+        atomic unit — down-weighted per Lin 2009 §V-A)."""
+        non_root = [
+            nd for nd in self._nodes
+            if nd.parent is not None and (nd.parent.left is nd or nd.parent.right is nd)
+        ]
+        if not non_root:
             return lambda: None
-        old_vidx = node.variant_idx
-        new_vidx = random.choice(
-            [i for i in range(len(variants)) if i != old_vidx]
-        )
-        node.variant_idx = new_vidx
-        def undo() -> None:
-            node.variant_idx = old_vidx
-        return undo
+        weights = [_HIERARCHY_MOVE_WEIGHT if nd.is_hierarchy else 1.0 for nd in non_root]
+        n = random.choices(non_root, weights=weights, k=1)[0]
+        return self._move_node(n, self._nodes)
+
+    def _op_move_inner(self) -> Callable[[], None]:
+        """Move a random pair-representative node within the island.
+        Self-symmetric reps are excluded (their only legal reordering is the
+        spine-restricted swap, _op_swap_inner — see module docstring)."""
+        non_root = [
+            nd for nd in self._inner_nodes
+            if nd.parent is not None and (nd.parent.left is nd or nd.parent.right is nd)
+            and not self._is_self_sym.get(nd.block_id, False)
+        ]
+        if not non_root:
+            return lambda: None
+        n = random.choice(non_root)
+
+        def forbid_right(target: _Node) -> bool:
+            # Never splice a node between two self-symmetric spine members.
+            return target.right is not None and self._is_self_sym.get(target.right.block_id, False)
+
+        return self._move_node(n, self._inner_nodes, forbid_right)
 
     def _op_change_rep(self) -> Callable[[], None]:
-        """Op4 from the ASF-B*-tree paper: swap which side of a symmetric pair
-        is the representative (the block stored in the tree node).
-
-        The tree structure is unchanged; only the block_id in one randomly
+        """Op4 from the ASF-B*-tree paper: swap which side of a symmetric
+        pair is the representative (the block stored in the inner tree
+        node). Structure is unchanged; only the block_id in one randomly
         chosen pair-node flips from one side of the pair to the other.
-        This can improve wire length without affecting island area.
-        Has no effect when there are no symmetric pairs (returns no-op).
-        """
+        Excluded for self-symmetric nodes (no "other side" to swap to)."""
         pair_nodes = [
-            n for n in self._nodes
+            n for n in self._inner_nodes
             if self._partner.get(n.block_id) is not None
             and not self._is_self_sym.get(n.block_id, False)
         ]
@@ -812,56 +902,81 @@ class BStarTopology(TopologyBase, SAMixin, GAMixin):
 
         node    = random.choice(pair_nodes)
         old_bid = node.block_id
-        new_bid = self._partner[old_bid]   # the current mirror becomes the rep
+        new_bid = self._partner[old_bid]
 
-        node.block_id         = new_bid
-        self._is_rep[old_bid] = False
-        self._is_rep[new_bid] = True
+        node.block_id          = new_bid
+        self._is_rep[old_bid]  = False
+        self._is_rep[new_bid]  = True
 
         def undo() -> None:
-            node.block_id         = old_bid
-            self._is_rep[old_bid] = True
-            self._is_rep[new_bid] = False
+            node.block_id          = old_bid
+            self._is_rep[old_bid]  = True
+            self._is_rep[new_bid]  = False
         return undo
 
     # ------------------------------------------------------------------
     # GAMixin
     # ------------------------------------------------------------------
+    # BStarTopology's GA path currently has no caller in this project (no
+    # GeneticAlgorithmOptimizer exists) — kept minimal and correct rather
+    # than elaborated, per YAGNI: crossover reuses the same DFS-encode +
+    # OX-crossover + reconstruct machinery independently for the outer and
+    # inner trees, no new algorithm.
 
     def mutate(self) -> Callable[[], None]:
         return self.perturb(temperature=0.5)
 
     def crossover(self, other: "BStarTopology") -> "BStarTopology":
-        """
-        B*-tree crossover via DFS+binary encoding.
-        1. Encode both trees as (permutation, direction_vector).
-        2. Apply OX crossover to permutations, single-point to direction vectors.
-        3. Reconstruct a new valid tree.
-        """
-        perm_a, dirs_a = self._encode()
-        perm_b, dirs_b = other._encode()
-
-        offspring_perm = _ox_crossover(perm_a, perm_b)
-        cut = random.randint(1, max(1, len(dirs_a) - 1))
-        offspring_dirs = dirs_a[:cut] + dirs_b[cut:]
+        outer_perm_a, outer_dirs_a = self._encode_tree(self._root)
+        outer_perm_b, outer_dirs_b = other._encode_tree(other._root)
+        inner_perm_a, inner_dirs_a = self._encode_tree(self._inner_root)
+        inner_perm_b, inner_dirs_b = other._encode_tree(other._inner_root)
 
         child = BStarTopology(self._blocks, self._nets, self._sym_groups)
-        child._nodes = [_Node(bid, self._default_variant_idx(bid)) for bid in offspring_perm]
-        child._root  = child._nodes[0]
-        child._root.parent = None
-        child._reconstruct_from_dirs(offspring_dirs)
+        child._is_rep = dict(self._is_rep)
+
+        if outer_perm_a:
+            offspring_perm = _ox_crossover(outer_perm_a, outer_perm_b)
+            cut = random.randint(1, max(1, len(outer_dirs_a) - 1))
+            offspring_dirs = outer_dirs_a[:cut] + outer_dirs_b[cut:]
+            child._nodes = [self._make_outer_node(bid) for bid in offspring_perm]
+            child._root  = child._nodes[0]
+            child._root.parent = None
+            self._reconstruct_from_dirs(child._nodes, offspring_dirs)
+        else:
+            child._nodes, child._root = [], None
+
+        if inner_perm_a:
+            offspring_perm = _ox_crossover(inner_perm_a, inner_perm_b)
+            cut = random.randint(1, max(1, len(inner_dirs_a) - 1))
+            offspring_dirs = inner_dirs_a[:cut] + inner_dirs_b[cut:]
+            child._inner_nodes = [_Node(bid, self._default_variant_idx(bid)) for bid in offspring_perm]
+            child._inner_root  = child._inner_nodes[0]
+            child._inner_root.parent = None
+            self._reconstruct_from_dirs(child._inner_nodes, offspring_dirs)
+        else:
+            child._inner_nodes, child._inner_root = [], None
+
         return child
 
     def random_init(self) -> None:
         self.seed(self._blocks, mode="random")
 
+    def _make_outer_node(self, bid: str) -> _Node:
+        if bid == self._ISLAND_ID:
+            n = _Node(bid, 0)
+            n.is_hierarchy = True
+            return n
+        return _Node(bid, self._default_variant_idx(bid))
+
     # ------------------------------------------------------------------
     # Encoding helpers for GA crossover
     # ------------------------------------------------------------------
 
-    def _encode(self) -> tuple[list[str], list[int]]:
+    @staticmethod
+    def _encode_tree(root: _Node | None) -> tuple[list[str], list[int]]:
         """DFS pre-order → (block_id permutation, x/y direction bits)."""
-        if self._root is None:
+        if root is None:
             return [], []
         perm: list[str] = []
         dirs: list[int] = []   # 0 = x-child (left), 1 = y-child (right)
@@ -875,15 +990,15 @@ class BStarTopology(TopologyBase, SAMixin, GAMixin):
                 dirs.append(1)
                 _dfs(node.right)
 
-        _dfs(self._root)
+        _dfs(root)
         return perm, dirs
 
-    def _reconstruct_from_dirs(self, dirs: list[int]) -> None:
+    @staticmethod
+    def _reconstruct_from_dirs(nodes: list[_Node], dirs: list[int]) -> None:
         """
-        Attach self._nodes[1:] as children in order, using dirs as preferred slot.
+        Attach nodes[1:] as children in order, using dirs as preferred slot.
         Applies four-level slot-conflict fallback.
         """
-        nodes = self._nodes
         if len(nodes) <= 1:
             return
 
@@ -946,13 +1061,15 @@ class BStarTopology(TopologyBase, SAMixin, GAMixin):
                         queue.append(curr.right)
 
     def get_variant_map(self) -> dict[str, int]:
-        result = {node.block_id: node.variant_idx for node in self._nodes}
-        # Mirror blocks have no tree node; they inherit their rep's variant so that
-        # _compute_placed_blocks renders them with the correct (matching) dimensions.
-        for node in self._nodes:
+        result: dict[str, int] = {}
+        for node in self._inner_nodes:
+            result[node.block_id] = node.variant_idx
             partner = self._partner.get(node.block_id)
             if partner and partner != node.block_id and partner not in result:
                 result[partner] = node.variant_idx
+        for node in self._nodes:
+            if not node.is_hierarchy:
+                result[node.block_id] = node.variant_idx
         return result
 
     # ------------------------------------------------------------------
