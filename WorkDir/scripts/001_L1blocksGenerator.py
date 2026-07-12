@@ -594,9 +594,7 @@ def wmi_generate_random_blocks(
     W_step   = gen_p["width_range"]["step"]
     M_min    = gen_p["multiplier_range"]["min"]
     M_max    = gen_p["multiplier_range"]["max"]
-    NF_min   = gen_p["num_fingers_range"]["min"]
-    NF_max   = gen_p["num_fingers_range"]["max"]
-    ar_cfg   = gen_p["aspect_ratio"]
+    ar_cfg   = gen_p["mosfet_variant_aspect_ratio"]
     design_c = config["design_constraints"]
     rot_cfg  = config.get("rotation_variants")
     pins_min = config["netlist"]["pins_per_block_min"]
@@ -643,12 +641,9 @@ def wmi_generate_random_blocks(
                     L  = snap_to_step(random.uniform(dc["L"]["min"], dc["L"]["max"]), L_step)
                     W  = snap_to_step(random.uniform(dc["W"]["min"], dc["W"]["max"]), W_step)
                     M  = random.randrange(M_min, M_max + 1, 2)
-                    NF = random.randint(NF_min, NF_max)
-                    min_ar = round(random.uniform(ar_cfg["min_aspect_min"], ar_cfg["min_aspect_max"]), 2)
-                    max_ar = round(random.uniform(ar_cfg["max_aspect_min"], ar_cfg["max_aspect_max"]), 2)
 
-                    tb = wmi_generate_transistor_block(
-                        tech_file, W, L, M, NF, min_ar, max_ar, device_type, num_pins
+                    tb = wmi_search_transistor_shape(
+                        tech_file, W, L, M, ar_cfg["min"], ar_cfg["max"], device_type, num_pins
                     )
 
                     if tb["variants"]:
