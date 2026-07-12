@@ -338,6 +338,8 @@ class SimulationWindow(QMainWindow):
             ("Contour placer",       "contour"),
             ("Spring / FDGD (paper)", "spring"),
             ("SPSA",                  "spsa"),
+            ("PSO",                   "pso"),
+            ("B* tree",               "bstar"),
         ]:
             self._warmup_strategy_combo.addItem(label, userData=key)
         form.addRow("Strategy:", self._warmup_strategy_combo)

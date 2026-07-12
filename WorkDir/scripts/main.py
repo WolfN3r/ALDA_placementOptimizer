@@ -75,7 +75,7 @@ if __name__ == "__main__":
     parser.add_argument("--random-sizes", dest="random_sizes", action="store_true", default=False,
                         help="With --netlist: randomize device sizes instead of using real netlist values (default: use real sizes)")
     parser.add_argument("--warmup-strategy", dest="warmup_strategy", default="",
-                        choices=["", "corp", "contour", "spring", "spsa"],
+                        choices=["", "corp", "contour", "spring", "spsa", "pso", "bstar"],
                         help="ILP warm-start strategy (default: use 101_placementOptimizer.py constant)")
     parser.add_argument("--warmup-n-runs", dest="warmup_n_runs", type=int, default=-1,
                         help="Number of parallel warmup runs (-1 → use 101_placementOptimizer.py constant)")
