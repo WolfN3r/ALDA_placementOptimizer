@@ -20,6 +20,7 @@ from __future__ import annotations
 import dataclasses
 import math
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -34,6 +35,12 @@ from cost_evaluator import _VDD_NET_IDS, _VSS_NET_IDS
 # =============================================================================
 DEBUG            = False
 ILP_LARGE_N_WARN = 20   # log warning when n_blocks exceeds this
+
+# Cost tracing: MIPSOL only fires when Gurobi finds a genuinely new incumbent,
+# which can be sparse (few distinct incumbents on an easy/small problem). To
+# get a denser time-resolved curve, the callback also re-logs the last known
+# incumbent's breakdown at every periodic MIP/MIPNODE poll, at most this often.
+ILP_TRACE_MIN_SAMPLE_INTERVAL_SEC = 0.002
 
 
 @dataclasses.dataclass
@@ -221,24 +228,73 @@ def _corp_row_pack(
     bids:            list[str],
     blocks:          dict,
     corp_centroids:  dict[str, tuple[float, float]],
+    target_ar:       float = 1.0,
 ) -> dict[str, tuple[float, float]]:
     """
-    Convert CORP spring centroids to a DRC-clean feasible layout.
-    Sorts blocks by x-centroid (connectivity-aware ordering), then
-    row-packs left-to-right with correct DRC spacing between each pair.
-    Returns bottom-left corner positions. Always overlap-free.
+    Convert CORP spring centroids to a DRC-clean feasible 2D layout.
+
+    The CORP spring simulation already produces connectivity-aware x AND y
+    centroids — bucket blocks into rows by y-centroid (preserving the
+    spring's spatial layout instead of discarding it), sort each row by
+    x-centroid, and row-pack left-to-right with correct DRC spacing.  Rows
+    are then stacked bottom-to-top with correct DRC spacing between them.
+    The number of rows is chosen to roughly match target_ar so the warm
+    start is already close to a square/target-AR bounding box instead of
+    one wide single row. Returns bottom-left corner positions. Always
+    overlap-free.
     """
-    sorted_bids = sorted(bids, key=lambda b: corp_centroids.get(b, (0.0, 0.0))[0])
+    n = len(bids)
+    if n == 0:
+        return {}
+
+    bw = {b: _variant_dims(blocks[b])[0][0] for b in bids}
+    bh = {b: _variant_dims(blocks[b])[0][1] for b in bids}
+    avg_w = sum(bw.values()) / n
+    avg_h = sum(bh.values()) / n
+
+    # Choose row count so rows*cols ~= n and (cols*avg_w)/(rows*avg_h) ~= target_ar.
+    n_rows = round(math.sqrt(n * avg_h / max(avg_w * max(target_ar, 1e-6), 1e-9)))
+    n_rows = max(1, min(n, n_rows))
+
+    y_sorted = sorted(bids, key=lambda b: corp_centroids.get(b, (0.0, 0.0))[1])
+    rows: list[list[str]] = []
+    base = n // n_rows
+    extra = n % n_rows
+    idx = 0
+    for r in range(n_rows):
+        size = base + (1 if r < extra else 0)
+        rows.append(y_sorted[idx:idx + size])
+        idx += size
+
     positions: dict[str, tuple[float, float]] = {}
-    x_cursor = 0.0
-    prev: str | None = None
-    for bid in sorted_bids:
-        w = _variant_dims(blocks[bid])[0][0]
-        if prev is not None:
-            x_cursor += compute_block_spacing(blocks[prev], blocks[bid]).x_spacing
-        positions[bid] = (round(x_cursor, 6), 0.0)
-        x_cursor += w
-        prev = bid
+    row_heights: list[float] = []
+    for row_bids in rows:
+        row_bids.sort(key=lambda b: corp_centroids.get(b, (0.0, 0.0))[0])
+        x_cursor = 0.0
+        prev: str | None = None
+        row_h = 0.0
+        for bid in row_bids:
+            if prev is not None:
+                x_cursor += compute_block_spacing(blocks[prev], blocks[bid]).x_spacing
+            positions[bid] = (round(x_cursor, 6), 0.0)  # y fixed up below
+            x_cursor += bw[bid]
+            row_h = max(row_h, bh[bid])
+            prev = bid
+        row_heights.append(row_h)
+
+    y_cursor = 0.0
+    for row_idx, row_bids in enumerate(rows):
+        if row_idx > 0:
+            prev_row = rows[row_idx - 1]
+            gap = max(
+                (compute_block_spacing(blocks[a], blocks[b]).y_spacing
+                 for a in prev_row for b in row_bids),
+                default=0.0,
+            )
+            y_cursor += row_heights[row_idx - 1] + gap
+        for bid in row_bids:
+            x, _ = positions[bid]
+            positions[bid] = (x, round(y_cursor, 6))
     return positions
 
 
@@ -256,6 +312,8 @@ def _solve_mip_gurobi(
     hint_positions:   dict[str, tuple[float, float]] | None = None,
     use_power_rails:  bool = True,
     variant_map:      dict[str, int] | None = None,
+    evaluator:        Any = None,
+    observer:         Any = None,
 ) -> tuple[dict[str, tuple[float, float]], dict[str, int], str]:
     """
     Build and solve the analog placement MILP with gurobipy.
@@ -267,6 +325,12 @@ def _solve_mip_gurobi(
     Returns (positions, variant_map, termination) where termination is
     "optimal", "feasible", or "infeasible".
     Falls back to warm_positions when the solver finds no feasible point.
+
+    evaluator/observer (both optional): when observer has a `record` method
+    (lib/cost_trace.TraceObserver), a Gurobi MIPSOL callback is registered
+    that reconstructs positions from each new incumbent and re-scores them
+    with `evaluator.evaluate_breakdown()` — never Gurobi's own objective
+    value, which is a different linearized formula (no AR term).
     """
     try:
         import gurobipy as gp
@@ -573,7 +637,48 @@ def _solve_mip_gurobi(
         y_lo[ei].Start = min(cys);  y_hi[ei].Start = max(cys)
 
     logger.debug("ILP: model has %d vars, %d constrs", m.NumVars, m.NumConstrs)
-    m.optimize()
+
+    if observer is not None and hasattr(observer, "record") and evaluator is not None:
+        _sample_count    = [0]
+        _last_breakdown  = [None]
+        _last_sample_t   = [0.0]
+
+        def _mipsol_callback(model, where) -> None:
+            if where == GRB.Callback.MIPSOL:
+                # New incumbent — the only place cbGetSolution() is valid.
+                try:
+                    cb_positions: dict[str, tuple[float, float]] = {}
+                    cb_variant_map: dict[str, int] = {}
+                    for bid in bids:
+                        xv = model.cbGetSolution(x[bid])
+                        yv = model.cbGetSolution(y[bid])
+                        cb_positions[bid] = (round(xv, 6), round(yv, 6))
+                        if s[bid]:
+                            vals = model.cbGetSolution(s[bid])
+                            cb_variant_map[bid] = int(max(range(len(vals)), key=lambda k: vals[k]))
+                        else:
+                            cb_variant_map[bid] = 0
+                    breakdown = evaluator.evaluate_breakdown(cb_positions, cb_variant_map)
+                    _last_breakdown[0] = breakdown
+                    observer.record(_sample_count[0], breakdown)
+                    _sample_count[0]  += 1
+                    _last_sample_t[0]  = time.perf_counter()
+                except Exception as exc:
+                    logger.debug("ILP trace callback skipped one incumbent (%s)", exc)
+            elif where in (GRB.Callback.MIP, GRB.Callback.MIPNODE) and _last_breakdown[0] is not None:
+                # Periodic poll — re-log the last known incumbent's breakdown
+                # (no new cbGetSolution() call; MIPSOL is found between polls
+                # for genuinely improving solutions) so the curve has a dense
+                # time resolution even when incumbents are found rarely.
+                now = time.perf_counter()
+                if now - _last_sample_t[0] >= ILP_TRACE_MIN_SAMPLE_INTERVAL_SEC:
+                    observer.record(_sample_count[0], _last_breakdown[0])
+                    _sample_count[0] += 1
+                    _last_sample_t[0] = now
+
+        m.optimize(_mipsol_callback)
+    else:
+        m.optimize()
 
     status = m.Status
     logger.info(
@@ -620,6 +725,8 @@ def _solve_mip(
     hint_positions:   dict[str, tuple[float, float]] | None = None,
     use_power_rails:  bool = True,
     variant_map:      dict[str, int] | None = None,
+    evaluator:        Any = None,
+    observer:         Any = None,
 ) -> tuple[dict[str, tuple[float, float]], dict[str, int], str]:
     """Dispatch to _solve_mip_gurobi with the given (or default) parameters."""
     return _solve_mip_gurobi(
@@ -629,6 +736,8 @@ def _solve_mip(
         hint_positions=hint_positions,
         use_power_rails=use_power_rails,
         variant_map=variant_map or {},
+        evaluator=evaluator,
+        observer=observer,
     )
 
 
@@ -651,6 +760,7 @@ class ILPOptimizer:
     ) -> None:
         self._topo                   = topology
         self._evaluator              = evaluator
+        self._observer               = observer
         self._gurobi_params          = gurobi_params
         self._initial_warm_positions = initial_warm_positions
         self._initial_variant_map    = initial_variant_map or {}
@@ -703,7 +813,7 @@ class ILPOptimizer:
                 corp_centroids = run_corp_spring(blocks, nets, seed=0)
                 if len(corp_centroids) == len(bids):
                     # Sort blocks by x-centroid → row-pack → DRC-clean positions.
-                    warm_positions = _corp_row_pack(bids, blocks, corp_centroids)
+                    warm_positions = _corp_row_pack(bids, blocks, corp_centroids, target_ar=target_ar)
                     # Convert centroids to bottom-left corners for r-hint computation.
                     # run_corp_spring returns (cx, cy); _r_hints() expects bottom-left (x, y).
                     # Off-by-w/2 would occasionally flip the direction hint.
@@ -722,11 +832,16 @@ class ILPOptimizer:
             hint_positions=corp_hints,
             use_power_rails=getattr(self._evaluator, "_use_power_rails", True),
             variant_map=self._initial_variant_map or None,
+            evaluator=self._evaluator,
+            observer=self._observer,
         )
 
         self._topo.set_solution(positions, variant_map)
         cost = self._evaluator.evaluate(positions, variant_map)
         best_state = self._topo.copy_state()
+
+        if self._observer is not None and hasattr(self._observer, "flush"):
+            self._observer.flush()
 
         logger.info(
             "ILP finished: termination=%s  cost=%.4f  n_blocks=%d",

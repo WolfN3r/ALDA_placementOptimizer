@@ -40,6 +40,7 @@ class WarmupResult:
     seed:        int
     is_selected: bool = False
     variant_map: dict = dataclasses.field(default_factory=dict)  # {bid: variant_idx}
+    trace_samples: list = dataclasses.field(default_factory=list)  # cost-over-time samples, empty unless trace=True
 
 
 @dataclasses.dataclass
@@ -71,12 +72,25 @@ class WarmupStrategy(ABC):
         blocks: dict,
         nets:   list,
         seed:   int,
+        t0:     float | None = None,
+        trace:  bool = False,
+        init_area: float = 1.0,
+        init_wl:   float = 1.0,
     ) -> dict[str, tuple[float, float, float, float]]:
         ...
 
     def get_variant_map(self) -> dict[str, int]:
         """Return {bid: variant_idx} chosen during run_single(). Default: empty (use variant 0)."""
         return {}
+
+    def get_trace_samples(self) -> list[dict]:
+        """Cost-over-time samples collected during run_single() when trace=True.
+
+        Default: none. Strategies with a real iterative loop (bstar, pso,
+        spring, contour) override this; corp/spsa are single-shot/out of
+        scope for per-step tracing (see plan v1 scoping).
+        """
+        return []
 
 
 # =============================================================================
@@ -97,7 +111,14 @@ class CORPWarmup(WarmupStrategy):
         blocks: dict,
         nets:   list,
         seed:   int,
+        t0:     float | None = None,
+        trace:  bool = False,
+        init_area: float = 1.0,
+        init_wl:   float = 1.0,
     ) -> dict[str, tuple[float, float, float, float]]:
+        # t0/trace/init_area/init_wl unused: CORP is a single-shot spring-embed
+        # + row-pack with no iterative loop to sample (v1 scope, see
+        # get_trace_samples docstring).
         from corp_placer   import run_corp_spring
         from ilp_optimizer import _corp_row_pack, _variant_dims
 
@@ -142,7 +163,13 @@ class SPSAWarmup(WarmupStrategy):
         blocks: dict,
         nets:   list,
         seed:   int,
+        t0:     float | None = None,
+        trace:  bool = False,
+        init_area: float = 1.0,
+        init_wl:   float = 1.0,
     ) -> dict[str, tuple[float, float, float, float]]:
+        # t0/trace/init_area/init_wl unused: SPSA warmup tracing is out of v1
+        # scope (see plan).
         import random
         from seqpair_topology import SequencePairTopology
         from cost_evaluator   import CostEvaluator
@@ -224,12 +251,19 @@ def _worker(
     seed:            int,
     init_area:       float,
     init_wl:         float,
-) -> tuple[dict, float]:
+    t0:              float | None = None,
+    trace:           bool = False,
+) -> tuple[dict, float, dict, list]:
     """
     Executed in a subprocess.  Imports are done inside to keep the pickling
     boundary clean — only JSON-native data crosses between processes.
-    Returns (positions_with_dims, cost) where
+    Returns (positions_with_dims, cost, variant_map, trace_samples) where
         positions_with_dims: {bid: (x_bl, y_bl, w, h)}
+        trace_samples: [] unless trace=True and the strategy supports it.
+
+    t0 (a time.perf_counter() value from the parent process) is safe to
+    compare against this worker's own perf_counter() reads: both Linux and
+    macOS back it with a system-wide monotonic clock, not a per-process one.
     """
     import sys
     from pathlib import Path
@@ -238,8 +272,12 @@ def _worker(
     from cost_evaluator import CostEvaluator
 
     strategy = strategy_cls(**strategy_kwargs)
-    positions_with_dims = strategy.run_single(blocks, nets, seed)
+    positions_with_dims = strategy.run_single(
+        blocks, nets, seed, t0=t0, trace=trace,
+        init_area=init_area, init_wl=init_wl,
+    )
     variant_map         = strategy.get_variant_map()
+    trace_samples       = strategy.get_trace_samples() if trace else []
 
     # Strip to (x, y) for CostEvaluator — it expects 2-tuples
     positions_2d = {bid: (v[0], v[1]) for bid, v in positions_with_dims.items()}
@@ -250,7 +288,7 @@ def _worker(
         max(init_wl, 0.0),
     )
     cost = evaluator.evaluate(positions_2d, variant_map)
-    return positions_with_dims, cost, variant_map
+    return positions_with_dims, cost, variant_map, trace_samples
 
 
 # =============================================================================
@@ -292,6 +330,8 @@ class WarmupManager:
         nets:      list,
         init_area: float,
         init_wl:   float,
+        t0:        float | None = None,
+        trace:     bool = False,
     ) -> tuple[dict[str, tuple[float, float]], list[WarmupResult], dict[str, int]]:
         """
         Run N warmup sessions in parallel.
@@ -300,6 +340,10 @@ class WarmupManager:
         all_results is sorted ascending by cost; the selected entry has is_selected=True.
         selected_variant_map: {bid: variant_idx} from the selected run (empty for strategies
         that do not expose variant choices).
+
+        t0/trace: when trace=True, t0 must be the same time.perf_counter()
+        reference the caller's pipeline run started with, so warmup samples
+        land on the same shared clock as whatever optimizer runs next.
         """
         cfg             = self._cfg
         seeds           = [cfg.master_seed * 10_000 + i for i in range(cfg.n_runs)]
@@ -317,7 +361,7 @@ class WarmupManager:
             cfg.strategy, cfg.n_runs, cfg.master_seed,
         )
 
-        raw: list[tuple[int, dict, float, int, dict]] = []  # (run_idx, positions, cost, seed, variant_map)
+        raw: list[tuple[int, dict, float, int, dict, list]] = []  # (run_idx, positions, cost, seed, variant_map, trace_samples)
 
         with ProcessPoolExecutor(max_workers=cfg.n_runs) as pool:
             futures = {
@@ -330,14 +374,16 @@ class WarmupManager:
                     seed,
                     init_area,
                     init_wl,
+                    t0,
+                    trace,
                 ): (i, seed)
                 for i, seed in enumerate(seeds)
             }
             for future in as_completed(futures):
                 run_idx, seed = futures[future]
                 try:
-                    positions_with_dims, cost, variant_map = future.result(timeout=120.0)
-                    raw.append((run_idx, positions_with_dims, cost, seed, variant_map))
+                    positions_with_dims, cost, variant_map, trace_samples = future.result(timeout=120.0)
+                    raw.append((run_idx, positions_with_dims, cost, seed, variant_map, trace_samples))
                     logger.debug(
                         "Warmup run %d (seed=%d) done: cost=%.4f", run_idx, seed, cost
                     )
@@ -353,14 +399,15 @@ class WarmupManager:
 
         results = [
             WarmupResult(
-                run_index   = idx,
-                positions   = pos,
-                cost        = cost,
-                strategy    = cfg.strategy,
-                seed        = seed,
-                variant_map = vm,
+                run_index     = idx,
+                positions     = pos,
+                cost          = cost,
+                strategy      = cfg.strategy,
+                seed          = seed,
+                variant_map   = vm,
+                trace_samples = samples,
             )
-            for idx, pos, cost, seed, vm in raw
+            for idx, pos, cost, seed, vm, samples in raw
         ]
 
         sorted_results = sorted(results, key=lambda r: r.cost)
@@ -383,6 +430,8 @@ class WarmupManager:
         nets:      list,
         init_area: float,
         init_wl:   float,
+        t0:        float | None = None,
+        trace:     bool = False,
     ) -> list[WarmupResult]:
         """
         Run every strategy in ALL_STRATEGY_NAMES (each doing its own n_runs
@@ -397,7 +446,7 @@ class WarmupManager:
             per_strategy_cfg = dataclasses.replace(self._cfg, strategy=name, all_strategies=False)
             try:
                 mgr = WarmupManager(per_strategy_cfg)
-                _, strategy_results, _ = mgr.run(blocks, nets, init_area, init_wl)
+                _, strategy_results, _ = mgr.run(blocks, nets, init_area, init_wl, t0=t0, trace=trace)
                 selected = next(r for r in strategy_results if r.is_selected)
                 results.append(selected)
             except Exception as exc:

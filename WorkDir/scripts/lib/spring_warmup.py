@@ -13,7 +13,9 @@ from __future__ import annotations
 import math
 import random
 import sys
+import time
 from pathlib import Path
+from typing import Callable
 
 sys.path.insert(0, str(Path(__file__).parent))
 from spacing        import compute_block_spacing
@@ -111,6 +113,7 @@ def _run_once(
     canvas:   float,
     seed:     int,
     n_iter:   int,
+    on_step:  Callable[[int, dict[str, tuple[float, float]]], None] | None = None,
 ) -> tuple[dict[str, float], dict[str, float]]:
     """
     One spring-embedding run (first-order integration, no velocity).
@@ -194,6 +197,10 @@ def _run_once(
             if q_mag > max_q:
                 max_q = q_mag
 
+        if on_step is not None:
+            positions = {b: (cx[b] - bw[b] / 2.0, cy[b] - bh[b] / 2.0) for b in bids}
+            on_step(step, positions)
+
         if step > 100 and max_q < CONV_THRESH:
             logger.debug("SpringWarmup: converged at step %d (seed=%d, max_q=%.2e)", step, seed, max_q)
             break
@@ -211,15 +218,23 @@ class SpringWarmup(WarmupStrategy):
 
     def __init__(self) -> None:
         self._variant_map: dict[str, int] = {}
+        self._trace_samples: list[dict] = []
 
     def get_variant_map(self) -> dict[str, int]:
         return self._variant_map
+
+    def get_trace_samples(self) -> list[dict]:
+        return self._trace_samples
 
     def run_single(
         self,
         blocks: dict,
         nets:   list,
         seed:   int,
+        t0:     float | None = None,
+        trace:  bool = False,
+        init_area: float = 1.0,
+        init_wl:   float = 1.0,
     ) -> dict[str, tuple[float, float, float, float]]:
         bids = [b for b in blocks if "error" not in blocks[b]]
         if not bids:
@@ -269,22 +284,47 @@ class SpringWarmup(WarmupStrategy):
         canvas     = math.sqrt(max(total_area, 1.0)) * CANVAS_FACTOR
 
         # --- Step 5: N_RUNS independent simulations; keep best by connectivity cost ---
-        best_cx:   dict[str, float] | None = None
-        best_cy:   dict[str, float] | None = None
-        best_cost  = float("inf")
+        # Tracing (when enabled) records the shared-CostEvaluator breakdown at
+        # every step of every run, but only the winning run's samples are kept
+        # — matching the same "only the selected result's trace survives"
+        # convention used by WarmupManager for its own N-seed selection.
+        # Normalized against the pipeline's real init_area/init_wl so the
+        # traced "cost" field matches the ILP-optimizer samples appended
+        # after this warmup phase — this evaluator only feeds the trace,
+        # never the run-selection criterion below (_connectivity_cost).
+        evaluator = None
+        if trace and t0 is not None:
+            from cost_evaluator import CostEvaluator
+            evaluator = CostEvaluator(blocks, nets, init_area, init_wl)
+
+        best_cx:      dict[str, float] | None = None
+        best_cy:      dict[str, float] | None = None
+        best_cost     = float("inf")
+        best_samples: list[dict] = []
 
         for run_idx in range(N_RUNS):
+            trace_obs = None
+            on_step   = None
+            if evaluator is not None:
+                from cost_trace import TraceObserver
+                trace_obs = TraceObserver("spring_warmup", t0, path="", auto_flush=False)
+
+                def on_step(step: int, positions: dict, _obs=trace_obs) -> None:
+                    _obs.record(step, evaluator.evaluate_breakdown(positions, v_idx))
+
             cx, cy = _run_once(
                 bids, bw, bh, conn, thresh_x, thresh_y,
-                canvas, seed=seed + run_idx, n_iter=N_ITER,
+                canvas, seed=seed + run_idx, n_iter=N_ITER, on_step=on_step,
             )
             cost = _connectivity_cost(cx, cy, conn)
             if cost < best_cost:
                 best_cost = cost
                 best_cx   = dict(cx)
                 best_cy   = dict(cy)
+                best_samples = trace_obs.samples if trace_obs is not None else []
 
         assert best_cx is not None and best_cy is not None
+        self._trace_samples = best_samples
 
         logger.info(
             "SpringWarmup: %d runs  best_cost=%.2f  canvas=%.1f µm  n=%d  connections=%d",

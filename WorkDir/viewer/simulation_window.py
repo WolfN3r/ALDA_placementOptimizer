@@ -6,7 +6,7 @@ import re
 import sys
 from pathlib import Path
 
-from PyQt6.QtCore import QProcess, Qt, pyqtSignal
+from PyQt6.QtCore import QProcess, Qt, QSettings, pyqtSignal
 from PyQt6.QtGui import QFont, QTextCursor
 from PyQt6.QtWidgets import (
     QButtonGroup, QCheckBox, QComboBox, QDialog, QDialogButtonBox,
@@ -448,6 +448,8 @@ class SimulationWindow(QMainWindow):
         ]
         if self._cb_warmup_viz.isChecked():
             args.append("--warmup-visualize")
+        if QSettings().value("cost_trace/enabled", False, type=bool):
+            args.append("--save-cost-trace")
 
         if self._rb_src_netlist.isChecked():
             netlist_name = self._netlist_combo.currentText()

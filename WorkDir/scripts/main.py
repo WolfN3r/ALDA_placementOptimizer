@@ -81,6 +81,14 @@ if __name__ == "__main__":
                         help="Number of parallel warmup runs (-1 → use 101_placementOptimizer.py constant)")
     parser.add_argument("--warmup-visualize", dest="warmup_visualize", action="store_true", default=False,
                         help="Save all warmup placements to JSON for viewer display")
+    parser.add_argument("--save-cost-trace", dest="save_cost_trace", action="store_true", default=False,
+                        help="Log cost-over-time for every run to WorkDir/traces/ (see the viewer's Analysis tool)")
+    parser.add_argument("--no-contour-baseline", dest="no_contour_baseline", action="store_true", default=False,
+                        help="Disable the shared contour reference baseline; fall back to each run's own random-seeded normalization")
+    parser.add_argument("--contour-baseline-n-runs", dest="contour_baseline_n_runs", type=int, default=-1,
+                        help="Parallel contour sessions for the reference baseline (-1 → use 101_placementOptimizer.py constant)")
+    parser.add_argument("--contour-baseline-seed", dest="contour_baseline_seed", type=int, default=-1,
+                        help="Master seed for the reference baseline (-1 → use 101_placementOptimizer.py constant)")
     args = parser.parse_args()
 
     seed       = args.seed
@@ -105,7 +113,7 @@ if __name__ == "__main__":
     opt = _load_script("101_placementOptimizer.py")
 
     # Override module constants so the optimizer uses the CLI-specified mode
-    opt.RUN_MODE  = args.run_mode if args.run_mode != "user" else "exhaustive"
+    opt.RUN_MODE  = args.run_mode
     opt.TOPOLOGY  = args.topology if args.run_mode == "user" else ""
     opt.OPTIMIZER = args.optimizer if args.run_mode == "user" else ""
 
@@ -116,6 +124,14 @@ if __name__ == "__main__":
         opt.WARMUP_N_RUNS = args.warmup_n_runs
     if args.warmup_visualize:
         opt.WARMUP_VISUALIZE = True
+    if args.save_cost_trace:
+        opt.SAVE_COST_TRACE = True
+    if args.no_contour_baseline:
+        opt.USE_CONTOUR_BASELINE = False
+    if args.contour_baseline_n_runs >= 0:
+        opt.CONTOUR_BASELINE_N_RUNS = args.contour_baseline_n_runs
+    if args.contour_baseline_seed >= 0:
+        opt.CONTOUR_BASELINE_SEED = args.contour_baseline_seed
 
     placement_data: dict = opt.run(blocks_data)
 

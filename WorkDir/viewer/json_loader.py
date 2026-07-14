@@ -73,7 +73,6 @@ class PlacementResult:
     t_total_ms: float
     placed_blocks: dict[int, PlacedBlockInfo]
     all_runs: list[dict]
-    renorm_cost: float = 0.0
     t_optimize_ms: float = 0.0
     chip_power_rails: list[dict] = field(default_factory=list)  # VDD/VSS M1 chip rails
     warmup_runs: list[dict] = field(default_factory=list)       # warmup multi-start results
@@ -279,13 +278,15 @@ def load(path: str | Path) -> PlacementData:
                     t_total_ms=float(run_raw.get("t_total_ms", 0.0)),
                     placed_blocks=_parse_placed_blocks(_pb_raw),
                     all_runs=[],
-                    renorm_cost=float(run_raw.get("renorm_cost", 0.0)),
                     t_optimize_ms=float(run_raw.get("t_optimize_ms", 0.0)),
                     chip_power_rails=_extract_chip_rails(_pb_raw),
                     warmup_strategy=str(run_raw.get("warmup_strategy", "")),
                 ))
-            # Ties (e.g. ILP warmup variants converging to the same cost) break on speed.
-            parsed_runs.sort(key=lambda r: (r.renorm_cost, r.t_total_ms))
+            # final_cost is directly comparable across runs — every pair shares
+            # the same a-priori contour-baseline normalization (see
+            # 101_placementOptimizer.py::USE_CONTOUR_BASELINE). Ties (e.g. ILP
+            # warmup variants converging to the same cost) break on speed.
+            parsed_runs.sort(key=lambda r: (r.final_cost, r.t_total_ms))
             all_placement_results = parsed_runs
             best_id = raw_placement.get("best_run_id", "")
             placement_result = next((r for r in parsed_runs if r.run_id == best_id), None)

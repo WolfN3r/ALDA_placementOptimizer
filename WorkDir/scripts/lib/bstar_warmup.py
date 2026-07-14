@@ -49,15 +49,23 @@ class BStarWarmup(WarmupStrategy):
     def __init__(self, sym_groups: list | None = None) -> None:
         self._sym_groups  = sym_groups or []
         self._variant_map: dict[str, int] = {}
+        self._trace_observer = None
 
     def get_variant_map(self) -> dict[str, int]:
         return self._variant_map
+
+    def get_trace_samples(self) -> list[dict]:
+        return self._trace_observer.samples if self._trace_observer else []
 
     def run_single(
         self,
         blocks: dict,
         nets:   list,
         seed:   int,
+        t0:     float | None = None,
+        trace:  bool = False,
+        init_area: float = 1.0,
+        init_wl:   float = 1.0,
     ) -> dict[str, tuple[float, float, float, float]]:
         import random
         from bstar_topology import BStarTopology
@@ -78,7 +86,9 @@ class BStarWarmup(WarmupStrategy):
         topo.seed(valid_blocks, mode="random")
 
         # Scale-neutral evaluator: SA only needs relative cost deltas to
-        # accept/reject moves, not absolute normalization.
+        # accept/reject moves, not absolute normalization. The raw area/HPWL/
+        # AR fields used for tracing are unaffected by this scale — only the
+        # combined `cost` field is (see cost_trace_plot.py's renormalization).
         evaluator = CostEvaluator(valid_blocks, nets, 1.0, 1.0)
 
         epoch_size = max(len(valid_blocks) * 8, BSTAR_WARMUP_MIN_EPOCH)
@@ -88,7 +98,25 @@ class BStarWarmup(WarmupStrategy):
         )
         sa_cfg.initial_temp = calibrate_initial_temperature(topo, evaluator)
 
-        result = SimulatedAnnealingOptimizer(topo, evaluator, sa_cfg).run()
+        observer = None
+        if trace and t0 is not None:
+            from cost_trace import TraceObserver
+            self._trace_observer = TraceObserver("bstar_warmup", t0, path="", auto_flush=False)
+            observer = self._trace_observer
+
+        result = SimulatedAnnealingOptimizer(topo, evaluator, sa_cfg, observer=observer).run()
+
+        if self._trace_observer is not None:
+            # observer.record() ran through the scale-neutral (1.0/1.0)
+            # `evaluator` above, so recorded "cost" fields are on a different
+            # scale than the ILP-optimizer samples appended after this warmup
+            # phase. area/HPWL/AR are scale-independent — only "cost" needs
+            # rescaling onto the pipeline's real init_area/init_wl.
+            from cost_evaluator import CostEvaluator
+            real_evaluator = CostEvaluator(valid_blocks, nets, init_area, init_wl)
+            for s in self._trace_observer.samples:
+                s["cost"] = real_evaluator.rescale_cost(s["area_um2"], s["hpwl_um"], s["aspect_ratio"])
+
         topo.restore_state(result.best_state)
 
         self._variant_map = topo.get_variant_map()

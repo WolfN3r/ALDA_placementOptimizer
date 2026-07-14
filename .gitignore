@@ -13,6 +13,7 @@ logs/*
 WorkDir/json_files/*.json
 WorkDir/testFiles/*
 WorkDir/route_output/*
+WorkDir/traces/*
 .temp/*
 
 # Images

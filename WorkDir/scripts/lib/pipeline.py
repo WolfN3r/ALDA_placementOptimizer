@@ -10,7 +10,8 @@ from __future__ import annotations
 import time
 import warnings
 from dataclasses import dataclass, field
-from typing import Any, Type
+from pathlib import Path
+from typing import Any, Type, TYPE_CHECKING
 
 from topology_base import TopologyBase, SAMixin, GAMixin
 from cost_evaluator import (
@@ -21,6 +22,11 @@ from sa_optimizer import (
     SimulatedAnnealingOptimizer, SAConfig, SAResult, NullObserver,
     calibrate_initial_temperature,
 )
+
+if TYPE_CHECKING:
+    # reference_baseline imports _bbox_area/_hpwl from this module — deferred
+    # to a type-checking-only import here to avoid a circular import at runtime.
+    from reference_baseline import ReferenceBaseline
 
 
 # =============================================================================
@@ -132,6 +138,7 @@ class PipelineResult:
     t_total_ms:       float           = 0.0
     error_message:    str             = ""
     warmup_runs:      list            = field(default_factory=list)
+    trace_file:       str             = ""   # cost-over-time JSONL path; "" unless save_trace=True
 
     def to_dict(self) -> dict:
         d: dict = {
@@ -183,6 +190,9 @@ class OptimizationPipeline:
         sym_groups:       list | None                 = None,
         optimizer_kwargs: dict | None                 = None,
         use_power_rails:  bool                        = False,
+        save_trace:       bool                        = False,
+        trace_dir:        str | None                  = None,
+        reference_baseline: "ReferenceBaseline | None" = None,
     ) -> None:
         self._topology_cls     = topology_cls
         self._optimizer_cls    = optimizer_cls
@@ -194,6 +204,9 @@ class OptimizationPipeline:
         self._sym_groups       = sym_groups or []
         self._optimizer_kwargs = optimizer_kwargs or {}
         self._use_power_rails  = use_power_rails
+        self._save_trace       = save_trace
+        self._trace_dir        = trace_dir
+        self._reference_baseline = reference_baseline
 
         # Check compatibility at construction — not at run time
         st = self._registry.status(topology_cls, optimizer_cls)
@@ -237,11 +250,20 @@ class OptimizationPipeline:
             ref_variant_map = topology.get_variant_map()
             result.t_first_decode_ms = (time.perf_counter() - t_decode_start) * 1000
 
-            init_area = _bbox_area(ref_positions, blocks, ref_variant_map)
-            init_wl   = _hpwl(
-                ref_positions, blocks, nets,
-                use_power_rails=self._use_power_rails, variant_map=ref_variant_map,
-            )
+            # Cost normalization reference: a shared, a-priori contour-warmup
+            # baseline (see reference_baseline.py) when the caller supplied
+            # one — so every (topology, optimizer) pair in this invocation is
+            # scored against the same denominator — otherwise fall back to
+            # this run's own random-seeded start (legacy per-run behavior).
+            if self._reference_baseline is not None:
+                init_area = self._reference_baseline.init_area
+                init_wl   = self._reference_baseline.init_wl
+            else:
+                init_area = _bbox_area(ref_positions, blocks, ref_variant_map)
+                init_wl   = _hpwl(
+                    ref_positions, blocks, nets,
+                    use_power_rails=self._use_power_rails, variant_map=ref_variant_map,
+                )
 
             # Step 5: construct evaluator
             evaluator = CostEvaluator(
@@ -255,6 +277,7 @@ class OptimizationPipeline:
             warmup_positions:    dict | None = None
             warmup_variant_map:  dict        = {}
             warmup_runs_data:    list        = []
+            warmup_results:      list        = []
             warmup_cfg = self._optimizer_kwargs.get("warmup_config")
             if warmup_cfg is not None:
                 from warmup_manager import WarmupManager
@@ -263,12 +286,16 @@ class OptimizationPipeline:
                     # RUN_MODE == "exhaustive": try every registered warmup
                     # strategy once (median-selected internally per strategy)
                     # and let the exhaustive-ILP loop below pick the best.
-                    warmup_results = mgr.run_all_strategies(blocks, nets, init_area, init_wl)
+                    warmup_results = mgr.run_all_strategies(
+                        blocks, nets, init_area, init_wl, t0=t_wall, trace=self._save_trace
+                    )
                     best_wu = min(warmup_results, key=lambda r: r.cost)
                     warmup_positions   = {bid: (v[0], v[1]) for bid, v in best_wu.positions.items()}
                     warmup_variant_map = best_wu.variant_map
                 else:
-                    warmup_positions, warmup_results, warmup_variant_map = mgr.run(blocks, nets, init_area, init_wl)
+                    warmup_positions, warmup_results, warmup_variant_map = mgr.run(
+                        blocks, nets, init_area, init_wl, t0=t_wall, trace=self._save_trace
+                    )
                 if warmup_cfg.visualize:
                     warmup_runs_data = [
                         {
@@ -320,8 +347,42 @@ class OptimizationPipeline:
                     wp_2d = {bid: (v[0], v[1]) for bid, v in wu_r.positions.items()}
                     kwargs_i = {**base_kwargs, "initial_warm_positions": wp_2d,
                                 "initial_variant_map": wu_r.variant_map}
+
+                    # One trace file per (strategy, seed). Every strategy's
+                    # warmup ran sequentially in this loop's outer WarmupManager
+                    # call (and, for exhaustive_ilp, N seeds' ILP solves also run
+                    # sequentially right here) — using the single outer t_wall
+                    # would make each curve's start time reflect how long it had
+                    # to wait for *other, unrelated* strategies/seeds to finish,
+                    # not its own actual work. Instead: rebase this strategy's
+                    # own warmup samples to start at t_rel=0, then pick a virtual
+                    # t0 for the ILP phase so its samples continue immediately
+                    # after warmup_duration with no artificial batching gap —
+                    # the resulting curve shows only this run's own time.
+                    trace_observer_i = None
+                    trace_file_i = ""
+                    if self._save_trace and self._trace_dir:
+                        from cost_trace import TraceObserver
+                        trace_id_i = f"{topo_name}+{opt_name}::{wu_r.strategy}_{wu_r.seed}"
+                        trace_path_i = Path(self._trace_dir) / f"{trace_id_i}.jsonl"
+
+                        warmup_samples = list(wu_r.trace_samples)
+                        if warmup_samples:
+                            t0_offset = warmup_samples[0]["t_rel"]
+                            for s in warmup_samples:
+                                s["t_rel"] -= t0_offset
+                            warmup_duration = warmup_samples[-1]["t_rel"]
+                        else:
+                            warmup_duration = 0.0
+                        virtual_t0 = time.perf_counter() - warmup_duration
+
+                        trace_observer_i = TraceObserver(trace_id_i, t0=virtual_t0, path=trace_path_i)
+                        trace_observer_i.samples.extend(warmup_samples)
+                        trace_file_i = str(trace_path_i)
+
                     opt_i = self._optimizer_cls(
-                        topology, evaluator, cfg, observer=self._observer, **kwargs_i
+                        topology, evaluator, cfg,
+                        observer=(trace_observer_i or self._observer), **kwargs_i
                     )
                     t_i = time.perf_counter()
                     res_i = opt_i.run()
@@ -366,6 +427,7 @@ class OptimizationPipeline:
                         "aspect_ratio": _aspect_ratio(pos_i_norm, blocks, vm_i),
                         "placed_blocks": placed_i,
                         "variant_map":   vm_i,
+                        "trace_file":    trace_file_i,
                     })
 
                     if cost_i < best_ilp_cost:
@@ -390,13 +452,25 @@ class OptimizationPipeline:
                 result.t_optimize_ms = sum(e["t_optimize_ms"] for e in ilp_entries)
 
             else:
-                # --- Default mode: single ILP run with selected warmup positions ---
+                # --- Default mode: single run (SA / PSO / single-strategy ILP) ---
                 effective_kwargs = dict(base_kwargs)
                 if warmup_positions is not None:
                     effective_kwargs["initial_warm_positions"] = warmup_positions
                     effective_kwargs["initial_variant_map"]    = warmup_variant_map
+
+                trace_observer = None
+                if self._save_trace and self._trace_dir:
+                    from cost_trace import TraceObserver
+                    trace_path = Path(self._trace_dir) / f"{result.run_id}.jsonl"
+                    trace_observer = TraceObserver(result.run_id, t0=t_wall, path=trace_path)
+                    selected_wu = next((r for r in warmup_results if r.is_selected), None)
+                    if selected_wu is not None:
+                        trace_observer.samples.extend(selected_wu.trace_samples)
+                    result.trace_file = str(trace_path)
+
                 optimizer = self._optimizer_cls(
-                    topology, evaluator, cfg, observer=self._observer, **effective_kwargs
+                    topology, evaluator, cfg,
+                    observer=(trace_observer or self._observer), **effective_kwargs
                 )
                 t_opt_start = time.perf_counter()
                 opt_result  = optimizer.run()

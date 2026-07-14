@@ -30,6 +30,8 @@ from placement_scene import PlacementScene
 from drc_checker import load_rules, run_drc, DRCViolation, DRC_CATEGORY_COLORS
 from simulation_window import SimulationWindow
 from routing_window import RoutingWindow
+from analysis_window import AnalysisWindow
+from run_labels import display_label as _display_label
 import tikz_exporter as _tikz
 
 
@@ -47,57 +49,6 @@ def _swatch(color: QColor, size: int = 14) -> QIcon:
     pix = QPixmap(size, size)
     pix.fill(color)
     return QIcon(pix)
-
-
-_RUN_ID_OVERRIDES: dict[str, str] = {
-    "BStarTopology+SimulatedAnnealingOptimizer": "B* SA",
-}
-
-
-def _abbrev_run_id(run_id: str) -> str:
-    """Shorten a run_id like 'SequencePairTopology+SimulatedAnnealingOptimizer' → 'SP+SA'."""
-    if run_id in _RUN_ID_OVERRIDES:
-        return _RUN_ID_OVERRIDES[run_id]
-    subs = [
-        ("SimulatedAnnealing", "SA"),
-        ("SequencePair", "SP"),
-        ("Topology", ""),
-        ("Optimizer", ""),
-    ]
-    result = run_id
-    for old, new in subs:
-        result = result.replace(old, new)
-    parts = [p for p in result.split("+") if p]
-    dedup: list[str] = []
-    for p in parts:
-        if not dedup or p != dedup[-1]:
-            dedup.append(p)
-    return "+".join(dedup)
-
-
-_WARMUP_STRATEGY_LABELS: dict[str, str] = {
-    "corp":    "CORP",
-    "spsa":    "SPSA",
-    "contour": "CONTOUR",
-    "spring":  "SPRING",
-    "pso":     "PSO",
-    "bstar":   "BTSA",
-}
-
-
-def _display_label(pr) -> str:
-    """
-    Tab/list label for one placement result.
-
-    Exhaustive-mode ILP runs are exploded into one entry per warmup strategy
-    (see 101_placementOptimizer.py::_build_warmup_run_entries) — label those
-    as e.g. 'BTSA+ILP' / 'SPSA+ILP' instead of the generic '_abbrev_run_id'
-    output, which would collapse every strategy to the same ambiguous 'ILP'.
-    """
-    if pr.warmup_strategy:
-        base = _WARMUP_STRATEGY_LABELS.get(pr.warmup_strategy, pr.warmup_strategy.upper())
-        return f"{base}+ILP"
-    return _abbrev_run_id(pr.run_id)
 
 
 def _get_block_symmetry_info(block_id: int, sc: dict) -> str:
@@ -347,6 +298,12 @@ class CanvasView(QGraphicsView):
 class LayersPanel(QWidget):
     nets_toggled = pyqtSignal(bool)
 
+    # Individual symmetry-variant layers, collapsed into one "Symmetry" row
+    _SYM_LAYER_NAMES = (
+        "symmetry", "sym_diff_pair", "sym_current_mirror", "sym_cascode",
+        "sym_passive", "sym_tail", "sym_cascode_prox", "sym_tail_cm",
+    )
+
     def __init__(self, lm: LayerManager, parent=None) -> None:
         super().__init__(parent)
         self.lm = lm
@@ -358,7 +315,20 @@ class LayersPanel(QWidget):
         self._tree.setHeaderHidden(True)
         layout.addWidget(self._tree)
 
+        sym_added = False
         for ld in lm.all_layers():
+            if ld.name in self._SYM_LAYER_NAMES:
+                if sym_added:
+                    continue
+                item = QTreeWidgetItem(self._tree, ["Symmetry"])
+                item.setData(0, Qt.ItemDataRole.UserRole, "__symmetry_group__")
+                item.setIcon(0, _swatch(lm.layer("symmetry").color))
+                item.setCheckState(
+                    0,
+                    Qt.CheckState.Checked if lm.is_visible("symmetry") else Qt.CheckState.Unchecked,
+                )
+                sym_added = True
+                continue
             item = QTreeWidgetItem(self._tree, [ld.display_name])
             item.setData(0, Qt.ItemDataRole.UserRole, ld.name)
             item.setIcon(0, _swatch(ld.color))
@@ -380,8 +350,14 @@ class LayersPanel(QWidget):
 
     def _on_changed(self, item: QTreeWidgetItem, _col: int) -> None:
         layer = item.data(0, Qt.ItemDataRole.UserRole)
-        if layer:
-            self.lm.set_visible(layer, item.checkState(0) == Qt.CheckState.Checked)
+        if not layer:
+            return
+        checked = item.checkState(0) == Qt.CheckState.Checked
+        if layer == "__symmetry_group__":
+            for name in self._SYM_LAYER_NAMES:
+                self.lm.set_visible(name, checked)
+        else:
+            self.lm.set_visible(layer, checked)
 
 
 # -----------------------------------------------------------------------
@@ -2206,8 +2182,8 @@ class ExhaustiveComparePanel(QWidget):
         self._table.setRowCount(len(results))
         for row, pr in enumerate(results):
             vals = [
-                _display_label(pr),
-                f"{pr.renorm_cost:.4f}",
+                _display_label(pr.run_id, pr.warmup_strategy),
+                f"{pr.final_cost:.4f}",
                 f"{pr.area_um2:.1f}",
                 f"{pr.hpwl_um:.1f}",
                 f"{pr.aspect_ratio:.3f}",
@@ -2276,10 +2252,12 @@ class MainWindow(QMainWindow):
         self._tikz_action:   QAction  | None = None
         self._route_action:  QAction  | None = None
         self._warmup_action: QAction  | None = None
+        self._analysis_action: QAction | None = None
         self._sim_window:   SimulationWindow | None = None
         self._gds_window:   GDSExportWindow  | None = None
         self._tikz_window:  TikZExportWindow | None = None
         self._route_window: RoutingWindow    | None = None
+        self._analysis_window: AnalysisWindow | None = None
         self._current_path: Path | None = None
 
         # Grid settings (backing values — updated by GridSettingsDialog)
@@ -2438,6 +2416,11 @@ class MainWindow(QMainWindow):
         self._warmup_action.triggered.connect(self._on_view_warmup_runs)
         tm.addAction(self._warmup_action)
 
+        self._analysis_action = QAction("&Analysis…", self)
+        self._analysis_action.setToolTip("Cost-over-time graphing and other analysis tools")
+        self._analysis_action.triggered.connect(self._open_analysis_window)
+        tm.addAction(self._analysis_action)
+
         tm.addSeparator()
         self._gds_action = QAction("&Export GDS…", self)
         self._gds_action.setToolTip("Export placement to GDS-II file")
@@ -2531,7 +2514,7 @@ class MainWindow(QMainWindow):
         small, main, vis = self._grid_small, self._grid_main, self._grid_visible
 
         if data.placement_mode == "exhaustive" and data.all_placement_results:
-            # Exhaustive mode: one tab per run, sorted by renorm_cost (best → worst)
+            # Exhaustive mode: one tab per run, sorted by final_cost (best → worst)
             self._exhaustive_mode = True
             self._exhaustive_tab_start = self._tabs.count()   # == 0
             for pr in data.all_placement_results:
@@ -2548,8 +2531,8 @@ class MainWindow(QMainWindow):
                 self._exhaustive_scenes.append(ps)
                 self._exhaustive_views.append(pv)
                 self._exhaustive_data.append(run_data)
-                self._tabs.addTab(pv, _display_label(pr))
-            # First tab = lowest renorm_cost
+                self._tabs.addTab(pv, _display_label(pr.run_id, pr.warmup_strategy))
+            # First tab = lowest final_cost
             self._placement_scene = self._exhaustive_scenes[0]
             self._placement_view = self._exhaustive_views[0]
             self._placement_tab_idx = self._exhaustive_tab_start
@@ -2732,6 +2715,14 @@ class MainWindow(QMainWindow):
         self._sim_window = SimulationWindow(parent=self)
         self._sim_window.result_ready.connect(self._load_simulation_result)
         self._sim_window.show()
+
+    def _open_analysis_window(self) -> None:
+        if self._analysis_window is not None and self._analysis_window.isVisible():
+            self._analysis_window.raise_()
+            self._analysis_window.activateWindow()
+            return
+        self._analysis_window = AnalysisWindow(parent=self)
+        self._analysis_window.show()
 
     def _load_simulation_result(self, path: Path) -> None:
         self._current_path = path

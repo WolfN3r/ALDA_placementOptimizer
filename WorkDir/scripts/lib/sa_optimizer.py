@@ -135,9 +135,15 @@ class SimulatedAnnealingOptimizer:
         if temp <= 0.0:
             raise ValueError("SAConfig.initial_temp must be > 0. Run calibration first.")
 
+        has_trace = hasattr(self._observer, "on_iteration")
+
         positions     = topo.decode()
         variant_map   = topo.get_variant_map()
-        current_cost  = self._eval.evaluate(positions, variant_map)
+        if has_trace:
+            current_breakdown = self._eval.evaluate_breakdown(positions, variant_map)
+            current_cost = current_breakdown.cost
+        else:
+            current_cost = self._eval.evaluate(positions, variant_map)
         best_cost     = current_cost
         best_state    = topo.copy_state()
         best_positions = positions
@@ -161,11 +167,22 @@ class SimulatedAnnealingOptimizer:
                 undo = topo.perturb(t_norm)
                 new_positions = topo.decode()
                 new_variant_map = topo.get_variant_map()
-                new_cost = self._eval.evaluate(new_positions, new_variant_map)
+                if has_trace:
+                    new_breakdown = self._eval.evaluate_breakdown(new_positions, new_variant_map)
+                    new_cost = new_breakdown.cost
+                else:
+                    new_cost = self._eval.evaluate(new_positions, new_variant_map)
 
                 delta = new_cost - current_cost
                 if delta < 0 or r < math.exp(-delta / temp):
                     current_cost = new_cost
+                    if has_trace:
+                        current_breakdown = new_breakdown
+                        # Log only accepted moves — logging every trial (including
+                        # rejected ones, which leave current_breakdown unchanged)
+                        # produces a dense blob of duplicate-valued points with no
+                        # extra information.
+                        self._observer.on_iteration(iteration, current_breakdown)
                     accepted += 1
                     if new_cost < best_cost:
                         best_cost      = new_cost

@@ -7,6 +7,9 @@ from collections import Counter
 
 # Ensure the viewer directory is on the path so relative imports work
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Ensure scripts/lib is on the path so the viewer can share code with the
+# optimizer (e.g. run_labels.py, cost_trace_plot.py) instead of duplicating it
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts", "lib"))
 
 
 def _resolve(path_str: str) -> Path:

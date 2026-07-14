@@ -276,10 +276,16 @@ class PSOOptimizer:
                         total += viol_x * viol_y
             return cfg.overlap_penalty_w * total
 
-        def _total_cost(positions: dict) -> tuple[float, float]:
-            base    = self._evaluator.evaluate(positions, variant_map)
-            overlap = _overlap_penalty(positions)
-            return base + overlap, overlap
+        def _total_cost(positions: dict):
+            """Returns (total_cost, overlap, breakdown).
+
+            `breakdown` is the pure shared-CostEvaluator score (no PSO overlap
+            penalty) — used for cost-over-time tracing so PSO's logged curve
+            is comparable to SA/ILP, not inflated by PSO's own penalty term.
+            """
+            breakdown = self._evaluator.evaluate_breakdown(positions, variant_map)
+            overlap   = _overlap_penalty(positions)
+            return breakdown.cost + overlap, overlap, breakdown
 
         def _init_particle(particle_idx: int) -> dict[str, tuple[float, float]]:
             pos: dict[str, tuple[float, float]] = {}
@@ -311,12 +317,17 @@ class PSOOptimizer:
             {bid: (0.0, 0.0) for bid in pso_bids} for _ in range(cfg.swarm_size)
         ]
 
-        pb_pos:  list[dict]  = [dict(p) for p in swarm_pos]
-        pb_cost: list[float] = [_total_cost(p)[0] for p in swarm_pos]
+        has_trace = hasattr(self._observer, "on_iteration")
 
-        gb_idx  = min(range(cfg.swarm_size), key=lambda i: pb_cost[i])
-        gb_pos  = dict(pb_pos[gb_idx])
-        gb_cost = pb_cost[gb_idx]
+        pb_pos:  list[dict]  = [dict(p) for p in swarm_pos]
+        _pb_init = [_total_cost(p) for p in swarm_pos]
+        pb_cost:       list[float] = [c for c, _, _ in _pb_init]
+        pb_breakdown:  list        = [bd for _, _, bd in _pb_init]
+
+        gb_idx       = min(range(cfg.swarm_size), key=lambda i: pb_cost[i])
+        gb_pos       = dict(pb_pos[gb_idx])
+        gb_cost      = pb_cost[gb_idx]
+        gb_breakdown = pb_breakdown[gb_idx]
 
         logger.debug(
             "PSO start: swarm=%d  n_blocks=%d  canvas=%.1f µm  gb_cost=%.4f",
@@ -361,7 +372,7 @@ class PSOOptimizer:
 
                 _enforce_symmetry(new_pos)
 
-                cost, overlap = _total_cost(new_pos)
+                cost, overlap, breakdown = _total_cost(new_pos)
 
                 if cost > _COST_ZERO_GUARD and (overlap / cost) > cfg.turn_around_thresh:
                     turn_around[i] = -1
@@ -372,21 +383,28 @@ class PSOOptimizer:
                 swarm_pos[i] = new_pos
 
                 if cost < pb_cost[i]:
-                    pb_pos[i]  = dict(new_pos)
-                    pb_cost[i] = cost
+                    pb_pos[i]      = dict(new_pos)
+                    pb_cost[i]     = cost
+                    pb_breakdown[i] = breakdown
 
                 if cost < gb_cost:
-                    gb_pos  = dict(new_pos)
-                    gb_cost = cost
+                    gb_pos       = dict(new_pos)
+                    gb_cost      = cost
+                    gb_breakdown = breakdown
                     logger.debug("PSO iter %4d  new gb_cost=%.5f", it, gb_cost)
                     if self._observer:
                         self._observer.on_improvement(it, gb_cost, gb_pos)
+
+            if has_trace:
+                self._observer.on_iteration(it, gb_breakdown)
 
         elapsed_ms = (time.perf_counter() - t_start) * 1000
         logger.info(
             "PSO done: %d iter  %.0f ms  gb_cost=%.4f  n_blocks=%d",
             cfg.max_iter, elapsed_ms, gb_cost, len(bids),
         )
+        if self._observer:
+            self._observer.on_termination("max_iter", cfg.max_iter, gb_cost, gb_pos)
 
         # Resolve residual x-spacing/geometric-overlap violations caused by y-adjacency:
         # if two blocks are too close in x only because their y-ranges overlap, nudging

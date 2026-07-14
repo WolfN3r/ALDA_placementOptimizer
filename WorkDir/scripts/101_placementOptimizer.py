@@ -13,6 +13,7 @@ n8n mode:    reads JSON from stdin, writes JSON to stdout.
 # =============================================================================
 import json
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent / "lib"))
@@ -21,12 +22,22 @@ from ilp_optimizer     import GurobiParams
 from pso_optimizer     import PSOConfig
 from sa_optimizer      import SAConfig
 from warmup_manager    import WarmupConfig
+from reference_baseline import compute_contour_baseline
 
 # =============================================================================
 # 2. CONSTANTS
 # =============================================================================
 DEBUG     = False
 SEED_MODE = "random"      # "random" | "ordered" — initial topology seed strategy
+
+# --- Cost-over-time tracing (opt-in, off by default) -------------------------
+# When True, every optimizer/warmup run logs its shared-CostEvaluator
+# breakdown (area/HPWL/AR/cost) vs. wall-clock time to
+# WorkDir/traces/<session_id>/<run_id>.jsonl, plus one manifest.json per
+# session listing every run. Driven by the viewer's Analysis tool; see
+# lib/cost_trace.py. Zero overhead when False.
+SAVE_COST_TRACE = False
+_TRACES_DIR     = Path(__file__).parent.parent / "traces"
 
 # --- Combination selector ---------------------------------------------------
 # Set TOPOLOGY + OPTIMIZER to run exactly one combination.
@@ -37,11 +48,21 @@ OPTIMIZER = "ILPOptimizer"  # "" | "SimulatedAnnealingOptimizer" | "ILPOptimizer
 # Used only when TOPOLOGY/OPTIMIZER are empty:
 RUN_MODE  = ""  # "exhaustive" → all supported pairs | "random" → one random pair
 
-# --- Exhaustive mode output options -----------------------------------------
-# RENORMALIZE: recalculates cost for all exhaustive runs using the best run's
-# area and hpwl as shared references so costs are directly comparable.
-# Best run = 1.0, all others >= 1.0 (higher is worse).
-RENORMALIZE = True
+# --- Cost-normalization reference baseline ----------------------------------
+# Before any optimizer runs, a shared reference placement is computed via
+# CONTOUR_BASELINE_N_RUNS parallel ContourWarmup sessions — the MEDIAN-cost
+# one is kept (a "decent, unremarkable" yardstick, not a best-of-N target).
+# Its raw area/HPWL become init_area/init_wl for every (topology, optimizer)
+# pair run in this invocation — single combo, random, or exhaustive — so
+# every run's final_cost shares the same denominator and is directly
+# comparable, instead of each pair normalizing against its own random-seeded
+# start. See .claude/plans/contour_reference_baseline.md.
+# This is orthogonal to WARMUP_STRATEGY/WARMUP_N_RUNS below: that mechanism
+# picks where the ILP optimizer starts its search; this one picks what "1.0"
+# means for cost comparison across every optimizer.
+USE_CONTOUR_BASELINE     = True
+CONTOUR_BASELINE_N_RUNS  = 9   # odd → a true middle run; median = index n//2
+CONTOUR_BASELINE_SEED    = 42
 
 # --- SA tuning (0 → auto-computed from n_blocks) ----------------------------
 SA_INITIAL_TEMP = 0.0    # auto-calibrated when 0.0
@@ -51,10 +72,10 @@ SA_EPOCH_SIZE   = 0      # 0 → max(n_blocks × 8, 50)
 SA_STAGNATION   = 15     # epochs without improvement before reheating
 
 # --- Cost weights (must sum to 1.0) -----------------------------------------
-W_AREA    = 0.6
-W_WL      = 0.2
-W_AR      = 0.2
-TARGET_AR = 1.0        # target width/height ratio for the full placement
+W_AREA    = 0.1
+W_WL      = 0.6
+W_AR      = 0.3
+TARGET_AR = 1        # target width/height ratio for the full placement
 
 # --- Power rails -------------------------------------------------------------
 USE_POWER_RAILS = True   # VDD net pulled to canvas top, VSS net pulled to canvas bottom via HPWL
@@ -306,6 +327,7 @@ def _build_run_entry(result) -> dict:
         "t_total_ms":    round(result.t_total_ms, 2),
         "placed_blocks": result.placed_blocks,
         "error":         result.error_message or None,
+        "trace_file":    result.trace_file,
     }
 
 
@@ -341,52 +363,70 @@ def _build_warmup_run_entries(result) -> list[dict]:
             "t_total_ms":      t_opt,
             "placed_blocks":   w.get("placed_blocks", {}),
             "error":           None,
+            "trace_file":      w.get("trace_file", ""),
         })
     return entries
 
 
-def _renormalize_costs(entries: list, weights) -> None:
+def _write_trace_manifest(
+    trace_dir:    str,
+    session_id:   str,
+    netlist_id:   str,
+    symmetry_mode: str,
+    all_results:  list,
+    weights,
+) -> None:
     """
-    Add renorm_cost to each entry using element-wise best metrics as shared
-    normalization references so every ratio is guaranteed >= 1.0.
+    Write manifest.json for this session — the index the viewer's Analysis
+    tool reads to discover which trace files exist and how to label them.
 
-    ref_area = min(area) across successful runs  → all area ratios >= 1.0
-    ref_hpwl = min(hpwl) across successful runs  → all hpwl ratios >= 1.0
-
-    shared_cost(R) = W_A*(R.area/ref_area) + W_WL*(R.hpwl/ref_hpwl) + W_AR*(R.ar-target)²
-
-    renorm_cost(R) = shared_cost(R) / min(shared_cost)   → best = 1.0, others >= 1.0
-    Failed runs get None.
+    Always expands each result's warmup_runs into one entry per warmup
+    strategy (same as the exhaustive-mode run_entries construction) rather
+    than only doing so when RUN_MODE == "exhaustive": a single fixed
+    ILPTopology+ILPOptimizer combo can itself carry multiple warmup-strategy
+    sub-results (WarmupConfig.all_strategies), each with its own trace file,
+    and those must not collapse into the one merged entry.
     """
-    success = [e for e in entries if e["status"] == "success"]
-    if not success:
-        for e in entries:
-            e["renorm_cost"] = None
-        return
+    full_entries: list[dict] = []
+    for r in all_results:
+        if r.optimizer == "ILPOptimizer" and r.warmup_runs:
+            full_entries.extend(_build_warmup_run_entries(r))
+        elif r.status == "success":
+            full_entries.append(_build_run_entry(r))
 
-    ref_area = min(e["area_um2"] for e in success)
-    ref_hpwl = min(e["hpwl_um"]  for e in success)
+    entries = [
+        {
+            "run_id":          e["run_id"],
+            "warmup_strategy": e.get("warmup_strategy", ""),
+            "topology":        e["topology"],
+            "optimizer":       e["optimizer"],
+            "trace_file":      e.get("trace_file", ""),
+            "final_cost":      e["final_cost"],
+            "area_um2":        e["area_um2"],
+            "hpwl_um":         e["hpwl_um"],
+            "aspect_ratio":    e["aspect_ratio"],
+        }
+        for e in full_entries
+    ]
 
-    w_a  = weights.area_weight
-    w_wl = weights.wirelength_weight
-    w_ar = weights.aspect_ratio_weight
-    target_ar = weights.target_aspect_ratio
-
-    def _shared_cost(e: dict) -> float:
-        area_term = w_a  * (e["area_um2"] / ref_area) if ref_area > 0.0 else 0.0
-        hpwl_term = w_wl * (e["hpwl_um"]  / ref_hpwl) if ref_hpwl > 0.0 else 0.0
-        ar_term   = w_ar * (e["aspect_ratio"] - target_ar) ** 2
-        return area_term + hpwl_term + ar_term
-
-    shared_costs = {id(e): _shared_cost(e) for e in success}
-    min_shared   = min(shared_costs.values())
-    denom        = min_shared if min_shared > 0.0 else 1.0
-
-    for e in entries:
-        if e["status"] == "success":
-            e["renorm_cost"] = round(_shared_cost(e) / denom, 6)
-        else:
-            e["renorm_cost"] = None
+    manifest = {
+        "session_id":    session_id,
+        "netlist_id":    netlist_id,
+        "symmetry_mode": symmetry_mode,
+        "timestamp":     time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "weights": {
+            "area_weight":         weights.area_weight,
+            "wirelength_weight":   weights.wirelength_weight,
+            "aspect_ratio_weight": weights.aspect_ratio_weight,
+            "target_aspect_ratio": weights.target_aspect_ratio,
+        },
+        "runs":          entries,
+    }
+    manifest_path = Path(trace_dir) / "manifest.json"
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(manifest_path, "w", encoding="utf-8") as f:
+        json.dump(manifest, f, indent=2)
+    logger.info("Cost trace manifest written: %s (%d runs)", manifest_path, len(entries))
 
 
 def optimize(data: dict) -> dict:
@@ -570,6 +610,9 @@ def optimize(data: dict) -> dict:
     seed       = gen_params.get("seed", 0)
     netlist_id = f"s{seed}_n{n_blks}"
 
+    session_id = f"{netlist_id}_{time.strftime('%Y%m%dT%H%M%S')}"
+    trace_dir  = str(_TRACES_DIR / session_id) if SAVE_COST_TRACE else None
+
     logger.info(
         "Starting optimizer: %d effective blocks, %d nets — topology=%s optimizer=%s mode=%s",
         len(blocks), len(effective_nets),
@@ -614,6 +657,24 @@ def optimize(data: dict) -> dict:
         per_opt_kwargs["ILPOptimizer"] = ilp_kwargs
     per_opt_kwargs["PSOOptimizer"]      = {"pso_config": PSO_CONFIG}
 
+    # Shared, a-priori cost-normalization reference — computed once, before any
+    # optimizer runs, so every (topology, optimizer) pair below (whether a
+    # single fixed combo or the full picker) scores against the same
+    # denominator. See USE_CONTOUR_BASELINE above and
+    # .claude/plans/contour_reference_baseline.md.
+    reference_baseline = None
+    if USE_CONTOUR_BASELINE:
+        reference_baseline = compute_contour_baseline(
+            blocks, effective_nets,
+            n_runs          = CONTOUR_BASELINE_N_RUNS,
+            master_seed     = CONTOUR_BASELINE_SEED,
+            use_power_rails = USE_POWER_RAILS,
+        )
+        logger.info(
+            "Contour reference baseline: area=%.2f µm²  hpwl=%.2f µm  (median of %d)",
+            reference_baseline.init_area, reference_baseline.init_wl, CONTOUR_BASELINE_N_RUNS,
+        )
+
     if fixed_combo is not None:
         # Single combination selected via TOPOLOGY + OPTIMIZER constants
         t_cls, o_cls = fixed_combo
@@ -627,6 +688,9 @@ def optimize(data: dict) -> dict:
             sym_groups       = sym_groups,
             optimizer_kwargs = single_kwargs,
             use_power_rails  = USE_POWER_RAILS,
+            save_trace       = SAVE_COST_TRACE,
+            trace_dir        = trace_dir,
+            reference_baseline = reference_baseline,
         )
         run_id = f"{t_cls.__name__}+{o_cls.__name__}"
         result = pipeline.run(blocks, effective_nets, seed_mode=SEED_MODE, run_id=run_id)
@@ -646,6 +710,9 @@ def optimize(data: dict) -> dict:
             sym_groups           = sym_groups,
             per_optimizer_kwargs = per_opt_kwargs,
             use_power_rails      = USE_POWER_RAILS,
+            save_trace           = SAVE_COST_TRACE,
+            trace_dir            = trace_dir,
+            reference_baseline   = reference_baseline,
         )
         if RUN_MODE == "exhaustive":
             doc = picker.run_exhaustive(
@@ -714,16 +781,11 @@ def optimize(data: dict) -> dict:
             else:
                 run_entries.append(_build_run_entry(r))
 
-        if RENORMALIZE:
-            _renormalize_costs(run_entries, weights)
-            # After renorm the winner is the entry with renorm_cost == 1.0
-            best_run_id = next(
-                (e["run_id"] for e in run_entries if e.get("renorm_cost") == 1.0),
-                "",
-            )
-        else:
-            successful = [e for e in run_entries if e["status"] == "success"]
-            best_run_id = min(successful, key=lambda e: e["final_cost"])["run_id"] if successful else ""
+        # final_cost is already directly comparable across runs — every pair
+        # shares the same contour-baseline denominator (see USE_CONTOUR_BASELINE
+        # above) — so no post-hoc rescaling is needed to rank them.
+        successful = [e for e in run_entries if e["status"] == "success"]
+        best_run_id = min(successful, key=lambda e: e["final_cost"])["run_id"] if successful else ""
         if not best_run_id and run_entries:
             best_run_id = run_entries[0]["run_id"]
         for e in run_entries:
@@ -732,9 +794,15 @@ def optimize(data: dict) -> dict:
             "mode":         "exhaustive",
             "seed_mode":    SEED_MODE,
             "best_run_id":  best_run_id,
-            "renormalized": RENORMALIZE,
             "runs":         run_entries,
         }
+        if reference_baseline is not None:
+            placement_meta["reference_baseline"] = {
+                "area_um2": round(reference_baseline.init_area, 4),
+                "hpwl_um":  round(reference_baseline.init_wl, 4),
+                "n_runs":   CONTOUR_BASELINE_N_RUNS,
+                "seed":     CONTOUR_BASELINE_SEED,
+            }
     elif best:
         # --- Single / random mode: flat structure (backward compatible) ---
         placement_meta = {
@@ -754,6 +822,16 @@ def optimize(data: dict) -> dict:
         }
         if best.warmup_runs:
             placement_meta["warmup_runs"] = best.warmup_runs
+        if reference_baseline is not None:
+            placement_meta["reference_baseline"] = {
+                "area_um2": round(reference_baseline.init_area, 4),
+                "hpwl_um":  round(reference_baseline.init_wl, 4),
+                "n_runs":   CONTOUR_BASELINE_N_RUNS,
+                "seed":     CONTOUR_BASELINE_SEED,
+            }
+
+    if SAVE_COST_TRACE and trace_dir:
+        _write_trace_manifest(trace_dir, session_id, netlist_id, sym_mode, all_results, weights)
 
     return {
         "generation_params":    gen_params,

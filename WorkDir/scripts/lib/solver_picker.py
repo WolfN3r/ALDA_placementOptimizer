@@ -12,7 +12,7 @@ import time
 import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Type
+from typing import Type, TYPE_CHECKING
 
 from pipeline import (
     OptimizationPipeline, PipelineResult, build_default_registry,
@@ -20,6 +20,9 @@ from pipeline import (
 )
 from cost_evaluator import CostWeights
 from sa_optimizer import SAConfig
+
+if TYPE_CHECKING:
+    from reference_baseline import ReferenceBaseline
 
 
 # =============================================================================
@@ -112,6 +115,9 @@ class SolverPicker:
         optimizer_kwargs:      dict | None                  = None,
         per_optimizer_kwargs:  dict | None                  = None,
         use_power_rails:       bool                         = False,
+        save_trace:            bool                         = False,
+        trace_dir:             str | None                   = None,
+        reference_baseline:    "ReferenceBaseline | None"   = None,
     ) -> None:
         self._registry        = registry      or build_default_registry()
         self._sa_config       = sa_config     or SAConfig()
@@ -124,6 +130,9 @@ class SolverPicker:
         self._per_optimizer_kwargs: dict = per_optimizer_kwargs or {}
         self._optimizer_kwargs:     dict = optimizer_kwargs or {}
         self._use_power_rails       = use_power_rails
+        self._save_trace            = save_trace
+        self._trace_dir             = trace_dir
+        self._reference_baseline    = reference_baseline
         self._last_results: list = []
 
     def run_random(
@@ -188,6 +197,9 @@ class SolverPicker:
             sym_groups       = self._sym_groups,
             optimizer_kwargs = kwargs,
             use_power_rails  = self._use_power_rails,
+            save_trace       = self._save_trace,
+            trace_dir        = self._trace_dir,
+            reference_baseline = self._reference_baseline,
         )
         run_id = f"{topology_cls.__name__}+{optimizer_cls.__name__}"
         return pipeline.run(blocks, nets, seed_mode=seed_mode, run_id=run_id)

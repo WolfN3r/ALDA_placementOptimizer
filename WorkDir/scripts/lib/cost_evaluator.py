@@ -12,10 +12,12 @@ from dataclasses import dataclass
 # =============================================================================
 # CONSTANTS
 # =============================================================================
-_DEFAULT_AREA_WEIGHT   = 0.1
-_DEFAULT_WL_WEIGHT     = 0.0
-_DEFAULT_AR_WEIGHT     = 0.9
-_DEFAULT_TARGET_AR     = 5.0
+_DEFAULT_AREA_WEIGHT   = 1.0
+_DEFAULT_WL_WEIGHT     = 1.0
+_DEFAULT_AR_WEIGHT     = 1.0
+_DEFAULT_TARGET_AR     = 1.0
+
+# these cost are not working - go to 101_placementOptimizer.py to change the weights
 
 _VDD_NET_IDS: frozenset[str] = frozenset({"VDD", "AVDD", "VCC", "VDDA"})
 _VSS_NET_IDS: frozenset[str] = frozenset({"VSS", "GND", "AGND", "VSSA"})
@@ -55,6 +57,14 @@ class CostWeights:
     wirelength_weight:         float = _DEFAULT_WL_WEIGHT
     aspect_ratio_weight:       float = _DEFAULT_AR_WEIGHT
     target_aspect_ratio:       float = _DEFAULT_TARGET_AR
+
+
+@dataclass
+class CostBreakdown:
+    area_um2:      float
+    hpwl_um:       float
+    aspect_ratio:  float
+    cost:          float
 
 
 # =============================================================================
@@ -102,6 +112,18 @@ class CostEvaluator:
         blocks. Without it, composite blocks fall back to their frozen
         construction-time is_used flag (see resolve_variant()).
         """
+        return self.evaluate_breakdown(positions, variant_map).cost
+
+    def evaluate_breakdown(
+        self,
+        positions: dict[str, tuple[float, float]],
+        variant_map: dict[str, int] | None = None,
+    ) -> CostBreakdown:
+        """Same as evaluate(), but also returns the raw area/HPWL/AR terms.
+
+        Used by cost-over-time tracing (lib/cost_trace.py) so a trace can
+        log the physical breakdown, not just the combined scalar.
+        """
         vm   = variant_map or {}
         area = self._bbox_area(positions, vm)
         wl   = self._hpwl(positions, vm)
@@ -112,6 +134,24 @@ class CostEvaluator:
             cost += self._w.wirelength_weight * (wl / self._init_wl)
         if self._w.aspect_ratio_weight > 0.0:
             cost += self._w.aspect_ratio_weight * (ar - self._w.target_aspect_ratio) ** 2
+        return CostBreakdown(area_um2=area, hpwl_um=wl, aspect_ratio=ar, cost=cost)
+
+    def rescale_cost(self, area_um2: float, hpwl_um: float, aspect_ratio: float) -> float:
+        """Recompute the combined cost for an already-measured breakdown
+        against this evaluator's own init_area/init_wl/weights.
+
+        Used to renormalize trace samples recorded by a *different*,
+        scale-neutral CostEvaluator (e.g. an SA/PSO warmup's search
+        evaluator, deliberately built with init_area=init_wl=1.0 so search
+        acceptance only sees relative deltas) onto this evaluator's real
+        normalization — without recomputing geometry, since area/HPWL/AR
+        are scale-independent physical quantities.
+        """
+        cost = self._w.area_weight * (area_um2 / self._init_area)
+        if self._init_wl > 0.0:
+            cost += self._w.wirelength_weight * (hpwl_um / self._init_wl)
+        if self._w.aspect_ratio_weight > 0.0:
+            cost += self._w.aspect_ratio_weight * (aspect_ratio - self._w.target_aspect_ratio) ** 2
         return cost
 
     # ------------------------------------------------------------------
