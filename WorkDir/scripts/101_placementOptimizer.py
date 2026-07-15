@@ -72,9 +72,9 @@ SA_EPOCH_SIZE   = 0      # 0 → max(n_blocks × 8, 50)
 SA_STAGNATION   = 15     # epochs without improvement before reheating
 
 # --- Cost weights (must sum to 1.0) -----------------------------------------
-W_AREA    = 0.1
-W_WL      = 0.6
-W_AR      = 0.3
+W_AREA    = 2
+W_WL      = 6
+W_AR      = 2
 TARGET_AR = 1        # target width/height ratio for the full placement
 
 # --- Power rails -------------------------------------------------------------

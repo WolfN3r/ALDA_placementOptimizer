@@ -3,3 +3,4 @@ gdstk==1.0.0
 gurobipy==13.0.2
 PyQt6==6.11.0
 pyqt6_sip==13.11.1
+matplotlib==3.11.0
