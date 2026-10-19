@@ -51,6 +51,7 @@ class LayerManager:
         ("net_signal",  "Signal nets",                 80, 220,  80),
         ("net_routes",  "Route segments (py201)",     100, 200, 255),
         ("labels",      "Labels",                     255, 255, 100),
+        ("group_labels", "Group topology labels",     200, 200, 200),
         ("symmetry",    "Symmetry pairs",             255, 150, 255),
         ("sym_diff_pair",      "Symmetry: Diff pairs",        58, 126, 191),
         ("sym_current_mirror", "Symmetry: Current mirrors",   58, 140,  58),

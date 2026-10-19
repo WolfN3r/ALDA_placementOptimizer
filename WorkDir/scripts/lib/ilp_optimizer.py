@@ -60,7 +60,7 @@ class GurobiParams:
     time_limit: float = 20.0
     # Hard wall-clock limit in seconds. Solver returns best incumbent found so far.
 
-    mip_gap: float = 0.1
+    mip_gap: float = 0.03
     # Stop when gap between best incumbent and LP bound ≤ this fraction.
     # Tighter → longer solve but finds better solutions; 3% is a good trade-off.
 
@@ -69,7 +69,7 @@ class GurobiParams:
     # Small/easy netlists: use 2 (prove optimum fast).
     # Large/hard netlists: use 1 (find any feasible solution first).
 
-    cuts: int = 1
+    cuts: int = -1
     # Global cut aggressiveness: -1=auto, 0=none, 1=moderate, 2=aggressive, 3=very.
     # Big-M non-overlap constraints benefit from 2–3; sparse netlists often 0–1.
 
@@ -77,11 +77,11 @@ class GurobiParams:
     # Mixed-Integer Rounding cuts. Especially effective with big-M formulations.
     # -1=auto, 0=off, 1=moderate, 2=aggressive.
 
-    implied_cuts: int = 2
+    implied_cuts: int = -1
     # Implied-bound cuts derived from constraint structure.
     # Tightens LP relaxation without adding new constraints. -1=auto, 0–2.
 
-    symmetry: int = 2
+    symmetry: int = -1
     # Symmetry detection aggressiveness: 0=none, 1=conservative, 2=aggressive.
     # Strongly correlated with number of symmetry groups in the netlist.
 
@@ -120,6 +120,16 @@ class GurobiParams:
     # MIP start (all binary AND continuous variables set).  This gives Gurobi a
     # verified initial incumbent at node 0, tightening pruning from the first B&B split.
     # False → use plain row-pack as warm start (faster pre-solve, worse initial bound).
+
+    break_mirror_symmetry: bool = True
+    # True → forbid mirror-image placements, which have identical ILP cost and
+    # make B&B explore every layout twice (Gurobi's Symmetry param only detects
+    # variable permutations, not this geometric mirror).
+    #   x = W/2 mirror: the largest block's centre is locked to the left half.
+    #     Skipped when symmetric pairs exist — sym_left already breaks it, and
+    #     an extra anchor would then cut off genuine optima.
+    #   y = H/2 mirror: broken by the VDD-top / VSS-bottom power-rail terms. Only
+    #     when there are no rail terms is the same anchor applied in y (bottom half).
 
 
 # =============================================================================
@@ -192,6 +202,50 @@ def _big_m(
             M_y += max_ay * (max_self_sym_group - 1)
 
     return max(M_x, 1.0), max(M_y, 1.0)
+
+
+def _mirror_anchor(
+    bids:     list[str],
+    all_dims: dict[str, list[tuple[float, float]]],
+    exclude:  set[str],
+) -> str:
+    """
+    Return the block used to break mirror symmetry: the one with the largest
+    guaranteed (smallest-variant) area. Blocks in `exclude` are skipped unless
+    nothing else is left. Ties go to the first block in `bids`.
+    """
+    candidates = [b for b in bids if b not in exclude] or list(bids)
+    return max(candidates, key=lambda b: min(wd * ht for wd, ht in all_dims[b]))
+
+
+def _mirror_positions(
+    positions: dict[str, tuple[float, float]],
+    dims:      dict[str, tuple[float, float]],
+    axis:      int,
+) -> dict[str, tuple[float, float]]:
+    """
+    Mirror a bottom-left-corner layout about the centre of its own extent along
+    `axis` (0 = x, 1 = y). Overlap-freedom and spacing are preserved, so a
+    DRC-clean warm start stays DRC-clean.
+    """
+    extent = max(positions[b][axis] + dims[b][axis] for b in positions)
+    mirrored: dict[str, tuple[float, float]] = {}
+    for b, p in positions.items():
+        q = list(p)
+        q[axis] = round(extent - p[axis] - dims[b][axis], 6)
+        mirrored[b] = (q[0], q[1])
+    return mirrored
+
+
+def _anchor_in_lower_half(
+    positions: dict[str, tuple[float, float]],
+    dims:      dict[str, tuple[float, float]],
+    anchor:    str,
+    axis:      int,
+) -> bool:
+    """True when `anchor`'s centre lies in the left (axis=0) / bottom (axis=1) half."""
+    extent = max(positions[b][axis] + dims[b][axis] for b in positions)
+    return 2.0 * positions[anchor][axis] + dims[anchor][axis] <= extent + 1e-9
 
 
 def _r_hints(
@@ -554,8 +608,11 @@ def _solve_mip_gurobi(
     # A device's bulk *and* source may both tie to the same rail net — each is an
     # independent physical connection, so each pin gets its own term rather than
     # collapsing every power-tied pin on a block into one block-level pull.
-    # VDD pins: -y_pin in objective → solver maximises y_pin → pushes it to top.
-    # VSS pins: +y_pin → solver minimises y_pin → pushes it to bottom.
+    # Rails sit at y=H (VDD) and y=0 (VSS), matching CostEvaluator's y_top/y_bot.
+    # VDD pins: (H - y_pin) → exact distance to the top rail. Using -y_pin alone
+    #   would reward absolute height and let the solver stretch H to lift VDD pins.
+    # VSS pins: +y_pin → exact distance to the bottom rail (all y >= 0).
+    # Both are >= 0 by the boundary constraints, so the term stays linear.
     vdd_pins: list[tuple[str, str]] = []   # (bid, pin_name)
     vss_pins: list[tuple[str, str]] = []
     if use_power_rails:
@@ -583,17 +640,41 @@ def _solve_mip_gurobi(
 
     power_proximity_expr = gp.LinExpr()
     for bid, pname in vdd_pins:
-        power_proximity_expr -= _pin_y_expr(bid, pname)
+        power_proximity_expr += H - _pin_y_expr(bid, pname)
     for bid, pname in vss_pins:
         power_proximity_expr += _pin_y_expr(bid, pname)
     n_power_bids = len(vdd_pins) + len(vss_pins)
+
+    # Mirror symmetry breaking. Every feasible placement has a mirror image about
+    # x = W/2 (and about y = H/2) with identical ILP cost, so B&B would explore
+    # every layout twice. Locking one block's centre to one half of the canvas
+    # keeps exactly one of the two images. The cut is only valid when the model is
+    # mirror-invariant along that axis; otherwise it could remove the optimum.
+    #   x: sym_left (pair[0] left of its axis) is not mirror-invariant, and already
+    #      breaks the x-mirror on its own → anchor only when there are no pairs.
+    #      Self-symmetric blocks sit centred on an axis, often near W/2, where the
+    #      cut is weakest, so they are only picked when nothing else is left.
+    #   y: VDD-top / VSS-bottom rail terms already break the y-mirror → anchor
+    #      only without rail terms, and only when every symmetric pair has
+    #      identical variant dims (y[a] == y[b] is mirror-invariant only if h[a] == h[b]).
+    anchor_x: str | None = None
+    anchor_y: str | None = None
+    if params.break_mirror_symmetry and n >= 2:
+        if not sym_pair_skip:
+            self_sym = {str(ss) for g in sym_groups for ss in g.get("self_symmetric", [])}
+            anchor_x = _mirror_anchor(bids, all_dims, self_sym)
+            m.addConstr(2 * x[anchor_x] + w[anchor_x] <= W, name=f"mirror_x_{anchor_x}")
+        if n_power_bids == 0 and all(all_dims[a] == all_dims[b] for a, b in sym_pair_skip):
+            anchor_y = _mirror_anchor(bids, all_dims, set())
+            m.addConstr(2 * y[anchor_y] + h[anchor_y] <= H, name=f"mirror_y_{anchor_y}")
+    logger.debug("ILP mirror-break anchors: x=%s  y=%s", anchor_x, anchor_y)
 
     # Objective
     n_nets_used = max(len(x_lo), 1)
     hpwl_expr = gp.quicksum(
         (x_hi[ei] - x_lo[ei]) + (y_hi[ei] - y_lo[ei]) for ei in x_lo
     ) if x_lo else 0.0
-    power_scale = (wl_weight / n_power_bids) / M_y if n_power_bids else 0.0
+    power_scale = (wl_weight / n_power_bids) if n_power_bids else 0.0
     m.setObjective(
         area_weight * (W + H)
         + (wl_weight / n_nets_used) * hpwl_expr
@@ -606,6 +687,25 @@ def _solve_mip_gurobi(
     # Setting ALL variables (binary + continuous) lets Gurobi accept the start as a
     # verified incumbent at node 0, tightening pruning from the first B&B split.
     # Incomplete starts (missing s-vars, W, H, HPWL) are silently ignored by Gurobi.
+    _vmap = variant_map or {}
+
+    # The warm start must satisfy the mirror anchors or Gurobi rejects it as an
+    # incumbent — flip it onto the anchored side (its mirror costs the same).
+    # hint_positions is flipped together with it so the r-var hints stay
+    # consistent with the x/y starts.
+    start_dims: dict[str, tuple[float, float]] = {}
+    for bid in bids:
+        k = _vmap.get(bid, 0)
+        start_dims[bid] = all_dims[bid][k] if k < len(all_dims[bid]) else all_dims[bid][0]
+    hint_dims = {bid: all_dims[bid][0] for bid in bids}   # _r_hints uses variant 0
+    for axis, anchor in ((0, anchor_x), (1, anchor_y)):
+        if anchor is None or _anchor_in_lower_half(warm_positions, start_dims, anchor, axis):
+            continue
+        warm_positions = _mirror_positions(warm_positions, start_dims, axis)
+        if hint_positions is not None:
+            hint_positions = _mirror_positions(hint_positions, hint_dims, axis)
+        logger.debug("ILP: warm start mirrored along %s to satisfy anchor %s", "xy"[axis], anchor)
+
     for bid in bids:
         x[bid].Start = warm_positions[bid][0]
         y[bid].Start = warm_positions[bid][1]
@@ -619,7 +719,6 @@ def _solve_mip_gurobi(
             for k in range(4):
                 r_vars[(bi, bj)][k].Start = 1 if k == k_best else 0
 
-    _vmap = variant_map or {}
     for bid in bids:
         chosen_k = _vmap.get(bid, 0)
         for k, sv in enumerate(s[bid]):

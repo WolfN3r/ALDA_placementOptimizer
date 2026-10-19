@@ -199,7 +199,7 @@ class PlacementScene(QGraphicsScene):
         lbl.setFont(f)
         lbl.setDefaultTextColor(border_color)
         lbl.setPos(sx + 0.1, sy + 0.1)
-        self._add(lbl, "labels")
+        self._add(lbl, "group_labels")
 
         DOT_R = max(w, h) * 0.03
 
