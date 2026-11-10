@@ -16,19 +16,6 @@ from __future__ import annotations
 # 2. CONSTANTS  — all topology rules live here, nowhere else
 # =============================================================================
 
-# Priority used when a compound group contains mixed topology pairs.
-# Higher number = takes precedence when tagging the whole group.
-_TYPE_PRIORITY: dict[str, int] = {
-    "diff_pair":             6,
-    "cross_coupled":         5,
-    "cascode_current_mirror": 4,
-    "current_mirror":        3,
-    "load_pair":             3,
-    "tail_cm_pair":          2,
-    "passive":               1,
-    "tail_transistor":       0,
-}
-
 # Matching rules per topology.
 #
 # Field notes:
@@ -155,9 +142,3 @@ _DEFAULT_RULES: dict = TOPOLOGY_RULES["current_mirror"]
 def get_topology_rules(topology_type: str) -> dict:
     return TOPOLOGY_RULES.get(topology_type, _DEFAULT_RULES)
 
-
-def dominant_type(types: set[str]) -> str:
-    """Return the highest-priority topology tag from a set of type strings."""
-    if not types:
-        return "tail_transistor"
-    return max(types, key=lambda t: _TYPE_PRIORITY.get(t, 0))

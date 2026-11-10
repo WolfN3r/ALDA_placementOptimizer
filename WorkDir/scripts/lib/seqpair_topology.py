@@ -1,5 +1,5 @@
 """
-Sequence Pair topology — supports both SA and GA optimizers.
+Sequence Pair topology — supports SA optimizers.
 
 Internal state: two permutations (r_plus, r_minus).
 decode() builds H-DAG and V-DAG from permutation constraints, then runs
@@ -14,7 +14,6 @@ When sym_groups are provided the topology enforces symmetric-feasibility
   - decode() applies the three-phase x-sweep (discover axis, sweep right,
     sweep left — covers both real pairs and lone self-symmetric cells) and
     forces y-equality on symmetric pairs.
-  - capabilities() returns {"SA"} only (PMX crossover breaks condition S).
 """
 from __future__ import annotations
 
@@ -22,14 +21,14 @@ import random
 from collections import defaultdict, deque
 from typing import Any, Callable
 
-from topology_base import TopologyBase, SAMixin, GAMixin
+from topology_base import TopologyBase, SAMixin
 from spacing import compute_block_spacing, is_wpe_pair
 
 _WEIGHTS_SYM   = [0.40, 0.40, 0.20]   # M1 M2 M3
 _WEIGHTS_NOSYM = [0.40, 0.40, 0.20]   # M1 M2 M3 — kept separate for future tuning
 
 
-class SequencePairTopology(TopologyBase, SAMixin, GAMixin):
+class SequencePairTopology(TopologyBase, SAMixin):
 
     def __init__(
         self,
@@ -400,8 +399,7 @@ class SequencePairTopology(TopologyBase, SAMixin, GAMixin):
         self._variant = dict(vt)
 
     def capabilities(self) -> set[str]:
-        # PMX crossover does not preserve symmetric-feasibility — disable GA
-        return {"SA"} if self._sym_groups else {"SA", "GA"}
+        return {"SA"}
 
     # ------------------------------------------------------------------
     # SAMixin
@@ -540,26 +538,6 @@ class SequencePairTopology(TopologyBase, SAMixin, GAMixin):
             self._variant[bid] = ov
         return _undo_m3
 
-    # ------------------------------------------------------------------
-    # GAMixin
-    # ------------------------------------------------------------------
-
-    def mutate(self) -> Callable[[], None]:
-        return self.perturb(temperature=0.5)
-
-    def crossover(self, other: "SequencePairTopology") -> "SequencePairTopology":
-        """PMX crossover on r_plus and r_minus independently.
-        Safe only when no symmetry groups are active (PMX breaks condition S)."""
-        child = SequencePairTopology(self._blocks, self._nets,
-                                     self._sym_groups or None)
-        child._r_plus  = _pmx(self._r_plus,  other._r_plus)
-        child._r_minus = _pmx(self._r_minus, other._r_minus)
-        child._variant = dict(self._variant)
-        return child
-
-    def random_init(self) -> None:
-        self.seed(self._blocks, mode="random")
-
     def get_variant_map(self) -> dict[str, int]:
         return dict(self._variant)
 
@@ -608,41 +586,3 @@ def _dag_longest_path(
                 queue.append(v)
 
     return [max(0.0, d) for d in dist]
-
-
-# =============================================================================
-# PMX CROSSOVER
-# =============================================================================
-
-def _pmx(perm_a: list[str], perm_b: list[str]) -> list[str]:
-    """
-    Partially Mapped Crossover (PMX).
-    Guarantees a valid permutation (no duplicates, no missing elements).
-    """
-    n = len(perm_a)
-    if n == 0:
-        return []
-    if n == 1:
-        return list(perm_a)
-
-    i, j = sorted(random.sample(range(n), 2))
-    offspring = [None] * n
-
-    for k in range(i, j + 1):
-        offspring[k] = perm_a[k]
-
-    mapping: dict[str, str] = {}
-    for k in range(i, j + 1):
-        mapping[perm_b[k]] = perm_a[k]
-
-    for k in range(n):
-        if offspring[k] is not None:
-            continue
-        val = perm_b[k]
-        seen: set[str] = set()
-        while val in mapping and val not in seen:
-            seen.add(val)
-            val = mapping[val]
-        offspring[k] = val
-
-    return offspring  # type: ignore[return-value]

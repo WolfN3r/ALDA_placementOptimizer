@@ -3,7 +3,6 @@ Abstract base classes for the decoupled placement-optimization framework.
 
 TopologyBase — every topology must implement these methods.
 SAMixin      — add to a topology to support Simulated Annealing.
-GAMixin      — add to a topology to support Genetic Algorithms.
 
 Optimizers import only these ABCs, never concrete topology classes.
 """
@@ -41,7 +40,7 @@ class TopologyBase(ABC):
 
     @abstractmethod
     def capabilities(self) -> set[str]:
-        """Return capability tokens, e.g. {'SA', 'GA'}."""
+        """Return capability tokens, e.g. {'SA'}."""
 
     def get_variant_map(self) -> dict[str, int]:
         """Return {block_id: active_variant_idx} for the current topology state.
@@ -58,22 +57,3 @@ class SAMixin(ABC):
         Returns a parameterless undo closure that exactly reverses the mutation.
         May use temperature to adapt operator selection probabilities.
         """
-
-
-class GAMixin(ABC):
-
-    @abstractmethod
-    def mutate(self) -> Callable[[], None]:
-        """Apply one random mutation in-place. Returns undo closure."""
-
-    @abstractmethod
-    def crossover(self, other: "GAMixin") -> "GAMixin":
-        """
-        Combine self and other into a new valid offspring.
-        Must not modify self or other.
-        Offspring must be a fully valid topology state (no duplicates, no orphaned blocks).
-        """
-
-    @abstractmethod
-    def random_init(self) -> None:
-        """Re-randomize the topology state completely. Required for GA population seeding."""
