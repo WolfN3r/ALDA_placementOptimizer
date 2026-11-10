@@ -18,7 +18,7 @@ from PyQt6.QtWidgets import (
     QDialog, QColorDialog, QSlider, QPlainTextEdit,
 )
 from PyQt6.QtGui import (
-    QAction, QKeySequence, QWheelEvent, QMouseEvent, QPainter,
+    QAction, QActionGroup, QKeySequence, QWheelEvent, QMouseEvent, QPainter,
     QColor, QPixmap, QIcon, QPen, QCursor, QBrush,
 )
 from PyQt6.QtCore import Qt, QPointF, QLineF, pyqtSignal, QSettings
@@ -26,6 +26,7 @@ from PyQt6.QtCore import Qt, QPointF, QLineF, pyqtSignal, QSettings
 import json_loader
 from layer_manager import LayerManager, LayerDef
 from scene import BlockScene
+from structure_view import StructurePanel, structure_for_block
 from placement_scene import PlacementScene
 from drc_checker import load_rules, run_drc, DRCViolation, DRC_CATEGORY_COLORS
 from simulation_window import SimulationWindow
@@ -358,57 +359,6 @@ class LayersPanel(QWidget):
                 self.lm.set_visible(name, checked)
         else:
             self.lm.set_visible(layer, checked)
-
-
-# -----------------------------------------------------------------------
-# Grid settings widget (kept as utility class; used inside dialogs)
-# -----------------------------------------------------------------------
-class GridSettingsWidget(QWidget):
-    grid_changed = pyqtSignal(float, float, bool)  # small, main, visible
-
-    def __init__(self, parent=None) -> None:
-        super().__init__(parent)
-        layout = QGridLayout(self)
-        layout.setContentsMargins(8, 8, 8, 8)
-        layout.setSpacing(4)
-
-        layout.addWidget(QLabel("Main step (µm):"), 0, 0)
-        self._main_step = QDoubleSpinBox()
-        self._main_step.setRange(0.1, 10000.0)
-        self._main_step.setValue(5.0)
-        self._main_step.setSingleStep(0.5)
-        self._main_step.setDecimals(2)
-        layout.addWidget(self._main_step, 0, 1)
-
-        layout.addWidget(QLabel("Small step (µm):"), 1, 0)
-        self._small_step = QDoubleSpinBox()
-        self._small_step.setRange(0.05, 1000.0)
-        self._small_step.setValue(1.0)
-        self._small_step.setSingleStep(0.1)
-        self._small_step.setDecimals(2)
-        layout.addWidget(self._small_step, 1, 1)
-
-        self._grid_check = QCheckBox("Show grid")
-        self._grid_check.setChecked(True)
-        layout.addWidget(self._grid_check, 2, 0, 1, 2)
-
-        self._main_step.valueChanged.connect(self._emit)
-        self._small_step.valueChanged.connect(self._emit)
-        self._grid_check.toggled.connect(self._emit)
-
-    def _emit(self, *_) -> None:
-        self.grid_changed.emit(
-            self._small_step.value(),
-            self._main_step.value(),
-            self._grid_check.isChecked(),
-        )
-
-    def current_grid(self) -> tuple[float, float, bool]:
-        return (
-            self._small_step.value(),
-            self._main_step.value(),
-            self._grid_check.isChecked(),
-        )
 
 
 # -----------------------------------------------------------------------
@@ -1151,6 +1101,8 @@ class GDSExportWindow(QMainWindow):
     """Export placement to GDS-II with configurable layer assignments and KLayout (WSL) integration."""
 
     _PDK_LAYERS_PATH = Path(__file__).parent.parent / "myPDK" / "gpdk090_gds_layers.json"
+    # --pdk runs (012): real PCells, built inside the PDK container
+    _PDK_EXPORT_PY = Path(__file__).parent.parent / "pdk" / "export_gds.py"
 
     _DEFAULT_ACTIVE: dict[str, str] = {
         "nmos_hvt": "OD_25", "pmos_hvt": "OD_25",
@@ -1177,6 +1129,8 @@ class GDSExportWindow(QMainWindow):
         self._active_combos: dict[str, QComboBox] = {}
         self._gate_combos:   dict[str, QComboBox] = {}
         self._pin_combo: QComboBox | None = None
+        self._pdk = data.generation_params.get("pdk")
+        self._process = None
 
         self.setWindowTitle("Export GDS")
         self.resize(720, 580)
@@ -1250,12 +1204,25 @@ class GDSExportWindow(QMainWindow):
         la_layout.addLayout(tbl)
         layout.addWidget(la_group)
 
+        if self._pdk:
+            la_group.setVisible(False)          # gpdk090 rectangles do not apply
+            pdk_group = QGroupBox(f"{self._pdk} export")
+            pg = QVBoxLayout(pdk_group)
+            pg.addWidget(QLabel(
+                f"Real {self._pdk} PCells (devices, dummies, guard rings, implant fills) of every\n"
+                "placed variant, built by KLayout inside the PDK container. Not routed."))
+            self._drc_check = QCheckBox("Run DRC (every checker of the PDK spec: KLayout deck + magic)")
+            self._drc_check.setChecked(True)
+            pg.addWidget(self._drc_check)
+            layout.addWidget(pdk_group)
+
         # Output file
         out_group = QGroupBox("Output File")
         out_layout = QHBoxLayout(out_group)
         out_layout.addWidget(QLabel("Path:"))
         self._out_path = QLineEdit()
-        default_out = str(Path(__file__).parent.parent / "output.gds")
+        default_out = str(Path(self._data.file_path).with_suffix(".gds")) if self._pdk \
+            else str(Path(__file__).parent.parent / "output.gds")
         self._out_path.setText(default_out)
         out_layout.addWidget(self._out_path, stretch=1)
         browse_btn = QPushButton("Browse…")
@@ -1378,6 +1345,9 @@ class GDSExportWindow(QMainWindow):
         if not out_path:
             self._status_label.setText("Error: no output path specified")
             return
+        if self._pdk:
+            self._export_pdk(out_path)
+            return
 
         assert self._pin_combo is not None
         pin_layer_num = self._pdk_layers[self._layer_names[self._pin_combo.currentIndex()]]
@@ -1396,6 +1366,46 @@ class GDSExportWindow(QMainWindow):
             QMessageBox.critical(self, "GDS Export Error", str(exc))
             return
 
+        if self._kl_open_check.isChecked():
+            self._open_in_klayout(out_path)
+
+    def _export_pdk(self, out_path: str) -> None:
+        import sys
+        from PyQt6.QtCore import QProcess
+        args = [str(self._PDK_EXPORT_PY), self._data.file_path, out_path]
+        if self._drc_check.isChecked():
+            args.append("--drc")
+        self._status_label.setText("Exporting in the PDK container" +
+                                   (" + DRC (about a minute)…" if self._drc_check.isChecked() else "…"))
+        self._process = QProcess(self)
+        self._process.setProgram(sys.executable)
+        self._process.setArguments(args)
+        self._process.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
+        self._process.finished.connect(lambda code, _st, p=out_path: self._on_pdk_done(code, p))
+        self._process.start()
+
+    def _on_pdk_done(self, exit_code: int, out_path: str) -> None:
+        log = bytes(self._process.readAll()).decode(errors="replace")
+        if exit_code != 0:
+            self._status_label.setText("Error: export failed")
+            QMessageBox.critical(self, "GDS Export Error", log[-3000:])
+            return
+        msg = f"Exported: {Path(out_path).name}"
+        rep_path = Path(out_path).with_suffix(".drc.json")
+        if self._drc_check.isChecked() and rep_path.exists():
+            rep = json.loads(rep_path.read_text(encoding="utf-8"))
+            if rep["clean"]:
+                msg += "  —  DRC clean"
+            else:
+                msg += f"  —  DRC: {sum(rep['summary'].values())} violation(s)"
+                lines = []
+                for rule, items in rep["violations"].items():
+                    where = sorted({i["block"] for i in items})
+                    lines.append(f"{rule}: {len(items)}\n    at {'; '.join(where)}")
+                if rep["intrinsic"]:
+                    lines.append("\nIntrinsic PCell rules (pdk.json, ignored): " + ", ".join(rep["intrinsic"]))
+                QMessageBox.warning(self, "DRC violations", "\n".join(lines) + f"\n\nFull report: {rep_path}")
+        self._status_label.setText(msg)
         if self._kl_open_check.isChecked():
             self._open_in_klayout(out_path)
 
@@ -1949,6 +1959,7 @@ class BlockDetailWindow(QMainWindow):
         self._view.set_y_up(variant.bbox[3] - variant.bbox[1])
         small, main, vis = grid_settings
         self._view.set_grid(small, main, vis)
+        self._grid_settings_init = grid_settings
 
         info = BlockInfoPanel()
         info.update_block(block, data)
@@ -1957,7 +1968,17 @@ class BlockDetailWindow(QMainWindow):
         )
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
-        splitter.addWidget(self._view)
+        structure = structure_for_block(data, block.block_id)
+        if structure:
+            # 012 (--pdk) blocks: the real slot pattern of the structure / copy array
+            tabs = QTabWidget()
+            tabs.addTab(self._view, "Block")
+            self._structure = StructurePanel(structure, self._make_view)
+            tabs.addTab(self._structure, "Structure")
+            tabs.setCurrentIndex(1)
+            splitter.addWidget(tabs)
+        else:
+            splitter.addWidget(self._view)
         splitter.addWidget(info)
         splitter.setStretchFactor(0, 1)
         splitter.setStretchFactor(1, 0)
@@ -1966,6 +1987,12 @@ class BlockDetailWindow(QMainWindow):
 
         self._view.fit()
         self._block = block
+
+    def _make_view(self, scene) -> "CanvasView":
+        view = CanvasView(scene)
+        small, main, vis = self._grid_settings_init
+        view.set_grid(small, main, vis)
+        return view
 
     def _on_variant_changed(self, block: json_loader.Block, idx: int) -> None:
         self._scene.switch_variant(idx)
@@ -2377,6 +2404,26 @@ class MainWindow(QMainWindow):
         )
         vm.addAction(zo)
 
+        # Block detail: routed structures drawn inside their placed box (block_detail)
+        vm.addSeparator()
+        dm = vm.addMenu("Block &detail")
+        self._detail_mode = "layers"
+        self._detail_actions: dict[str, QAction] = {}
+        group = QActionGroup(self)
+        for mode, text in (("layers", "&Layers (KLayout-like)"), ("abstract", "&Abstract (centrelines)"),
+                           ("off", "&Off (boxes)")):
+            a = QAction(text, self, checkable=True)
+            a.setChecked(mode == self._detail_mode)
+            a.triggered.connect(lambda _=False, m=mode: self._set_detail_mode(m))
+            group.addAction(a)
+            dm.addAction(a)
+            self._detail_actions[mode] = a
+        dm.addSeparator()
+        cyc = QAction("&Cycle  Layers → Abstract → Off", self)
+        cyc.setShortcut(QKeySequence("Ctrl+E"))
+        cyc.triggered.connect(self._cycle_detail_mode)
+        dm.addAction(cyc)
+
         # ---- Options --------------------------------------------------------
         om = mb.addMenu("&Options")
         grid_act = QAction("&Grid Settings…", self)
@@ -2435,6 +2482,17 @@ class MainWindow(QMainWindow):
         tm.addAction(self._tikz_action)
 
     # -----------------------------------------------------------------------
+    def _set_detail_mode(self, mode: str) -> None:
+        self._detail_mode = mode
+        self._detail_actions[mode].setChecked(True)
+        for ps in self._exhaustive_scenes + ([self._placement_scene] if self._placement_scene else []):
+            ps.set_detail_mode(mode)
+        self._status.showMessage(f"Block detail: {mode}", 2000)
+
+    def _cycle_detail_mode(self) -> None:
+        modes = ["layers", "abstract", "off"]
+        self._set_detail_mode(modes[(modes.index(self._detail_mode) + 1) % len(modes)])
+
     def _current_view(self) -> CanvasView | None:
         idx = self._tabs.currentIndex()
         if self._exhaustive_mode:
@@ -2522,6 +2580,7 @@ class MainWindow(QMainWindow):
                     data, placement_result=pr, all_placement_results=[], placement_mode=""
                 )
                 ps = PlacementScene(run_data, self.lm)
+                ps.set_detail_mode(self._detail_mode)
                 pv = CanvasView(ps)
                 pv.set_y_up(ps._total_H)
                 pv.set_grid(small, main, vis)
@@ -2546,6 +2605,7 @@ class MainWindow(QMainWindow):
         elif data.has_placement and data.placement_result:
             # Single-run placement mode: one Placement tab
             ps = PlacementScene(data, self.lm)
+            ps.set_detail_mode(self._detail_mode)
             pv = CanvasView(ps)
             pv.set_y_up(ps._total_H)
             pv.set_grid(small, main, vis)

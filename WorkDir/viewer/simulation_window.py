@@ -31,6 +31,13 @@ _NETLISTS_DIR  = _VIEWER_DIR.parent / "#Netlists"
 _ROUTER_SCRIPT       = _SCRIPTS_DIR / "201_routingOptimizer.py"
 _VIEWER_SETTINGS_PATH = _VIEWER_DIR / "viewer_settings.json"
 
+# Netlist name prefix -> PDK folder under WorkDir/pdk/ (main.py --pdk: real-device generator 012)
+_PDK_BY_PREFIX: dict[str, str] = {"sky": "sky130"}
+
+
+def _pdk_for_netlist(name: str) -> str | None:
+    return next((pdk for prefix, pdk in _PDK_BY_PREFIX.items() if name.lower().startswith(prefix)), None)
+
 _PAIR_RE = re.compile(
     r'reg\.register\(\s*(\w+)\s*,\s*(\w+)\s*,\s*_SUPPORTED'
 )
@@ -245,7 +252,12 @@ class SimulationWindow(QMainWindow):
         random_sizes_row.addWidget(self._cb_random_sizes)
         vbox.addLayout(random_sizes_row)
 
+        self._pdk_label = QLabel("")
+        random_sizes_row.addWidget(self._pdk_label)
+
         self._rb_src_netlist.toggled.connect(self._on_source_toggled)
+        self._netlist_combo.currentTextChanged.connect(lambda _t: self._on_source_toggled(
+            self._rb_src_netlist.isChecked()))
 
         return box
 
@@ -265,15 +277,16 @@ class SimulationWindow(QMainWindow):
         form.addRow("Num Blocks:", self._blocks_spin)
 
         self._sym_mode_combo = QComboBox()
-        self._sym_mode_combo.addItem("Aggressive  (all groups)", userData="aggressive")
-        self._sym_mode_combo.addItem("Moderate  (diff pairs + mirrors + tail-CM)", userData="moderate")
-        self._sym_mode_combo.addItem("None  (no constraints)", userData="none")
+        self._sym_mode_combo.addItem("Matched  (matched groups, no symmetry axis)", userData="matched")
+        self._sym_mode_combo.addItem("Balanced  (matched groups + hard symmetry around DPs)", userData="balanced")
+        self._sym_mode_combo.addItem("Mirrored  (matched groups + hard and soft symmetry)", userData="mirrored")
+        self._sym_mode_combo.setCurrentIndex(1)  # balanced, same default as main.py / 011
         self._sym_mode_combo.setEnabled(False)  # enabled only in netlist mode
         self._sym_mode_combo.setToolTip(
-            "Symmetry aggressiveness — only applies when using a SPICE netlist.\n"
-            "  Aggressive: all detected symmetry groups (default)\n"
-            "  Moderate:   diff pairs + current mirrors + tail-CM pairs\n"
-            "  None:       no symmetry constraints"
+            "Symmetry mode — only applies when using a SPICE netlist.\n"
+            "  Matched:  matched groups, no symmetry axis\n"
+            "  Balanced: matched groups, axis only for hard groups (DP + nearby) (default)\n"
+            "  Mirrored: matched groups, axis for hard and soft groups"
         )
         form.addRow("Sym mode:", self._sym_mode_combo)
 
@@ -414,7 +427,9 @@ class SimulationWindow(QMainWindow):
         self._netlist_combo.setEnabled(netlist_active)
         self._blocks_spin.setEnabled(not netlist_active)
         self._sym_mode_combo.setEnabled(netlist_active)
-        self._cb_random_sizes.setEnabled(netlist_active)
+        pdk = _pdk_for_netlist(self._netlist_combo.currentText())
+        self._cb_random_sizes.setEnabled(netlist_active and pdk is None)
+        self._pdk_label.setText(f"PDK: {pdk} (012, real devices)" if netlist_active and pdk else "")
 
     def _on_run(self) -> None:
         self._log.clear()
@@ -453,10 +468,13 @@ class SimulationWindow(QMainWindow):
 
         if self._rb_src_netlist.isChecked():
             netlist_name = self._netlist_combo.currentText()
-            sym_mode = self._sym_mode_combo.currentData() or "aggressive"
+            sym_mode = self._sym_mode_combo.currentData() or "balanced"
             args += ["--netlist", str(_NETLISTS_DIR / netlist_name),
                      "--sym-mode", sym_mode]
-            if self._cb_random_sizes.isChecked():
+            pdk = _pdk_for_netlist(netlist_name)
+            if pdk:
+                args += ["--pdk", pdk]          # sizes come from the netlist, never random
+            elif self._cb_random_sizes.isChecked():
                 args.append("--random-sizes")
             self._netlist_mode = True
         else:

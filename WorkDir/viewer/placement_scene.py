@@ -8,6 +8,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtGui import QPen, QBrush, QColor, QFont, QPolygonF
 from PyQt6.QtCore import Qt, QPointF, pyqtSignal
 
+import block_detail
 from drc_checker import DRCViolation, DRC_CATEGORY_COLORS
 
 from json_loader import PlacementData, PlacementResult
@@ -56,6 +57,11 @@ class PlacementScene(QGraphicsScene):
         # Flat lookup: maps every block ID (including sub_blocks) to its PlacedBlockInfo.
         # Used by symmetry / cascode / tail drawing methods that need individual device positions.
         self._flat_pb: dict[int, object] = {}
+        # Block detail (block_detail): routed structures drawn inside their placed box
+        self._detail_mode = "off"
+        self._detail_items: list = []
+        self._sub_items: dict[int, list] = {}      # composite bid -> [(member item, layer)]
+        self._detailed: set[int] = set()            # composites currently drawn in detail
 
         pr = data.placement_result
         if pr and pr.placed_blocks:
@@ -219,6 +225,7 @@ class PlacementScene(QGraphicsScene):
             sub_rect.setData(0, mbid)
             self._add(sub_rect, "annotation")
             self._block_rects[mbid] = sub_rect
+            self._sub_items.setdefault(bid, []).append((sub_rect, "annotation"))
 
             mlbl = QGraphicsTextItem(f"B{mbid}")
             mf = QFont("Courier New")
@@ -229,6 +236,7 @@ class PlacementScene(QGraphicsScene):
             mbr = mlbl.boundingRect()
             mlbl.setPos(msx + mw / 2 - mbr.width() / 2, msy + mh / 2 - mbr.height() / 2)
             self._add(mlbl, "labels")
+            self._sub_items[bid].append((mlbl, "labels"))
 
         # Group-level pins drawn last so they render on top of sub-block fills
         for pname, pdata in pb.pins.items():
@@ -267,113 +275,71 @@ class PlacementScene(QGraphicsScene):
             self._add(dot, "annotation")
 
     def _build_symmetry(self, pr: PlacementResult, x_max: float) -> None:
-        sc = self._data.symmetry_constraints
-        if not sc:
+        """
+        One dashed axis per symmetry axis the run's mode enforces (balanced: hard
+        groups, mirrored: hard + soft; matched: none), drawn through the centres of
+        those groups — composites, or member devices of groups without one — plus a
+        connector for every detected device pair inside them.
+        """
+        from hierarchy_builder import SYM_MODE_LEVELS, LEGACY_SYM_MODES
+
+        mode = self._data.placement_config.get("symmetry_mode", "")
+        levels = SYM_MODE_LEVELS.get(LEGACY_SYM_MODES.get(mode, mode), ())
+        if not levels:
             return
 
-        # (block_id, layer_key, color) collected for end-of-loop self-sym rendering
-        self_sym_entries: list[tuple[int, str, QColor]] = []
-
-        for g in sc.get("groups", []):
-            tag = str(g.get("topology_tag", ""))
-            layer_key = self._lm.topology_layer_key(tag)
-            color = self._lm.topology_tag_color(tag)
-
-            # Normalise pair format: old=[{"block_a":a,"block_b":b}], new=[[a,b]]
-            group_pairs: list[tuple[int, int]] = []
-            for p in g.get("pairs", []):
-                if isinstance(p, dict):
-                    group_pairs.append((int(p["block_a"]), int(p["block_b"])))
-                else:
-                    group_pairs.append((int(p[0]), int(p[1])))
-
-            # Collect self-sym before the placed-pair guard so they always render
-            for s in g.get("self_symmetric", []):
-                self_sym_entries.append((int(s), layer_key, color))
-
-            # Axis position derived from this group's pairs only
-            global_axis = sc.get("symmetry_axis", "vertical")
-            axis_dir = g.get("axis", global_axis)
-            placed = [(a, b) for a, b in group_pairs
-                      if a in self._flat_pb and b in self._flat_pb]
-            if not placed:
+        comp_box = {pb.group_id: pb.main_bbox for pb in pr.placed_blocks.values() if pb.is_composite}
+        axis_boxes: dict[int, list] = {}
+        enforced: set[int] = set()
+        for g in self._data.groups:
+            sym = g.get("symmetry")
+            if not sym or sym["level"] not in levels:
                 continue
+            box = comp_box.get(g["group_id"])
+            boxes = [box] if box else [self._flat_pb[b].main_bbox for b in g["block_ids"] if b in self._flat_pb]
+            axis_boxes.setdefault(sym["axis_id"], []).extend(boxes)
+            enforced.update(g["block_ids"])
 
-            axis_pen = QPen(color)
-            axis_pen.setCosmetic(True)
-            axis_pen.setWidthF(1.5)
-            axis_pen.setStyle(Qt.PenStyle.DashLine)
-
-            if axis_dir == "horizontal":
-                midpoints = [
-                    (self._sy((self._flat_pb[a].main_bbox[1] + self._flat_pb[a].main_bbox[3]) / 2)
-                     + self._sy((self._flat_pb[b].main_bbox[1] + self._flat_pb[b].main_bbox[3]) / 2)) / 2
-                    for a, b in placed
-                ]
-                axis_pos = sum(midpoints) / len(midpoints)
-                axis_line = QGraphicsLineItem(0, axis_pos, x_max, axis_pos)
-            else:
-                midpoints = [
-                    ((self._flat_pb[a].main_bbox[0] + self._flat_pb[a].main_bbox[2]) / 2
-                     + (self._flat_pb[b].main_bbox[0] + self._flat_pb[b].main_bbox[2]) / 2) / 2
-                    for a, b in placed
-                ]
-                axis_pos = sum(midpoints) / len(midpoints)
-                axis_line = QGraphicsLineItem(axis_pos, 0, axis_pos, self._H)
-
+        layer_key = self._lm.topology_layer_key("")
+        color = self._lm.topology_tag_color("")
+        axis_pen = QPen(color)
+        axis_pen.setCosmetic(True)
+        axis_pen.setWidthF(1.5)
+        axis_pen.setStyle(Qt.PenStyle.DashLine)
+        for axis_id, boxes in axis_boxes.items():
+            if len(boxes) < 2:
+                continue
+            axis_x = sum((bx[0] + bx[2]) / 2 for bx in boxes) / len(boxes)
+            axis_line = QGraphicsLineItem(axis_x, 0, axis_x, self._H)
             axis_line.setPen(axis_pen)
             axis_line.setZValue(50)
             self._add(axis_line, layer_key)
 
-            # Topology tag label on the axis line
-            if tag:
-                lbl = QGraphicsTextItem(tag.replace("_", " "))
-                f = QFont("Courier New")
-                f.setStyleHint(QFont.StyleHint.Monospace)
-                f.setPointSizeF(1.0)
-                lbl.setFont(f)
-                lbl.setDefaultTextColor(color)
-                lbl.setZValue(55)
-                br = lbl.boundingRect()
-                if axis_dir == "horizontal":
-                    lbl.setPos(x_max * 0.02, axis_pos - br.height() - 0.05)
-                else:
-                    lbl.setPos(axis_pos + 0.05, self._H * 0.02)
-                self._add(lbl, layer_key)
+            lbl = QGraphicsTextItem(f"axis {axis_id}")
+            f = QFont("Courier New")
+            f.setStyleHint(QFont.StyleHint.Monospace)
+            f.setPointSizeF(1.0)
+            lbl.setFont(f)
+            lbl.setDefaultTextColor(color)
+            lbl.setZValue(55)
+            lbl.setPos(axis_x + 0.05, self._H * 0.02)
+            self._add(lbl, layer_key)
 
-            # Center-to-center connector for each pair in this group
-            pair_pen = QPen(color)
-            pair_pen.setCosmetic(True)
-            pair_pen.setWidthF(1.0)
-            for a, b in group_pairs:
-                if a not in self._flat_pb or b not in self._flat_pb:
+        pair_pen = QPen(color)
+        pair_pen.setCosmetic(True)
+        pair_pen.setWidthF(1.0)
+        for g in self._data.symmetry_constraints.get("groups", []):
+            for a, b in g.get("pairs", []):
+                if a not in enforced or b not in enforced or a not in self._flat_pb or b not in self._flat_pb:
                     continue
                 ba, bb = self._flat_pb[a].main_bbox, self._flat_pb[b].main_bbox
-                cx_a = (ba[0] + ba[2]) / 2
-                cy_a = self._sy((ba[1] + ba[3]) / 2)
-                cx_b = (bb[0] + bb[2]) / 2
-                cy_b = self._sy((bb[1] + bb[3]) / 2)
-                line = QGraphicsLineItem(cx_a, cy_a, cx_b, cy_b)
+                line = QGraphicsLineItem(
+                    (ba[0] + ba[2]) / 2, self._sy((ba[1] + ba[3]) / 2),
+                    (bb[0] + bb[2]) / 2, self._sy((bb[1] + bb[3]) / 2),
+                )
                 line.setPen(pair_pen)
                 line.setZValue(50)
                 self._add(line, layer_key)
-
-        # Self-symmetric block markers — × cross at block center
-        for s, layer_key, color in self_sym_entries:
-            if s not in self._flat_pb:
-                continue
-            cross_pen = QPen(color)
-            cross_pen.setCosmetic(True)
-            cross_pen.setWidthF(1.2)
-            bb = self._flat_pb[s].main_bbox
-            cx = (bb[0] + bb[2]) / 2
-            cy = self._sy((bb[1] + bb[3]) / 2)
-            arm = min(bb[2] - bb[0], bb[3] - bb[1]) * 0.18
-            for dx, dy, ex, ey in [(-arm, 0, arm, 0), (0, -arm, 0, arm)]:
-                c = QGraphicsLineItem(cx + dx, cy + dy, cx + ex, cy + ey)
-                c.setPen(cross_pen)
-                c.setZValue(50)
-                self._add(c, layer_key)
 
     def _build_cascode_proximity_pairs(self, pr: PlacementResult) -> None:
         """Draw vertical connector + midpoint dot for each cascode-stacked device pair."""
@@ -680,6 +646,59 @@ class PlacementScene(QGraphicsScene):
         if layer == "drc_overlay":
             for item in self._drc_items:
                 item.setVisible(visible)
+        for bid in self._detailed:               # member boxes stay hidden under a detailed block
+            for item, _ in self._sub_items.get(bid, []):
+                item.setVisible(False)
+
+    # ---- block detail --------------------------------------------------------
+
+    def set_detail_mode(self, mode: str) -> None:
+        """"off" (boxes), "layers" or "abstract": routed structures drawn inside their placed box."""
+        for item in self._detail_items:
+            self.removeItem(item)
+        self._detail_items.clear()
+        for bid in self._detailed:
+            for item, layer in self._sub_items.get(bid, []):
+                item.setVisible(self._lm.is_visible(layer))
+        self._detailed.clear()
+        self._detail_mode = mode
+        pr = self._data.placement_result
+        if mode == "off" or not pr:
+            return
+        names = {b.block_id: (b.inst or f"B{b.block_id}") for b in self._data.blocks}
+        groups = {g["group_id"]: g for g in self._data.groups}
+        for bid, pb in pr.placed_blocks.items():
+            if pb.is_composite:
+                mv = (groups.get(pb.group_id) or {}).get("matching_variants") or []
+                if not mv:
+                    continue
+                idx = pb.variant_index if pb.variant_index is not None else \
+                    next((i for i, v in enumerate(mv) if v.get("is_used")), 0)
+                v = mv[idx]
+                if pb.routing:                      # pins chosen after placement, unused trunk ends cut
+                    v = {**v, "routing": pb.routing}
+            else:                                   # plain block (e.g. MIM cap with its 012 detail)
+                block = self._data.block_by_id(bid)
+                var = self._data.active_variant(block) if block else None
+                if var is None or not var.routing:
+                    continue
+                v = {"slots": var.slots, "routing": var.routing, "guard_ring": var.guard_ring,
+                     "rotation_deg": var.rotation_deg, "height_um": var.bbox[3]}
+            if not block_detail.has_detail(v):
+                continue
+            x0, y0 = pb.main_bbox[0], pb.main_bbox[1]
+            if v.get("rotation_deg") == 90:     # 90° CW: (x, y) -> (y, W0 - x), W0 = height_um
+                w0 = v["height_um"]
+                place = lambda x, y, x0=x0, y0=y0, w0=w0: QPointF(x0 + y, self._sy(y0 + w0 - x))
+            else:
+                place = lambda x, y, x0=x0, y0=y0: QPointF(x0 + x, self._sy(y0 + y))
+            items = block_detail.draw_variant(self, v, names, place, mode, device_labels=False)
+            for item in items:
+                item.setZValue(5)
+            self._detail_items += items
+            self._detailed.add(bid)
+            for item, _ in self._sub_items.get(bid, []):
+                item.setVisible(False)
 
     def _refresh_block_styles(self) -> None:
         """Update pen/brush of all block rects when colors or border width change."""

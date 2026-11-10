@@ -22,6 +22,9 @@ class Variant:
     pins: list[PinPos]
     is_used: bool
     rotation_deg: int  # 0 or 90
+    slots: list = field(default_factory=list)       # 012: copy positions (unrotated frame)
+    guard_ring: dict | None = None                  # 012: ring around the copies
+    routing: dict | None = None                     # 012: block_router / MIM cap detail (block_detail)
 
 
 @dataclass
@@ -32,6 +35,7 @@ class Block:
     variants: list[Variant]
     power_rail: str | None   # VDD | VSS | None
     placed: dict | None = None  # {x, y, rotation_deg, variant_index, ...} when placed
+    inst: str = ""              # netlist instance name (netlist-driven generators)
 
 
 @dataclass
@@ -58,6 +62,7 @@ class PlacedBlockInfo:
     matching_variant: dict = field(default_factory=dict)
     sub_blocks: dict = field(default_factory=dict)   # str(member_bid) -> PlacedBlockInfo
     variant_index: int | None = None   # actual variant chosen by the optimizer, if present
+    routing: dict | None = None        # lib/pin_access: routing with the pins chosen after placement
 
 
 @dataclass
@@ -88,6 +93,7 @@ class PlacementData:
     nets: list[Net]
     symmetry_constraints: dict  # keys: groups, passive_clusters, symmetric_net_pairs, self_symmetric_nets, cascode_proximity_pairs, tail_cm_pairs, compound_blocks
     groups: list  # hierarchy groups from py011/py101 JSON top-level groups[] key
+    placement_config: dict  # symmetry_mode etc. from py011
     has_placement: bool
     placement_result: PlacementResult | None = None
     placement_mode: str = ""
@@ -180,6 +186,7 @@ def _parse_placed_blocks(pb_raw: dict) -> dict[int, PlacedBlockInfo]:
                 matching_variant=dict(pb.get("matching_variant", {})),
                 sub_blocks=sub,
                 variant_index=vidx,
+                routing=pb.get("routing"),
             )
         else:
             placed_blocks[bid] = PlacedBlockInfo(block_id=bid, main_bbox=bbox, pins=pins, variant_index=vidx)
@@ -217,6 +224,9 @@ def _parse_variant(idx: int, raw: dict) -> Variant:
         pins=pins,
         is_used=bool(raw.get("is_used", False)),
         rotation_deg=int(raw.get("rotation_deg", 0)),
+        slots=list(raw.get("slots", [])),
+        guard_ring=raw.get("guard_ring"),
+        routing=raw.get("routing"),
     )
 
 
@@ -241,6 +251,7 @@ def load(path: str | Path) -> PlacementData:
             variants=variants,
             power_rail=rb.get("power_rail"),
             placed=placed,
+            inst=str(rb.get("inst", "")),
         ))
 
     nets: list[Net] = []
@@ -333,6 +344,7 @@ def load(path: str | Path) -> PlacementData:
         nets=nets,
         symmetry_constraints=raw.get("symmetry_constraints", {}),
         groups=list(raw.get("groups", [])),
+        placement_config=raw.get("placement_config", {}),
         has_placement=has_placement,
         placement_result=placement_result,
         placement_mode=placement_mode,
