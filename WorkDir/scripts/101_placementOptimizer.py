@@ -20,6 +20,7 @@ sys.path.insert(0, str(Path(__file__).parent / "lib"))
 from log_setup      import get_logger
 from ilp_optimizer     import GurobiParams
 from pso_optimizer     import PSOConfig
+from spacing           import GRID
 from sa_optimizer      import SAConfig
 from warmup_manager    import WarmupConfig
 from reference_baseline import compute_contour_baseline
@@ -447,8 +448,9 @@ def optimize(data: dict) -> dict:
     from pipeline       import OptimizationPipeline, build_default_registry
 
     from hierarchy_builder import (
-        filter_groups_for_sym_mode,
         build_composite_blocks,
+        SYM_MODE_LEVELS,
+        LEGACY_SYM_MODES,
         remap_nets_for_composites,
         COMPOSITE_ID_BASE,
     )
@@ -458,16 +460,18 @@ def optimize(data: dict) -> dict:
     gen_params       = data.get("generation_params", {})
     nets             = netlist.get("nets", [])
     placement_config = data.get("placement_config", {})
-    sym_mode         = placement_config.get("symmetry_mode", "aggressive")
+    sym_mode         = placement_config.get("symmetry_mode", "balanced")
+    sym_mode         = LEGACY_SYM_MODES.get(sym_mode, sym_mode)
+    if sym_mode not in SYM_MODE_LEVELS:
+        raise KeyError(f"optimize: unknown symmetry_mode '{sym_mode}'")
 
     # Build composite blocks from hierarchy groups so each matched building
     # block (diff pair, current mirror, …) is placed as one atomic unit whose
     # variants are the pre-computed matching_variants from hierarchy_builder.
     raw_groups      = data.get("groups", [])
-    filtered_groups = filter_groups_for_sym_mode(raw_groups, sym_mode)
 
     block_by_id = {b["block_id"]: b for b in raw_blocks if "error" not in b}
-    composite_list, excluded_ids = build_composite_blocks(filtered_groups, block_by_id, nets)
+    composite_list, excluded_ids = build_composite_blocks(raw_groups, block_by_id, nets)
 
     # Effective block set: composite blocks + ungrouped individual blocks
     effective_raw: list = list(composite_list)
@@ -480,129 +484,77 @@ def optimize(data: dict) -> dict:
     # composite block's centre pin (used for HPWL estimation during optimisation).
     effective_nets = remap_nets_for_composites(nets, composite_list, block_by_id)
 
-    # For moderate mode: symmetry is encoded inside each composite block's
-    # matching_variants — no inter-composite axis constraints needed.
-    # For aggressive mode: additionally enforce global vertical axis constraints
-    # between composite pairs that the circuit analyzer placed on the same axis.
-    sym_constraints_raw = data.get("symmetry_constraints", {})
+    # Axis constraints from the group symmetry annotations (hierarchy_builder):
+    # a "self" group is centred on its axis, a "pair" group (side L) is mirrored
+    # with its partner (side R), same variant on both sides. A group is one node —
+    # its composite, or its single device; a self group without a composite falls
+    # back to its member devices.
+    levels = SYM_MODE_LEVELS[sym_mode]
+    comp_of_group = {cb["group_id"]: cb["block_id"] for cb in composite_list}
+    group_by_id = {g["group_id"]: g for g in raw_groups}
+
+    def _node(g: dict):
+        if g["group_id"] in comp_of_group:
+            return comp_of_group[g["group_id"]]
+        members = [b for b in g["block_ids"] if b in block_by_id]
+        return members[0] if len(members) == 1 else None
+
+    axis_self: dict = {}
+    axis_pairs: dict = {}
+    for g in raw_groups:
+        sym = g.get("symmetry")
+        if not sym or sym["level"] not in levels:
+            continue
+        if sym["role"] == "self":
+            node = _node(g)
+            nodes = [node] if node is not None else [b for b in g["block_ids"] if b in block_by_id]
+            axis_self.setdefault(sym["axis_id"], []).extend(nodes)
+        elif sym["side"] == "L":
+            left, right = _node(g), _node(group_by_id[sym["partner"]])
+            if left is None or right is None:
+                logger.warning("Pair groups %d/%d have no single node — not mirrored",
+                               g["group_id"], sym["partner"])
+                continue
+            axis_pairs.setdefault(sym["axis_id"], []).append([left, right])
+
+    def _n_variants(node) -> int:
+        return len(blocks[str(node)]["variants"])
+
     sym_groups: list = []
+    for axis_id in sorted(set(axis_self) | set(axis_pairs)):
+        pairs, selfs = axis_pairs.get(axis_id, []), axis_self.get(axis_id, [])
+        if 2 * len(pairs) + len(selfs) < 2:
+            continue
+        sym_groups.append({
+            "compound_id":               axis_id,
+            "axis":                      "vertical",
+            "pairs":                     pairs,
+            "self_symmetric":            selfs,
+            "enforce_matching_variants": bool(pairs) and all(
+                _n_variants(a) == _n_variants(b) for a, b in pairs),
+        })
+    # Self nodes are centred on one axis (origin = axis - w/2): all origins are on the
+    # grid only when every width has the same grid parity. Pad odd widths by one step;
+    # the device then sits GRID/2 (2.5 nm) off its axis.
+    for g in sym_groups:
+        for node in g["self_symmetric"]:
+            for v in blocks[str(node)]["variants"]:
+                bb = v["main_bbox"]
+                if round((bb["x_max"] - bb["x_min"]) / GRID) % 2:
+                    bb["x_max"] = round(bb["x_max"] + GRID, 6)
+                    logger.debug("Self node %s: width padded to %.4f (even grid count)",
+                                 node, bb["x_max"] - bb["x_min"])
 
-    if sym_mode == "aggressive":
-        # Build mapping: original block_id → composite_id (COMPOSITE_ID_BASE + group_id)
-        bid_to_comp: dict = {
-            int(mbid): cb["block_id"]
-            for cb in composite_list
-            for mbid in cb.get("group_block_ids", [])
-        }
-        for cg in sym_constraints_raw.get("groups", []):
-            # Pass 1: classify pairs.
-            # Two blocks mapping to different composites → inter-composite pair (axis-mirrored).
-            # Two blocks mapping to the SAME composite → that composite is self-symmetric.
-            comp_pairs: list = []
-            seen_pairs: set = set()
-            intra_ss_candidates: list = []
-            seen_intra: set = set()
-
-            for a, b in cg.get("pairs", []):
-                ca  = bid_to_comp.get(a, a)
-                cb_ = bid_to_comp.get(b, b)
-                if ca == cb_:
-                    if ca not in seen_intra:
-                        intra_ss_candidates.append(ca)
-                        seen_intra.add(ca)
-                else:
-                    key = (min(ca, cb_), max(ca, cb_))
-                    if key not in seen_pairs:
-                        comp_pairs.append([ca, cb_])
-                        seen_pairs.add(key)
-
-            # Composites in comp_pairs already have a defined role (left/right of axis).
-            # They cannot simultaneously be self-symmetric (would make the ILP infeasible).
-            in_pairs: set = {e for pair in comp_pairs for e in pair}
-
-            # Pass 2: build comp_ss, skipping anything already in a pair role.
-            comp_ss: list = []
-            seen_ss: set = set()
-
-            for ca in intra_ss_candidates:
-                if ca not in in_pairs and ca not in seen_ss:
-                    comp_ss.append(ca)
-                    seen_ss.add(ca)
-
-            for ss in cg.get("self_symmetric", []):
-                cid = bid_to_comp.get(ss, ss)
-                if cid not in in_pairs and cid not in seen_ss:
-                    comp_ss.append(cid)
-                    seen_ss.add(cid)
-
-            if comp_pairs or comp_ss:
-                # Composite pairs that share the same topology_type have aligned
-                # matching_variants (same count, same arrangement types), so M3
-                # can keep their active variant in sync during SA optimisation.
-                comp_id_to_blk = {cb["block_id"]: cb for cb in composite_list}
-                enforce = bool(comp_pairs) and all(
-                    comp_id_to_blk.get(ca, {}).get("topology_type") ==
-                    comp_id_to_blk.get(cb_, {}).get("topology_type")
-                    for ca, cb_ in comp_pairs
-                )
-                sym_groups.append({
-                    "compound_id":             cg.get("compound_id", 0),
-                    "axis":                    "vertical",
-                    "pairs":                   comp_pairs,
-                    "self_symmetric":          comp_ss,
-                    "enforce_matching_variants": enforce,
-                })
-        # Axis-mirrored mirror-family split (mirror_and_passive_axis_split.md §3):
-        # composites carrying axis_partner_group_id (both current_mirror halves
-        # hierarchy_builder split from one N>=3 sub-group) are resolved via
-        # group_id, bypassing bid_to_comp/raw-block-id-pair resolution entirely
-        # — this mechanism does not depend on Phase-5 pairing data at all.
-        group_id_to_comp: dict = {
-            cb["group_id"]: cb["block_id"] for cb in composite_list if "group_id" in cb
-        }
-        axis_split_pairs: list = []
-        seen_axis_pairs: set = set()
-        for cb in composite_list:
-            partner_gid = cb.get("axis_partner_group_id")
-            if partner_gid is None:
-                continue
-            # Guard: build_composite_blocks() silently drops a group whose
-            # matching_variants is empty (e.g. an odd-split half with
-            # total_M <= 1) — the partner composite may not exist.
-            partner_comp_id = group_id_to_comp.get(partner_gid)
-            if partner_comp_id is None:
-                logger.warning(
-                    "Axis-split composite %d: partner group %d missing "
-                    "(dropped — empty matching_variants?), skipping axis pair",
-                    cb["block_id"], partner_gid,
-                )
-                continue
-            key = (min(cb["block_id"], partner_comp_id), max(cb["block_id"], partner_comp_id))
-            if key in seen_axis_pairs:
-                continue
-            seen_axis_pairs.add(key)
-            axis_split_pairs.append([key[0], key[1]])
-
-        if axis_split_pairs:
-            sym_groups.append({
-                "compound_id":               -1,
-                "axis":                      "vertical",
-                "pairs":                     axis_split_pairs,
-                "self_symmetric":            [],
-                "enforce_matching_variants": True,
-            })
-            logger.info("Axis-split mirror pairs: %d", len(axis_split_pairs))
-
-        logger.info(
-            "Aggressive sym_groups: %d axis group(s) with %d composite pair(s)",
-            len(sym_groups),
-            sum(len(g["pairs"]) for g in sym_groups),
-        )
+    logger.info(
+        "Symmetry mode %s: %d axis group(s), %d self node(s), %d mirrored pair(s)",
+        sym_mode, len(sym_groups), sum(len(g["self_symmetric"]) for g in sym_groups),
+        sum(len(g["pairs"]) for g in sym_groups),
+    )
 
     logger.info(
         "Symmetry mode: %s  →  %d group(s)  "
         "(%d composite + %d ungrouped = %d effective blocks)",
-        sym_mode, len(filtered_groups),
+        sym_mode, len(raw_groups),
         len(composite_list), len(effective_raw) - len(composite_list), len(effective_raw),
     )
 

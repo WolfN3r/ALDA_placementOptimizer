@@ -19,26 +19,22 @@ import json
 import random
 import re
 import sys
-from collections import OrderedDict, defaultdict
+from collections import OrderedDict
 from pathlib import Path
 from typing import NamedTuple
 
 sys.path.insert(0, str(Path(__file__).parent / "lib"))
 from log_setup        import get_logger
-from symmetry_detector import detect_symmetries, find_passive_arrays
+from symmetry_detector import detect_symmetries
 from hierarchy_builder import build_groups
+from netlist_blocks import (POWER_ALIASES, build_netlist_json, classify_nets,
+                            collapse_passive_arrays, pin_assignment_for, placement_config)
 
 # =============================================================================
 # 2. CONSTANTS
 # =============================================================================
 DEBUG    = False
 _PDK_DIR = Path(__file__).parent.parent / "myPDK"
-
-# SPICE power supply aliases (case-insensitive match)
-POWER_ALIASES: frozenset = frozenset({
-    "vdda", "vssa", "vddd", "vssd", "vdd", "vss", "gnd", "gnd!",
-    "vcc", "vee", "avdd", "avss",
-})
 
 # Maps lowercase SPICE model name → PDK device type
 _MODEL_MAP: dict = {
@@ -512,22 +508,6 @@ def parse_and_flatten(path: str) -> tuple:
     return list(top_ports), flat_devices, hierarchy_map
 
 
-# --- 4h. Net classification ---------------------------------------------------
-
-def classify_nets(all_nets: set, top_ports: list) -> dict:
-    port_set = {p.lower() for p in top_ports}
-    result: dict = {}
-    for net in all_nets:
-        lo = net.lower()
-        if lo in POWER_ALIASES:
-            result[net] = "power"
-        elif lo in port_set:
-            result[net] = "signal"
-        else:
-            result[net] = "internal"
-    return result
-
-
 # --- 4i. Resistor serpentine cutter --------------------------------------------
 
 def _accepted_split_range(L: float, W: float, grid: float, L_min: float) -> list:
@@ -611,56 +591,6 @@ def _generate_capacitor_variants(L: float, W: float, num_pins: int, grid: float)
     Real capacitor-specific variant/symmetry logic is future work; kept as its
     own function so that work has an obvious home."""
     return _generate_passive_block(W, L, "cap_mom", num_pins, grid)["variants"]
-
-
-# --- 4k. Netlist JSON builder -------------------------------------------------
-
-def _build_netlist_json(blocks: list, net_class: dict) -> dict:
-    net_pins: dict = defaultdict(list)
-    for blk in blocks:
-        if "error" in blk:
-            continue
-        bid = blk["block_id"]
-        for term, pin_lbl in blk.get("pin_assignment", {}).items():
-            net = blk["terminals"].get(term)
-            if net:
-                net_pins[net].append(f"B{bid}_{pin_lbl}")
-
-    nets = [
-        {"net_id": net, "net_type": net_class.get(net, "internal"), "pins": pins}
-        for net, pins in sorted(net_pins.items())
-    ]
-    n_power    = sum(1 for n in nets if n["net_type"] == "power")
-    n_signal   = sum(1 for n in nets if n["net_type"] == "signal")
-    n_internal = sum(1 for n in nets if n["net_type"] == "internal")
-    tot_pins   = sum(blk["num_pins"] for blk in blocks if "error" not in blk)
-    return {
-        "num_nets":          len(nets),
-        "num_power_nets":    n_power,
-        "num_signal_nets":   n_signal,
-        "num_internal_nets": n_internal,
-        "num_pins":          tot_pins,
-        "nets":              nets,
-    }
-
-
-# --- 4l. Pin assignment -------------------------------------------------------
-
-def _pin_assignment_for(dev: dict) -> dict:
-    if dev["device_group"] != "passive":
-        return {"bulk": "P0", "drain": "P1", "gate": "P2", "source": "P3"}
-    terms  = list(dev["terminals"].keys())
-    subs   = [t for t in terms if t == "substrate"]
-    others = [t for t in terms if t != "substrate"]
-    pa: dict = {}
-    if subs:
-        pa["substrate"] = "P0"
-        for k, t in enumerate(others):
-            pa[t] = f"P{k + 1}"
-    else:
-        for k, t in enumerate(others):
-            pa[t] = f"P{k}"
-    return pa
 
 
 # --- 4l2. MOSFET shape search --------------------------------------------------
@@ -835,7 +765,7 @@ def _generate_blocks_random_sizes(
             block["array_multiplier"] = m_mult
 
         if "error" not in block:
-            pa = _pin_assignment_for(dev)
+            pa = pin_assignment_for(dev)
             block["pin_assignment"] = pa
             block["terminals"]      = dev["terminals"]
             bulk_net = dev["terminals"].get("bulk", "") or dev["terminals"].get("substrate", "")
@@ -972,7 +902,7 @@ def _generate_blocks_real_sizes(
             block["array_multiplier"] = m_mult
 
         if "error" not in block:
-            pa = _pin_assignment_for(dev)
+            pa = pin_assignment_for(dev)
             block["pin_assignment"] = pa
             block["terminals"]      = dev["terminals"]
             bulk_net = dev["terminals"].get("bulk", "") or dev["terminals"].get("substrate", "")
@@ -1008,37 +938,8 @@ def wmi_generate_netlist_blocks(
     signal_nets = {p for p in top_ports if p.lower() not in POWER_ALIASES}
     net_class   = classify_nets(all_nets, top_ports)
 
-    # Step 1 — assign temp block_ids and collapse parallel passive arrays
-    temp_devs = [dict(d, block_id=i) for i, d in enumerate(flat_devices)]
-    raw_clusters = find_passive_arrays(temp_devs)
-
-    inst_to_mult: dict = {}
-    insts_to_drop: set = set()
-    for cluster in raw_clusters:
-        rep_inst = temp_devs[cluster["representative_block_id"]]["inst"]
-        inst_to_mult[rep_inst] = len(cluster["members"])
-        for extra_bid in cluster["members"][1:]:
-            insts_to_drop.add(temp_devs[extra_bid]["inst"])
-
-    old_to_new: dict = {}
-    collapsed: list  = []
-    for i, dev in enumerate(flat_devices):
-        if dev["inst"] not in insts_to_drop:
-            new_bid = len(collapsed)
-            old_to_new[i] = new_bid
-            collapsed.append(dict(dev, block_id=new_bid))
-
-    passive_cluster_info: list = []
-    for cluster in raw_clusters:
-        new_rep = old_to_new.get(cluster["representative_block_id"])
-        if new_rep is None:
-            continue
-        passive_cluster_info.append({
-            "representative_block_id": new_rep,
-            "original_count":          len(cluster["members"]),
-            "topology":                cluster["topology"],
-            "original_insts":          [flat_devices[m]["inst"] for m in cluster["members"]],
-        })
+    # Step 1 — collapse parallel passive arrays
+    collapsed, inst_to_mult, passive_cluster_info = collapse_passive_arrays(flat_devices)
 
     # Step 2 — detect symmetries on the collapsed device list
     sym_result = detect_symmetries(collapsed, signal_nets, power_nets)
@@ -1057,15 +958,15 @@ def wmi_generate_netlist_blocks(
     )
 
     valid   = [b for b in blocks if "error" not in b]
-    netlist = _build_netlist_json(valid, net_class)
+    netlist = build_netlist_json(valid, net_class)
 
     sym_constraints = {
         "groups":               sym_result["groups"],
         "passive_clusters":     passive_cluster_info,
         "symmetric_net_pairs":  sym_result["symmetric_net_pairs"],
         "self_symmetric_nets":  sym_result["self_symmetric_nets"],
-        "tail_cm_pairs":        sym_result.get("tail_cm_pairs", []),
-        "compound_blocks":      sym_result.get("compound_blocks", []),
+        "building_blocks":      sym_result["building_blocks"],
+        "logical_devices":      sym_result["logical_devices"],
     }
     return blocks, netlist, sym_constraints
 
@@ -1074,7 +975,7 @@ def wmi_generate_netlist_blocks(
 # 5. ENTRY POINT
 # =============================================================================
 
-def run(netlist_path: str, seed: int, sym_mode: str = "aggressive",
+def run(netlist_path: str, seed: int, sym_mode: str = "balanced",
         random_sizes: bool = False) -> dict:
     path = Path(netlist_path)
     if not path.exists():
@@ -1111,13 +1012,8 @@ def run(netlist_path: str, seed: int, sym_mode: str = "aggressive",
         netlist.get("num_internal_nets", 0),
     )
 
-    placement_config = {
-        "symmetry_mode":            sym_mode,
-        "enable_matching":          True,
-        "enable_passive_splitting": True,
-        "passive_max_split":        8,
-    }
-    groups = build_groups(sym_constraints, blocks, placement_config)
+    pconf = placement_config(sym_mode)
+    groups = build_groups(sym_constraints, blocks, pconf)
 
     return {
         "generation_params": {
@@ -1127,7 +1023,7 @@ def run(netlist_path: str, seed: int, sym_mode: str = "aggressive",
             "random_sizes":   random_sizes,
         },
         "technology":           tech_file["technology_info"]["name"],
-        "placement_config":     placement_config,
+        "placement_config":     pconf,
         "blocks":               blocks,
         "netlist":              netlist,
         "symmetry_constraints": sym_constraints,
@@ -1142,10 +1038,10 @@ if __name__ == "__main__":
     parser.add_argument("seed",    type=int, help="Random seed")
     parser.add_argument(
         "--sym-mode",
-        default="aggressive",
-        choices=["none", "moderate", "aggressive"],
+        default="balanced",
+        choices=["matched", "balanced", "mirrored"],
         dest="sym_mode",
-        help="Symmetry enforcement: none | moderate | aggressive (default: aggressive)",
+        help="Symmetry enforcement: matched | balanced | mirrored (default: balanced)",
     )
     parser.add_argument(
         "--random-sizes", dest="random_sizes", action="store_true", default=False,
