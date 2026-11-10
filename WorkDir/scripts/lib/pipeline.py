@@ -13,11 +13,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Type, TYPE_CHECKING
 
-from topology_base import TopologyBase, SAMixin, GAMixin
+from topology_base import TopologyBase, SAMixin
 from cost_evaluator import (
     CostEvaluator, CostWeights, _VDD_NET_IDS, _VSS_NET_IDS,
     resolve_variant as _active_variant,
 )
+import pin_access
+from pin_access import net_hpwl
 from sa_optimizer import (
     SimulatedAnnealingOptimizer, SAConfig, SAResult, NullObserver,
     calibrate_initial_temperature,
@@ -107,9 +109,6 @@ def build_default_registry() -> CompatibilityRegistry:
     reg.register(SequencePairTopology,   SimulatedAnnealingOptimizer, _SUPPORTED)
     reg.register(ILPTopology,            ILPOptimizer,                _SUPPORTED)
     reg.register(PSOTopology,            PSOOptimizer,                _SUPPORTED)
-    # GeneticOptimizer not yet implemented — stubs only
-    # reg.register(SequencePairTopology, GeneticOptimizer, _SUPPORTED)
-    # reg.register(BStarTopology,        GeneticOptimizer, _EXPERIMENTAL)
     return reg
 
 
@@ -413,6 +412,7 @@ class OptimizationPipeline:
                         placed_i = optimize_pin_positions(placed_i, nets, blocks)
                     except Exception as _pin_exc:
                         warnings.warn(f"pin_optimizer skipped for warmup entry: {_pin_exc}")
+                    placed_i = pin_access.assign(placed_i, nets, blocks, vm_i)
                     ilp_entries.append({
                         "run_index":    wu_r.run_index,
                         "strategy":     wu_r.strategy,
@@ -499,6 +499,7 @@ class OptimizationPipeline:
                 placed = optimize_pin_positions(placed, nets, blocks)
             except Exception as _pin_exc:
                 warnings.warn(f"pin_optimizer skipped: {_pin_exc}")
+            placed = pin_access.assign(placed, nets, blocks, variant_map)
             result.placed_blocks = placed
             result.area_um2      = _bbox_area(final_positions, blocks, variant_map)
             result.hpwl_um       = _hpwl(
@@ -566,10 +567,13 @@ def _hpwl(
 ) -> float:
     vm = variant_map or {}
     pin_pos: dict[str, tuple[float, float]] = {}
+    pin_segs: dict[str, list] = {}
     for bid, (bx, by) in positions.items():
         v = _active_variant(blocks.get(bid, {}), bid, vm)
         for pname, pcoord in v.get("pin_positions", {}).items():
             pin_pos[f"B{bid}_{pname}"] = (bx + pcoord["x"], by + pcoord["y"])
+        for pname, acc in v.get("pin_access", {}).items():
+            pin_segs[f"B{bid}_{pname}"] = [(bx + s[0], by + s[1], bx + s[2], by + s[3]) for s in acc["segs"]]
     if use_power_rails and positions:
         y_top = max(
             by + _active_variant(blocks.get(bid, {}), bid, vm).get("main_bbox", {}).get("y_max", 0.0)
@@ -593,6 +597,9 @@ def _hpwl(
                 total += sum(py - y_bot for py in ys)
                 continue
         if len(xs) >= 2:
+            if any(p in pin_segs for p in pins):     # routed block: nearest point of its access segments
+                total += net_hpwl([pin_segs.get(p) or [(*pin_pos[p], *pin_pos[p])] for p in pins if p in pin_pos])[0]
+                continue
             total += (max(xs) - min(xs)) + (max(ys) - min(ys))
     return total
 
