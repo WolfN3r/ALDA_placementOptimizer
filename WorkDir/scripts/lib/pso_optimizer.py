@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).parent))
-from spacing import compute_block_spacing
+from spacing import GRID, compute_block_spacing, snap_down_to_grid, snap_to_grid
 from log_setup import get_logger
 
 DEBUG = False
@@ -36,7 +36,7 @@ logger = get_logger(__name__, DEBUG)
 
 _COST_ZERO_GUARD = 1e-9   # prevents /0 in turn-around overlap-ratio check
 _FLOAT_EPS       = 1e-6   # floating-point tolerance for gap comparisons in repair
-_REPAIR_GAP      = 0.001  # minimum clearance added when y-nudging a block in repair
+_REPAIR_GAP      = GRID   # minimum clearance added when y-nudging a block in repair (keeps y on grid)
 
 
 # =============================================================================
@@ -144,12 +144,12 @@ class PSOOptimizer:
         variant_map: dict[str, int]                 = {bid: 0 for bid in bids}
 
         total_area = sum(w * h for w, h in block_dims.values())
-        canvas     = math.sqrt(max(total_area, 1.0)) * cfg.canvas_factor
+        canvas     = snap_to_grid(math.sqrt(max(total_area, 1.0)) * cfg.canvas_factor)
         v_max      = canvas * cfg.v_max_factor
         # All symmetry groups share one vertical axis at the canvas midpoint.
         # A floating per-group axis (axis = master's own center) is wrong:
         # it makes slave_cx = master_cx, collapsing the slave onto the master.
-        sym_axis = canvas / 2.0
+        sym_axis = snap_to_grid(canvas / 2.0)
 
         # slave_set:    blocks whose (x, y) is derived from a master
         # master_set:   pair-master blocks — PSO restricts them to the left half
@@ -167,6 +167,13 @@ class PSOOptimizer:
                 s_id = str(s)
                 if s_id in blocks:
                     all_self_syms.append(s_id)
+        # A self-symmetric block's origin axis - w/2 is on the grid only when the axis
+        # sits half a grid step off for odd-grid widths, on the grid for even ones.
+        parities = {round(block_dims[s][0] / GRID) % 2 for s in all_self_syms}
+        if len(parities) > 1:
+            logger.warning("PSO: self-symmetric widths of both grid parities; odd ones end off grid")
+        if parities == {1}:
+            sym_axis = round(sym_axis + GRID / 2.0, 6)
 
         for group in sym_groups:
             for pair in group.get("pairs", []):
@@ -192,7 +199,7 @@ class PSOOptimizer:
                             c_slave  = (sym_axis - w_a / 2.0 - w_b / 2.0
                                         - w_s / 2.0 - sr_bs.x_spacing)
                             x_max = min(x_max, c_master, c_slave)
-                        master_x_max[a] = max(0.0, x_max)
+                        master_x_max[a] = max(0.0, snap_down_to_grid(x_max))
 
         pso_bids = [bid for bid in bids if bid not in slave_set]
 
@@ -223,17 +230,17 @@ class PSOOptimizer:
         def _clamp(bid: str, x: float, y: float) -> tuple[float, float]:
             w, h = block_dims[bid]
             return (
-                max(0.0, min(canvas - w, x)),
-                max(0.0, min(canvas - h, y)),
+                max(0.0, min(canvas - w, snap_to_grid(x))),
+                max(0.0, min(canvas - h, snap_to_grid(y))),
             )
 
         def _clamp_master(bid: str, x: float, y: float) -> tuple[float, float]:
             # x bounded by master_x_max so the mirrored slave clears DRC spacing
             w, h  = block_dims[bid]
-            x_max = master_x_max.get(bid, sym_axis - w)
+            x_max = master_x_max.get(bid, snap_down_to_grid(sym_axis - w))
             return (
-                max(0.0, min(x_max, x)),
-                max(0.0, min(canvas - h, y)),
+                max(0.0, min(x_max, snap_to_grid(x))),
+                max(0.0, min(canvas - h, snap_to_grid(y))),
             )
 
         def _enforce_symmetry(positions: dict) -> None:

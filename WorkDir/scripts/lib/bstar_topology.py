@@ -1,5 +1,5 @@
 """
-B*-tree topology — supports both SA and GA optimizers.
+B*-tree topology — supports SA optimizers.
 
 Two-level structure, following Chang et al. (2000) B*-trees and Lin, Chang &
 Lin (2009) ASF-/HB*-trees:
@@ -51,8 +51,8 @@ import math
 import random
 from typing import Any, Callable
 
-from topology_base import TopologyBase, SAMixin, GAMixin
-from spacing import compute_block_spacing, is_wpe_pair, SpacingResult
+from topology_base import TopologyBase, SAMixin
+from spacing import compute_block_spacing, is_wpe_pair, snap_up_to_grid, SpacingResult
 
 
 # =============================================================================
@@ -167,7 +167,8 @@ def _contour_query(
 
             if effective > max_h:
                 max_h = effective
-    return max_h
+    # up, never down: the sqrt corner clearance and the 1e-6 nudges are off grid
+    return snap_up_to_grid(max_h)
 
 
 def _contour_update(
@@ -217,11 +218,11 @@ def _bfs_subtree(root: _Node) -> list[_Node]:
 # B*-TREE TOPOLOGY
 # =============================================================================
 
-class BStarTopology(TopologyBase, SAMixin, GAMixin):
+class BStarTopology(TopologyBase, SAMixin):
     """
     B*-tree placement topology.
 
-    Capabilities: SA (perturb/undo) and GA (mutate/crossover/random_init).
+    Capabilities: SA (perturb/undo).
     """
 
     _ISLAND_ID = "__ISLAND__"   # sentinel outer block_id for the hierarchy node
@@ -611,7 +612,7 @@ class BStarTopology(TopologyBase, SAMixin, GAMixin):
         self._is_rep = dict(is_rep_snap)
 
     def capabilities(self) -> set[str]:
-        return {"SA", "GA"}
+        return {"SA"}
 
     # ------------------------------------------------------------------
     # SAMixin
@@ -914,152 +915,6 @@ class BStarTopology(TopologyBase, SAMixin, GAMixin):
             self._is_rep[new_bid]  = False
         return undo
 
-    # ------------------------------------------------------------------
-    # GAMixin
-    # ------------------------------------------------------------------
-    # BStarTopology's GA path currently has no caller in this project (no
-    # GeneticAlgorithmOptimizer exists) — kept minimal and correct rather
-    # than elaborated, per YAGNI: crossover reuses the same DFS-encode +
-    # OX-crossover + reconstruct machinery independently for the outer and
-    # inner trees, no new algorithm.
-
-    def mutate(self) -> Callable[[], None]:
-        return self.perturb(temperature=0.5)
-
-    def crossover(self, other: "BStarTopology") -> "BStarTopology":
-        outer_perm_a, outer_dirs_a = self._encode_tree(self._root)
-        outer_perm_b, outer_dirs_b = other._encode_tree(other._root)
-        inner_perm_a, inner_dirs_a = self._encode_tree(self._inner_root)
-        inner_perm_b, inner_dirs_b = other._encode_tree(other._inner_root)
-
-        child = BStarTopology(self._blocks, self._nets, self._sym_groups)
-        child._is_rep = dict(self._is_rep)
-
-        if outer_perm_a:
-            offspring_perm = _ox_crossover(outer_perm_a, outer_perm_b)
-            cut = random.randint(1, max(1, len(outer_dirs_a) - 1))
-            offspring_dirs = outer_dirs_a[:cut] + outer_dirs_b[cut:]
-            child._nodes = [self._make_outer_node(bid) for bid in offspring_perm]
-            child._root  = child._nodes[0]
-            child._root.parent = None
-            self._reconstruct_from_dirs(child._nodes, offspring_dirs)
-        else:
-            child._nodes, child._root = [], None
-
-        if inner_perm_a:
-            offspring_perm = _ox_crossover(inner_perm_a, inner_perm_b)
-            cut = random.randint(1, max(1, len(inner_dirs_a) - 1))
-            offspring_dirs = inner_dirs_a[:cut] + inner_dirs_b[cut:]
-            child._inner_nodes = [_Node(bid, self._default_variant_idx(bid)) for bid in offspring_perm]
-            child._inner_root  = child._inner_nodes[0]
-            child._inner_root.parent = None
-            self._reconstruct_from_dirs(child._inner_nodes, offspring_dirs)
-        else:
-            child._inner_nodes, child._inner_root = [], None
-
-        return child
-
-    def random_init(self) -> None:
-        self.seed(self._blocks, mode="random")
-
-    def _make_outer_node(self, bid: str) -> _Node:
-        if bid == self._ISLAND_ID:
-            n = _Node(bid, 0)
-            n.is_hierarchy = True
-            return n
-        return _Node(bid, self._default_variant_idx(bid))
-
-    # ------------------------------------------------------------------
-    # Encoding helpers for GA crossover
-    # ------------------------------------------------------------------
-
-    @staticmethod
-    def _encode_tree(root: _Node | None) -> tuple[list[str], list[int]]:
-        """DFS pre-order → (block_id permutation, x/y direction bits)."""
-        if root is None:
-            return [], []
-        perm: list[str] = []
-        dirs: list[int] = []   # 0 = x-child (left), 1 = y-child (right)
-
-        def _dfs(node: _Node) -> None:
-            perm.append(node.block_id)
-            if node.left:
-                dirs.append(0)
-                _dfs(node.left)
-            if node.right:
-                dirs.append(1)
-                _dfs(node.right)
-
-        _dfs(root)
-        return perm, dirs
-
-    @staticmethod
-    def _reconstruct_from_dirs(nodes: list[_Node], dirs: list[int]) -> None:
-        """
-        Attach nodes[1:] as children in order, using dirs as preferred slot.
-        Applies four-level slot-conflict fallback.
-        """
-        if len(nodes) <= 1:
-            return
-
-        dir_idx = 0
-        for node in nodes[1:]:
-            node.left   = None
-            node.right  = None
-            node.parent = None
-
-            preferred_left = (dir_idx < len(dirs) and dirs[dir_idx] == 0)
-            dir_idx += 1
-
-            inserted = False
-            in_tree  = [n for n in nodes if n is nodes[0] or n.parent is not None]
-            random.shuffle(in_tree)
-
-            for candidate in in_tree:
-                if preferred_left and candidate.left is None:
-                    candidate.left = node
-                    node.parent    = candidate
-                    inserted = True
-                    break
-                if not preferred_left and candidate.right is None:
-                    candidate.right = node
-                    node.parent     = candidate
-                    inserted = True
-                    break
-
-            if not inserted:
-                # Walk right spine from root
-                curr = nodes[0]
-                while curr:
-                    if curr.left is None:
-                        curr.left   = node
-                        node.parent = curr
-                        inserted = True
-                        break
-                    if curr.right is None:
-                        curr.right  = node
-                        node.parent = curr
-                        inserted = True
-                        break
-                    curr = curr.right
-
-            if not inserted:
-                # BFS scan of all tree nodes
-                queue = [nodes[0]]
-                while queue and not inserted:
-                    curr = queue.pop(0)
-                    if curr.left is None:
-                        curr.left   = node
-                        node.parent = curr
-                        inserted = True
-                    elif curr.right is None:
-                        curr.right  = node
-                        node.parent = curr
-                        inserted = True
-                    else:
-                        queue.append(curr.left)
-                        queue.append(curr.right)
-
     def get_variant_map(self) -> dict[str, int]:
         result: dict[str, int] = {}
         for node in self._inner_nodes:
@@ -1083,19 +938,3 @@ class BStarTopology(TopologyBase, SAMixin, GAMixin):
             if v.get("is_used"):
                 return i
         return 0
-
-
-# =============================================================================
-# CROSSOVER HELPERS
-# =============================================================================
-
-def _ox_crossover(perm_a: list[str], perm_b: list[str]) -> list[str]:
-    """Order Crossover (OX) producing one offspring permutation."""
-    n = len(perm_a)
-    if n == 0:
-        return []
-    i, j = sorted(random.sample(range(n), 2))
-    segment   = perm_a[i:j + 1]
-    remaining = [x for x in perm_b if x not in segment]
-    result    = remaining[:i] + segment + remaining[i:]
-    return result[:n]

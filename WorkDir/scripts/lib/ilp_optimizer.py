@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).parent))
-from spacing       import compute_block_spacing
+from spacing       import GRID, compute_block_spacing, snap_to_grid
 from corp_placer   import run_corp_spring
 from log_setup     import get_logger
 from cost_evaluator import _VDD_NET_IDS, _VSS_NET_IDS
@@ -457,6 +457,14 @@ def _solve_mip_gurobi(
         for bid in bids
     }
 
+    # Origins on the manufacturing grid: x = GRID * integer. Continuous x/y let the
+    # HPWL term align pin centres of odd-grid-width blocks, half a grid step off.
+    for bid in bids:
+        for v, name, M, i in ((x[bid], "gx", M_x, 0), (y[bid], "gy", M_y, 1)):
+            ub = max(0.0, M - min(d[i] for d in all_dims[bid]))
+            k = m.addVar(lb=0.0, ub=math.floor(ub / GRID), vtype=GRB.INTEGER, name=f"{name}_{bid}")
+            m.addConstr(v == GRID * k, name=f"{name}_on_grid_{bid}")
+
     # Variant selection
     w: dict[str, Any] = {}
     h: dict[str, Any] = {}
@@ -797,7 +805,7 @@ def _solve_mip_gurobi(
     for bid in bids:
         xv = x[bid].X
         yv = y[bid].X
-        positions[bid] = (round(xv, 6), round(yv, 6))
+        positions[bid] = (snap_to_grid(xv), snap_to_grid(yv))    # only strips solver float noise
 
         if s[bid]:
             vals = [sv.X for sv in s[bid]]

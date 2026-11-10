@@ -12,10 +12,15 @@ verification enforces.
 A LUT over all (device_type_a, device_type_b) pairs is built on the first
 call and reused thereafter — no file I/O or dict traversal during the SA
 hot loop.
+
+A block mixing device types (digital proximity composite) carries them joined
+by MIXED_TYPE_SEP, e.g. "nmos_rvt+pmos_rvt"; its spacing is the worst case over
+its member types.
 """
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 from typing import NamedTuple
 
@@ -28,6 +33,13 @@ _RULES_PATH = Path(__file__).parent.parent.parent / "myPDK" / "gpdk090_device_ru
 # matching same_cellNames minimums so unknown types never violate that category.
 _DEFAULT_X_SPACING = 2.0
 _DEFAULT_Y_SPACING = 3.0
+
+MIXED_TYPE_SEP = "+"
+
+# Manufacturing grid (µm): gpdk090_tech_simple.json manufacturing_grid = sky130 pdk.json grid.
+# Every placed block origin must be a multiple of it (KLayout x.1b OFFGRID).
+GRID = 0.005
+_GRID_TOL = 1e-6        # in grid units: float noise, not a real step
 
 _rules_cache: dict | None = None
 _lut_cache: dict[tuple[str, str], "SpacingResult"] | None = None
@@ -44,6 +56,20 @@ def _load_rules() -> dict:
 # =============================================================================
 # PUBLIC API
 # =============================================================================
+
+def snap_to_grid(v: float) -> float:
+    return round(round(v / GRID) * GRID, 6)
+
+
+def snap_up_to_grid(v: float) -> float:
+    """Smallest grid multiple >= v (a value already on the grid stays)."""
+    return round(math.ceil(v / GRID - _GRID_TOL) * GRID, 6)
+
+
+def snap_down_to_grid(v: float) -> float:
+    """Largest grid multiple <= v (a value already on the grid stays)."""
+    return round(math.floor(v / GRID + _GRID_TOL) * GRID, 6)
+
 
 class SpacingResult(NamedTuple):
     x_spacing: float  # required horizontal clearance (right edge A → left edge B)
@@ -69,7 +95,14 @@ def compute_block_spacing(block_a: dict, block_b: dict) -> SpacingResult:
         _lut_cache = _build_lut(_load_rules())
 
     result = _lut_cache.get((dt_a, dt_b))
-    if result is None:
+    if result is None and (MIXED_TYPE_SEP in dt_a or MIXED_TYPE_SEP in dt_b):
+        parts = [
+            compute_block_spacing({"device_type": a}, {"device_type": b})
+            for a in dt_a.split(MIXED_TYPE_SEP) for b in dt_b.split(MIXED_TYPE_SEP)
+        ]
+        result = SpacingResult(max(s.x_spacing for s in parts), max(s.y_spacing for s in parts))
+        _lut_cache[(dt_a, dt_b)] = _lut_cache[(dt_b, dt_a)] = result
+    elif result is None:
         # Type not seen at LUT-build time (e.g. block has a new/unknown device_type).
         # Classify on-the-fly and cache the result for subsequent calls.
         rules = _load_rules()
@@ -147,6 +180,9 @@ def is_wpe_pair(block_a: dict, block_b: dict) -> bool:
     dt_b: str = block_b.get("device_type", "")
     if _wpe_lut_cache is None:
         _wpe_lut_cache = _build_wpe_lut(_load_rules())
+    if MIXED_TYPE_SEP in dt_a or MIXED_TYPE_SEP in dt_b:
+        return any(_wpe_lut_cache.get((a, b), False)
+                   for a in dt_a.split(MIXED_TYPE_SEP) for b in dt_b.split(MIXED_TYPE_SEP))
     return _wpe_lut_cache.get((dt_a, dt_b), False)
 
 
