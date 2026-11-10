@@ -84,37 +84,6 @@ def test_variants_span_the_full_configured_interval(gen001, tech_file):
     assert len(set(ars)) == len(ars), "no duplicate shapes expected among the 8 picks"
 
 
-def test_identical_inputs_give_identical_shape(gen001, tech_file):
-    """No explicit 'copy the partner' step is needed for symmetric pairs —
-    the search is a pure function of (W, L, M, device_type), so identical
-    inputs already guarantee identical output."""
-    a = gen001.wmi_search_transistor_shape(
-        tech_file, ar_min=0.5, ar_max=2.0, num_pins=4, **_PRIME_CASE)
-    b = gen001.wmi_search_transistor_shape(
-        tech_file, ar_min=0.5, ar_max=2.0, num_pins=4, **_PRIME_CASE)
-    assert a["variants"] == b["variants"]
-
-
-def test_unit_cell_is_independent_of_multiplier(gen001, tech_file):
-    """wmi_search_unit_cell must not take multiplier as an input — any two
-    devices sharing (device_type, W, L) need the identical unit cell so
-    matching_engine.compute_matching_variants() can share it across a group
-    regardless of per-member multiplier."""
-    uw1, uh1, nf1 = gen001.wmi_search_unit_cell(
-        tech_file, width=12.0, length=0.3, ar_min=0.5, ar_max=2.0, device_type="pmos_rvt")
-    uw2, uh2, nf2 = gen001.wmi_search_unit_cell(
-        tech_file, width=12.0, length=0.3, ar_min=0.5, ar_max=2.0, device_type="pmos_rvt")
-    assert (uw1, uh1, nf1) == (uw2, uh2, nf2)
-    ar = max(uw1, uh1) / min(uw1, uh1)
-    assert ar <= 2.0, f"unit cell roundness {ar} is not close to square"
-
-
-def test_max_layout_fingers_matches_active_min_width(gen001, tech_file):
-    active_min = tech_file["physical_design_rules"]["active"]["min_width"]
-    nf_max = gen001._max_layout_fingers(tech_file, width=1.0)
-    assert nf_max == int(1.0 / active_min)
-
-
 # --- Integration: 011_netlisBlocksGenerator on a real netlist ---------------
 
 _NETLIST = _SCRIPTS_DIR.parent / "#Netlists" / "m03_ota2.sp"

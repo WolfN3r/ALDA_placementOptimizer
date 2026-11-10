@@ -2,8 +2,12 @@
 pipeline.py's module-level geometry helpers (_bbox_area/_hpwl/_aspect_ratio)
 must agree with CostEvaluator's and honor variant_map the same way, since
 both now resolve variants via the shared cost_evaluator.resolve_variant().
+CostEvaluator.evaluate() must measure composite blocks with the variant the
+optimizer selected (variant_map), not the frozen construction-time is_used flag.
 """
-from cost_evaluator import CostEvaluator
+import pytest
+
+from cost_evaluator import CostEvaluator, CostWeights
 import pipeline
 
 
@@ -58,3 +62,70 @@ def test_compute_placed_blocks_defaults_missing_bid_to_variant_zero():
     placed = pipeline._compute_placed_blocks(positions, blocks, {})
     assert placed["B"]["variant_index"] == 0
     assert placed["B"]["main_bbox"]["x_max"] == 2.0 + 4.0
+
+
+def test_evaluate_default_variant_map_is_backward_compatible():
+    blocks, positions, nets = _fixture()
+    ev = CostEvaluator(
+        blocks, nets, init_area=12.0, init_wl=1.0,
+        weights=CostWeights(area_weight=1.0, wirelength_weight=0.0, aspect_ratio_weight=0.0),
+        use_power_rails=False,
+    )
+    # No variant_map passed at all -> same as passing None -> falls back to is_used.
+    cost_no_arg = ev.evaluate(positions)
+    cost_none   = ev.evaluate(positions, None)
+    cost_empty  = ev.evaluate(positions, {})
+    assert cost_no_arg == cost_none == cost_empty
+    # area = 12.0 (fallback bbox), init_area = 12.0 -> area term = 1.0
+    assert cost_no_arg == 1.0
+
+
+def test_evaluate_uses_variant_map_when_given():
+    blocks, positions, nets = _fixture()
+    ev = CostEvaluator(
+        blocks, nets, init_area=36.0, init_wl=1.0,
+        weights=CostWeights(area_weight=1.0, wirelength_weight=0.0, aspect_ratio_weight=0.0),
+        use_power_rails=False,
+    )
+    cost = ev.evaluate(positions, {"B": 1})
+    # area = 36.0 (true bbox with B's real selected variant), init_area = 36.0
+    assert cost == 1.0
+
+
+# ── HPWL and power rails, hand calculation (approved 2026-11-05) ──────────────
+
+def _hpwl_fixture():
+    # A 2x1 at (0, 0), pin p at (1, 0.5) -> absolute (1, 0.5)
+    # B 4x2 at (2, 0), pin q at (0.5, 1) -> absolute (2.5, 1)
+    blocks = {
+        "A": {"variants": [{"main_bbox": {"x_max": 2.0, "y_max": 1.0}, "is_used": True,
+                            "pin_positions": {"p": {"x": 1.0, "y": 0.5}}}]},
+        "B": {"variants": [{"main_bbox": {"x_max": 4.0, "y_max": 2.0}, "is_used": True,
+                            "pin_positions": {"q": {"x": 0.5, "y": 1.0}}}]},
+    }
+    return blocks, {"A": (0.0, 0.0), "B": (2.0, 0.0)}
+
+
+@pytest.mark.parametrize("net_id, rails, expected", [
+    ("n1",  False, 2.0),   # [HAND] |2.5 - 1| + |1 - 0.5| = 1.5 + 0.5
+    ("VDD", False, 2.0),   # rails off: a supply net is an ordinary net
+    ("VDD", True,  2.5),   # [HAND] top rail y = max(0 + 1, 0 + 2) = 2: (2 - 0.5) + (2 - 1)
+    ("VSS", True,  1.5),   # [HAND] bottom rail y = 0: (0.5 - 0) + (1 - 0)
+])
+def test_hpwl_hand_calculation(net_id, rails, expected):
+    blocks, positions = _hpwl_fixture()
+    nets = [{"net_id": net_id, "pins": ["BA_p", "BB_q"]}]
+    ev = CostEvaluator(blocks, nets, init_area=1.0, init_wl=1.0, use_power_rails=rails)
+    assert ev._hpwl(positions, {}) == pytest.approx(expected, abs=1e-12)
+    assert pipeline._hpwl(positions, blocks, nets, use_power_rails=rails) == pytest.approx(expected, abs=1e-12)
+
+
+def test_rescale_cost_hand_calculation():
+    # [HAND] init_area 10, init_wl 4, all weights 1, target AR 1:
+    # 20/10 + 8/4 + (2 - 1)^2 = 2 + 2 + 1 = 5
+    blocks, _ = _hpwl_fixture()
+    ev = CostEvaluator(blocks, [], init_area=10.0, init_wl=4.0,
+                       weights=CostWeights(area_weight=1.0, wirelength_weight=1.0,
+                                           aspect_ratio_weight=1.0, target_aspect_ratio=1.0),
+                       use_power_rails=False)
+    assert ev.rescale_cost(20.0, 8.0, 2.0) == pytest.approx(5.0, abs=1e-12)
