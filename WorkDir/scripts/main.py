@@ -69,11 +69,15 @@ if __name__ == "__main__":
     parser.add_argument("--version",    default=VERSION, help="Output version tag (default: %(default)s)")
     parser.add_argument("--no-routing", dest="no_routing", action="store_true", default=False,
                         help="Skip routing stage (stage 201) even when RUN_ROUTING=True in config")
-    parser.add_argument("--sym-mode", dest="sym_mode", default="aggressive",
-                        choices=["none", "moderate", "aggressive"],
+    parser.add_argument("--sym-mode", dest="sym_mode", default="balanced",
+                        choices=["matched", "balanced", "mirrored"],
                         help="Symmetry constraint aggressiveness for netlist-driven runs (default: %(default)s)")
     parser.add_argument("--random-sizes", dest="random_sizes", action="store_true", default=False,
                         help="With --netlist: randomize device sizes instead of using real netlist values (default: use real sizes)")
+    parser.add_argument("--pdk", default="",
+                        help="With --netlist: PDK folder under WorkDir/pdk/ (e.g. sky130); activates 012 (real PDK devices) instead of 011")
+    parser.add_argument("--params", action="append", default=[],
+                        help="With --pdk: JSON file of design parameter values, e.g. result.json (repeatable, later files win)")
     parser.add_argument("--warmup-strategy", dest="warmup_strategy", default="",
                         choices=["", "corp", "contour", "spring", "spsa", "pso", "bstar"],
                         help="ILP warm-start strategy (default: use 101_placementOptimizer.py constant)")
@@ -96,7 +100,12 @@ if __name__ == "__main__":
     version    = args.version
 
     # --- Stage 1: block generation ---
-    if args.netlist:
+    if args.netlist and args.pdk:
+        gen = _load_script("012_pdkDeviceGenerator.py")
+        blocks_data: dict = gen.run(args.netlist, seed, pdk_name=args.pdk,
+                                     params_paths=args.params, sym_mode=args.sym_mode)
+        script_id_gen = "012"
+    elif args.netlist:
         gen = _load_script("011_netlisBlocksGenerator.py")
         blocks_data: dict = gen.run(args.netlist, seed, sym_mode=args.sym_mode,
                                      random_sizes=args.random_sizes)

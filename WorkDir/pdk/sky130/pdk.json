@@ -1,0 +1,2655 @@
+{
+  "@refs": {
+    "hvi": [75, 20],
+    "hvntm": [125, 20],
+    "hvtp": [78, 44],
+    "li1": [67, 20],
+    "lvtn": [125, 44],
+    "met1": [68, 20],
+    "met2": [69, 20],
+    "met3": [70, 20],
+    "met4": [71, 20],
+    "met5": [72, 20],
+    "npc": [95, 20],
+    "nsdm": [93, 44],
+    "nwell": [64, 20],
+    "psdm": [94, 20],
+    "rpm": [86, 20],
+    "tap": [65, 44],
+    "urpm": [79, 20],
+    "via1": [68, 44],
+    "via2": [69, 44],
+    "sky130_fd_pr__diode_pd2nw_05v5_lvt": [
+      "klayout:n/psdm.8",
+      "@magic:nsd.10b",
+      "@magic:licon.7",
+      "magic:P-diode overlap of N-diode contact < 0.04um (licon.5a)",
+      "@magic:psd.10b",
+      "@magic:diff/tap.11",
+      "@magic:diff/tap.11#2"
+    ],
+    "sd": {
+      "layer": "@met1",
+      "order": "x",
+      "count": "nf+1",
+      "cx": {"1": 0.05, "k": 0.5, "k*l": 1.0, "first": 0.1, "last": -0.1},
+      "cy": {"w": 0.5},
+      "w_min": 0.23,
+      "w": {"1": 0.23},
+      "h_min": 0.29,
+      "h": {"1": -0.424966, "w": 0.999952},
+      "size_exact": false,
+      "samples": 3124
+    },
+    "sky130_fd_pr__npn_05v5_W1p00L2p00": [
+      "klayout:ct_OFFGRID",
+      "klayout:diff_OFFGRID",
+      "klayout:dnwell_OFFGRID",
+      "klayout:li_OFFGRID",
+      "klayout:licon_OFFGRID",
+      "klayout:m1_OFFGRID",
+      "klayout:nsdm_OFFGRID",
+      "klayout:nwell_OFFGRID",
+      "klayout:psdm_OFFGRID",
+      "klayout:tap_OFFGRID"
+    ],
+    "p_ring|n_ring": {
+      "min": 0.005,
+      "pass_intervals": [[0.005, 8.0]],
+      "limited_by": ["klayout:difftap.11", "@magic:diff/tap.10", "magic:N-well width < 0.84um (nwell.1)"],
+      "verification": "clean"
+    },
+    "sky130_fd_pr__cap_vpp_11p5x11p7_l1m1m2m3m4_shieldpom5_x9": [
+      "klayout:m4.5ab",
+      "klayout:vpp.3",
+      "magic:Metal4 > 3um spacing to unrelated m4 < 0.4um (met4.5b)",
+      "magic:Spacing of metal4 features attached to and within 0.40um of large metal4 < 0.4um (met4.5a)"
+    ],
+    "p_ring|var": {
+      "min": 0.005,
+      "pass_intervals": [[0.005, 8.0]],
+      "limited_by": ["klayout:difftap.11", "@magic:diff/tap.10"],
+      "verification": "clean"
+    },
+    "p_ring|vpp": {
+      "min": 0.025,
+      "pass_intervals": [[0.025, 8.0]],
+      "limited_by": ["klayout:li.3", "@magic:li.3"],
+      "verification": "clean"
+    },
+    "n_ring|pdiode": {
+      "min": 0.605,
+      "pass_intervals": [[0.605, 8.0]],
+      "limited_by": ["klayout:nwell.2a", "@magic:nwell.2a"],
+      "verification": "clean"
+    },
+    "n_ring|pnp": {
+      "min": 0.505,
+      "pass_intervals": [[0.505, 8.0]],
+      "limited_by": ["klayout:nwell.2a", "@magic:nwell.2a"],
+      "verification": "clean"
+    },
+    "n_ring|var": {
+      "min": 1.27,
+      "pass_intervals": [[1.27, 8.0]],
+      "limited_by": ["klayout:nwell.2a", "@magic:nwell.2a"],
+      "verification": "clean"
+    },
+    "magic:diff/tap.20 + diff/tap.17,19": "magic:MV Diffusion in N-well to P-tap spacing < 0.76um (diff/tap.20 + diff/tap.17,19)",
+    "magic:nwell.5a, 7": "magic:N-well overlap of Deep N-well < 0.4um outside, 1.03um inside (nwell.5a, 7)",
+    "magic:diff/tap.18,20": "magic:Spacing of N-Diffusion or P-tap to MV nwell < 0.43um (diff/tap.18,20)",
+    "magic:licon.7": "magic:N-tap overlap of N-tap contact < 0.12um in one direction (licon.7)",
+    "magic:nwell.7": "magic:Deep N-well spacing to N-well < 4.5um (nwell.7)",
+    "magic:diff/tap.11": "magic:P-tap spacing to N-well < 0.005um (diff/tap.11)",
+    "magic:diff/tap.10": "magic:N-well overlap of N-tap < 0.18um (diff/tap.10)",
+    "magic:diff/tap.11#2": "magic:P-tap spacing to N-well < 0.13um (diff/tap.11)",
+    "magic:via3.2 - 2 * via3.4": "magic:via3 spacing < 0.08um (via3.2 - 2 * via3.4)",
+    "magic:li.3": "magic:Local interconnect spacing < 0.17um (li.3)",
+    "magic:nsd.10b": "magic:N-tap minimum area < 0.07011um^2 (nsd.10b)",
+    "magic:psd.10b": "magic:P-tap minimum area < 0.07011um^2 (psd.10b)",
+    "area/(perim/4+sqrt(max(p": "area/(perim/4+sqrt(max(perim*perim/16-area,0)))",
+    "perim/4+sqrt(max(perim*p": "perim/4+sqrt(max(perim*perim/16-area,0))",
+    "magic:nwell.2a": "magic:N-well spacing < 1.27um (nwell.2a)",
+    "magic:rpm.1": "magic:Width of RPM/URPM < 1.27um (rpm.1)",
+    "magic:met1.2": "magic:Metal1 spacing < 0.14um (met1.2)"
+  },
+  "_generated": {"by": "characterize_pdk.py", "spec": "characterize.json", "date": "2026-11-10 12:17"},
+  "pdk": "sky130A",
+  "library": "skywater130",
+  "technology": null,
+  "dbu": 0.001,
+  "grid": 0.005,
+  "netlist_defaults": {"nf": 1},
+  "netlist_copies": ["m", "mult", "mf", "vm"],
+  "layout_policy": {"row_gap_poly_min": 1.0, "row_gap_round": 0.1},
+  "routing": {
+    "layers": {
+      "met1": {"gds": "@met1", "pin": [68, 16], "label": [68, 5], "width": 0.14, "space": 0.14},
+      "met2": {"gds": "@met2", "pin": [69, 16], "label": [69, 5], "width": 0.14, "space": 0.14},
+      "met3": {"gds": "@met3", "pin": [70, 16], "label": [70, 5], "width": 0.3, "space": 0.3},
+      "met4": {"gds": "@met4", "pin": [71, 16], "label": [71, 5], "width": 0.3, "space": 0.3},
+      "met5": {"gds": "@met5", "pin": [72, 16], "label": [72, 5], "width": 1.6, "space": 1.6}
+    },
+    "vias": {
+      "via1": {
+        "gds": "@via1",
+        "cut": 0.15,
+        "below": "met1",
+        "above": "met2",
+        "enc_below": [0.055, 0.085],
+        "enc_above": [0.055, 0.085]
+      },
+      "via2": {
+        "gds": "@via2",
+        "cut": 0.2,
+        "below": "met2",
+        "above": "met3",
+        "enc_below": [0.04, 0.085],
+        "enc_above": [0.065, 0.065]
+      }
+    }
+  },
+  "devices": {
+    "nmos": {
+      "@name": "sky130_fd_pr__{key}",
+      "@members": {
+        "nfet_01v8": {
+          "@set": {
+            "device_group": "LV",
+            "merge_layers": ["@nsdm", "@npc"],
+            "footprint": {
+              "w": {"1": 0.35},
+              "h": {"1": 0.75},
+              "x0": {"1": -0.125},
+              "y0": {"1": -0.2},
+              "inset_top": {"1": 0.02}
+            },
+            "pins": {"gate": {"w_min": 0.365, "w": {"1": -0.194844, "l": 0.862086}, "samples": 434}},
+            "clearance": {"left": 0.145, "right": 0.145, "bottom": 0.07, "top": 0.135},
+            "gap": {"x": 0.02, "y": {"r0_r0": 0.19, "r0_r180": 0.27, "m0_r0": 0.23}, "x_routed": 0.02},
+            "scans": {
+              "clearance": {
+                "left": {
+                  "pass_intervals": [[0.145, 2.0]],
+                  "limited_by": ["klayout:difftap.3", "magic:Diffusion spacing < 0.27um (diff/tap.3)"]
+                },
+                "right": {
+                  "pass_intervals": [[0.145, 2.0]],
+                  "limited_by": ["klayout:difftap.3", "magic:Diffusion spacing < 0.27um (diff/tap.3)"]
+                },
+                "bottom": {
+                  "pass_intervals": [[0.07, 2.0]],
+                  "limited_by": [
+                    "klayout:difftap.3",
+                    "magic:Diffusion spacing < 0.27um (diff/tap.3)",
+                    "magic:nFET cannot abut P-diffusion (diff/tap.3)"
+                  ]
+                },
+                "top": {
+                  "pass_intervals": [[0.135, 2.0]],
+                  "limited_by": ["magic:poly contact spacing to P-diffusion < 0.235um (licon.9 + psdm.5a)"]
+                }
+              },
+              "gap": {
+                "x": {
+                  "pass_intervals": [[-0.55, -0.55], [0.02, 2.0]],
+                  "limited_by": ["klayout:difftap.3", "magic:Diffusion spacing < 0.27um (diff/tap.3)"]
+                },
+                "y": {
+                  "r0_r0": {
+                    "pass_intervals": [[-0.11, -0.02], [0.19, 2.0]],
+                    "limited_by": ["klayout:poly.2", "magic:poly spacing < 0.21um (poly.2)"]
+                  },
+                  "r0_r180": {"pass_intervals": [[0.27, 2.0]], "limited_by": ["klayout:npc.2"]},
+                  "m0_r0": {
+                    "pass_intervals": [[-0.46, -0.4], [0.23, 2.0]],
+                    "limited_by": ["klayout:n/psdm.1", "klayout:nsdm.1"]
+                  }
+                },
+                "x_routed": {
+                  "pass_intervals": [[-0.55, -0.55], [0.02, 2.0]],
+                  "limited_by": ["klayout:difftap.3", "magic:Diffusion spacing < 0.27um (diff/tap.3)"]
+                }
+              }
+            }
+          }
+        },
+        "nfet_01v8_lvt": {
+          "@set": {
+            "device_group": "LV",
+            "merge_layers": ["@nsdm", "@npc", "@lvtn"],
+            "footprint": {
+              "w": {"1": 0.35},
+              "h": {"1": 0.75},
+              "x0": {"1": -0.125},
+              "y0": {"1": -0.2},
+              "inset_top": {"1": 0.02}
+            },
+            "pins": {"gate": {"w_min": 0.365, "w": {"1": -0.194844, "l": 0.862086}, "samples": 434}},
+            "clearance": {"left": 0.145, "right": 0.145, "bottom": 0.07, "top": 0.135},
+            "gap": {"x": 0.02, "y": {"r0_r0": 0.19, "r0_r180": 0.27, "m0_r0": 0.34}, "x_routed": 0.02},
+            "scans": {
+              "clearance": {
+                "left": {
+                  "pass_intervals": [[0.145, 2.0]],
+                  "limited_by": ["klayout:difftap.3", "magic:Diffusion spacing < 0.27um (diff/tap.3)"]
+                },
+                "right": {
+                  "pass_intervals": [[0.145, 2.0]],
+                  "limited_by": ["klayout:difftap.3", "magic:Diffusion spacing < 0.27um (diff/tap.3)"]
+                },
+                "bottom": {
+                  "pass_intervals": [[0.07, 2.0]],
+                  "limited_by": [
+                    "klayout:difftap.3",
+                    "magic:Diffusion spacing < 0.27um (diff/tap.3)",
+                    "magic:nFET cannot abut P-diffusion (diff/tap.3)"
+                  ]
+                },
+                "top": {
+                  "pass_intervals": [[0.135, 2.0]],
+                  "limited_by": ["magic:poly contact spacing to P-diffusion < 0.235um (licon.9 + psdm.5a)"]
+                }
+              },
+              "gap": {
+                "x": {
+                  "pass_intervals": [[-0.55, -0.55], [0.02, 2.0]],
+                  "limited_by": ["klayout:difftap.3", "magic:Diffusion spacing < 0.27um (diff/tap.3)"]
+                },
+                "y": {
+                  "r0_r0": {
+                    "pass_intervals": [[0.19, 2.0]],
+                    "limited_by": ["klayout:poly.2", "magic:poly spacing < 0.21um (poly.2)"]
+                  },
+                  "r0_r180": {"pass_intervals": [[0.27, 2.0]], "limited_by": ["klayout:npc.2"]},
+                  "m0_r0": {"pass_intervals": [[-0.46, -0.4], [0.34, 2.0]], "limited_by": ["klayout:lvtn.2"]}
+                },
+                "x_routed": {
+                  "pass_intervals": [[-0.55, -0.55], [0.02, 2.0]],
+                  "limited_by": ["klayout:difftap.3", "magic:Diffusion spacing < 0.27um (diff/tap.3)"]
+                }
+              }
+            }
+          }
+        },
+        "nfet_03v3_nvt": {
+          "@set": {
+            "device_group": "HV",
+            "merge_layers": ["@nsdm", "@npc", "@lvtn", "@hvi", "@hvntm"],
+            "footprint": {
+              "w": {"1": 0.84},
+              "h": {"1": 1.12},
+              "x0": {"1": -0.37},
+              "y0": {"1": -0.385},
+              "inset_bottom": {"1": 0.185},
+              "inset_top": {"1": 0.205}
+            },
+            "pins": {"gate": {"w_min": 0.365, "w": {"1": -0.281189, "l": 0.950192}, "samples": 364}},
+            "clearance": {"left": 0.18, "right": 0.18, "bottom": 0.18, "top": 0.18},
+            "gap": {"x": -0.44, "y": {"r0_r0": 0.7, "r0_r180": 0.7, "m0_r0": 0.7}, "x_routed": -0.44},
+            "scans": {
+              "clearance": {
+                "left": {"pass_intervals": [[0.18, 2.0]], "limited_by": ["klayout:hvdifftap.23"]},
+                "right": {"pass_intervals": [[0.18, 2.0]], "limited_by": ["klayout:hvdifftap.23"]},
+                "bottom": {"pass_intervals": [[0.18, 2.0]], "limited_by": ["klayout:hvdifftap.23"]},
+                "top": {"pass_intervals": [[0.18, 2.0]], "limited_by": ["klayout:hvdifftap.23"]}
+              },
+              "gap": {
+                "x": {
+                  "pass_intervals": [[-0.44, 2.0]],
+                  "limited_by": ["klayout:hvdifftap.15a", "magic:MV Diffusion spacing < 0.3um (diff/tap.15a)"]
+                },
+                "y": {
+                  "r0_r0": {
+                    "pass_intervals": [[-0.05, 0.0], [0.7, 2.0]],
+                    "limited_by": ["klayout:hvi.2", "klayout:hvi.2a"]
+                  },
+                  "r0_r180": {
+                    "pass_intervals": [[-0.1, 0.0], [0.7, 2.0]],
+                    "limited_by": ["klayout:hvi.2", "klayout:hvi.2a"]
+                  },
+                  "m0_r0": {
+                    "pass_intervals": [[-0.83, -0.77], [0.7, 2.0]],
+                    "limited_by": ["klayout:hvi.2", "klayout:hvi.2a"]
+                  }
+                },
+                "x_routed": {
+                  "pass_intervals": [[-0.44, 2.0]],
+                  "limited_by": ["klayout:hvdifftap.15a", "magic:MV Diffusion spacing < 0.3um (diff/tap.15a)"]
+                }
+              }
+            }
+          }
+        },
+        "nfet_05v0_nvt": {
+          "@set": {
+            "device_group": "HV",
+            "merge_layers": ["@nsdm", "@npc", "@lvtn", "@hvi", "@hvntm"],
+            "footprint": {
+              "w": {"1": 0.84},
+              "h": {"1": 1.12},
+              "x0": {"1": -0.37},
+              "y0": {"1": -0.385},
+              "inset_bottom": {"1": 0.185},
+              "inset_top": {"1": 0.205}
+            },
+            "pins": {"gate": {"w_min": 0.65, "w": {"1": -0.402562, "l": 1.042684}, "samples": 284}},
+            "clearance": {"left": 0.18, "right": 0.18, "bottom": 0.18, "top": 0.18},
+            "gap": {"x": -0.44, "y": {"r0_r0": 0.7, "r0_r180": 0.7, "m0_r0": 0.7}, "x_routed": -0.44},
+            "scans": {
+              "clearance": {
+                "left": {"pass_intervals": [[0.18, 2.0]], "limited_by": ["klayout:hvdifftap.23"]},
+                "right": {"pass_intervals": [[0.18, 2.0]], "limited_by": ["klayout:hvdifftap.23"]},
+                "bottom": {"pass_intervals": [[0.18, 2.0]], "limited_by": ["klayout:hvdifftap.23"]},
+                "top": {"pass_intervals": [[0.18, 2.0]], "limited_by": ["klayout:hvdifftap.23"]}
+              },
+              "gap": {
+                "x": {
+                  "pass_intervals": [[-0.44, 2.0]],
+                  "limited_by": ["klayout:hvdifftap.15a", "magic:MV Diffusion spacing < 0.3um (diff/tap.15a)"]
+                },
+                "y": {
+                  "r0_r0": {
+                    "pass_intervals": [[-0.05, 0.0], [0.7, 2.0]],
+                    "limited_by": ["klayout:hvi.2", "klayout:hvi.2a"]
+                  },
+                  "r0_r180": {
+                    "pass_intervals": [[-0.1, 0.0], [0.7, 2.0]],
+                    "limited_by": ["klayout:hvi.2", "klayout:hvi.2a"]
+                  },
+                  "m0_r0": {
+                    "pass_intervals": [[-0.83, -0.77], [0.7, 2.0]],
+                    "limited_by": ["klayout:hvi.2", "klayout:hvi.2a"]
+                  }
+                },
+                "x_routed": {
+                  "pass_intervals": [[-0.44, 2.0]],
+                  "limited_by": ["klayout:hvdifftap.15a", "magic:MV Diffusion spacing < 0.3um (diff/tap.15a)"]
+                }
+              }
+            }
+          }
+        },
+        "nfet_g5v0d10v5": {
+          "@set": {
+            "device_group": "HV",
+            "merge_layers": ["@nsdm", "@npc", "@hvi", "@hvntm"],
+            "footprint": {
+              "w": {"1": 0.84},
+              "h": {"1": 1.12},
+              "x0": {"1": -0.37},
+              "y0": {"1": -0.385},
+              "inset_bottom": {"1": 0.185},
+              "inset_top": {"1": 0.205}
+            },
+            "pins": {"gate": {"w_min": 0.365, "w": {"1": -0.281189, "l": 0.950192}, "samples": 364}},
+            "clearance": {"left": 0.18, "right": 0.18, "bottom": 0.18, "top": 0.18},
+            "gap": {"x": -0.44, "y": {"r0_r0": 0.7, "r0_r180": 0.7, "m0_r0": 0.7}, "x_routed": -0.44},
+            "scans": {
+              "clearance": {
+                "left": {"pass_intervals": [[0.18, 2.0]], "limited_by": ["klayout:hvdifftap.23"]},
+                "right": {"pass_intervals": [[0.18, 2.0]], "limited_by": ["klayout:hvdifftap.23"]},
+                "bottom": {"pass_intervals": [[0.18, 2.0]], "limited_by": ["klayout:hvdifftap.23"]},
+                "top": {"pass_intervals": [[0.18, 2.0]], "limited_by": ["klayout:hvdifftap.23"]}
+              },
+              "gap": {
+                "x": {
+                  "pass_intervals": [[-0.44, 2.0]],
+                  "limited_by": ["klayout:hvdifftap.15a", "magic:MV Diffusion spacing < 0.3um (diff/tap.15a)"]
+                },
+                "y": {
+                  "r0_r0": {
+                    "pass_intervals": [[-0.05, 0.0], [0.7, 2.0]],
+                    "limited_by": ["klayout:hvi.2", "klayout:hvi.2a"]
+                  },
+                  "r0_r180": {
+                    "pass_intervals": [[-0.1, 0.0], [0.7, 2.0]],
+                    "limited_by": ["klayout:hvi.2", "klayout:hvi.2a"]
+                  },
+                  "m0_r0": {
+                    "pass_intervals": [[-0.83, -0.77], [0.7, 2.0]],
+                    "limited_by": ["klayout:hvi.2", "klayout:hvi.2a"]
+                  }
+                },
+                "x_routed": {
+                  "pass_intervals": [[-0.44, 2.0]],
+                  "limited_by": ["klayout:hvdifftap.15a", "magic:MV Diffusion spacing < 0.3um (diff/tap.15a)"]
+                }
+              }
+            }
+          }
+        }
+      },
+      "class": "nmos",
+      "terminals": ["drain", "gate", "source", "bulk"],
+      "pcell": "nfet",
+      "fixed": {
+        "type": "{name}",
+        "bulk": "None",
+        "gate_con_pos": "top",
+        "sd_con_col": 1,
+        "inter_sd_l": 0.5,
+        "con_bet_fin": 1
+      },
+      "map": {"w": "W/nf", "l": "L", "nf": "nf"},
+      "snap_params": {"w": 0.005, "l": 0.005},
+      "ring": "p_ring",
+      "footprint": {
+        "w": {"nf": 0.5, "nf*l": 1.0},
+        "h": {"w": 1.0},
+        "x0": {},
+        "y0": {},
+        "inset_bottom": {},
+        "inset_top": {},
+        "samples": 27,
+        "max_error_um": 0.0
+      },
+      "pins": {
+        "sd": "@sd",
+        "gate": {
+          "layer": "@met1",
+          "order": "x",
+          "count": "nf",
+          "cx": {"1": 0.3, "l": 0.5, "k": 0.5, "k*l": 1.0},
+          "cy": {"1": 0.365, "w": 1.0},
+          "w": {},
+          "h": {"1": 0.23},
+          "size_exact": false
+        }
+      },
+      "clearance": {},
+      "gap": {"y": {}},
+      "scans": {
+        "clearance": {"left": {}, "right": {}, "bottom": {}, "top": {}},
+        "gap": {"x": {}, "y": {"r0_r0": {}, "r0_r180": {}, "m0_r0": {}}, "x_routed": {}}
+      },
+      "verification": {"tight_ring_2x2": "clean", "routed_pair": "clean"}
+    },
+    "pmos": {
+      "@name": "sky130_fd_pr__{key}",
+      "@members": {
+        "pfet_01v8": {
+          "@set": {
+            "device_group": "LV",
+            "merge_layers": ["@psdm", "@npc"],
+            "footprint": {
+              "w": {"1": 0.71},
+              "h": {"1": 1.11},
+              "x0": {"1": -0.305},
+              "y0": {"1": -0.38},
+              "inset_bottom": {"1": 0.18},
+              "inset_top": {"1": 0.2}
+            },
+            "pins": {"gate": {"w": {"1": -0.194844, "l": 0.862086}, "samples": 434}},
+            "clearance": {"left": -0.035, "right": -0.035, "bottom": -0.11, "top": -0.09},
+            "gap": {"x": -0.34, "y": {"r0_r0": -0.17, "r0_r180": -0.09, "m0_r0": -0.13}, "x_routed": -0.34},
+            "scans": {
+              "clearance": {
+                "left": {
+                  "pass_intervals": [[-0.035, 2.0]],
+                  "limited_by": ["klayout:difftap.3", "magic:Diffusion spacing < 0.27um (diff/tap.3)"]
+                },
+                "right": {
+                  "pass_intervals": [[-0.035, 2.0]],
+                  "limited_by": ["klayout:difftap.3", "magic:Diffusion spacing < 0.27um (diff/tap.3)"]
+                },
+                "bottom": {
+                  "pass_intervals": [[-0.11, 2.0]],
+                  "limited_by": [
+                    "klayout:difftap.3",
+                    "magic:Diffusion spacing < 0.27um (diff/tap.3)",
+                    "magic:pFET cannot abut N-diffusion (diff/tap.3)"
+                  ]
+                },
+                "top": {
+                  "pass_intervals": [[-0.09, 2.0]],
+                  "limited_by": [
+                    "klayout:licon.14",
+                    "magic:poly contact spacing to diffusion < 0.19um (licon.14)"
+                  ]
+                }
+              },
+              "gap": {
+                "x": {
+                  "pass_intervals": [[-0.34, 2.0]],
+                  "limited_by": ["klayout:difftap.3", "magic:Diffusion spacing < 0.27um (diff/tap.3)"]
+                },
+                "y": {
+                  "r0_r0": {
+                    "pass_intervals": [[-0.425, -0.38], [-0.17, 2.0]],
+                    "limited_by": ["klayout:poly.2", "magic:poly spacing < 0.21um (poly.2)"]
+                  },
+                  "r0_r180": {"pass_intervals": [[-0.09, 2.0]], "limited_by": ["klayout:npc.2"]},
+                  "m0_r0": {
+                    "pass_intervals": [[-0.82, -0.76], [-0.13, 2.0]],
+                    "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"]
+                  }
+                },
+                "x_routed": {
+                  "pass_intervals": [[-0.34, 2.0]],
+                  "limited_by": ["klayout:difftap.3", "magic:Diffusion spacing < 0.27um (diff/tap.3)"]
+                }
+              }
+            }
+          }
+        },
+        "pfet_01v8_lvt": {
+          "@set": {
+            "device_group": "LV",
+            "merge_layers": ["@psdm", "@npc", "@lvtn"],
+            "footprint": {
+              "w": {"1": 0.71},
+              "h": {"1": 1.11},
+              "x0": {"1": -0.305},
+              "y0": {"1": -0.38},
+              "inset_bottom": {"1": 0.18},
+              "inset_top": {"1": 0.2}
+            },
+            "pins": {"gate": {"w": {"1": -0.219842, "l": 0.887594}, "samples": 434}},
+            "clearance": {"left": -0.035, "right": -0.035, "bottom": -0.11, "top": -0.09},
+            "gap": {"x": -0.34, "y": {"r0_r0": -0.17, "r0_r180": -0.09, "m0_r0": -0.02}, "x_routed": -0.34},
+            "scans": {
+              "clearance": {
+                "left": {
+                  "pass_intervals": [[-0.035, 2.0]],
+                  "limited_by": ["klayout:difftap.3", "magic:Diffusion spacing < 0.27um (diff/tap.3)"]
+                },
+                "right": {
+                  "pass_intervals": [[-0.035, 2.0]],
+                  "limited_by": ["klayout:difftap.3", "magic:Diffusion spacing < 0.27um (diff/tap.3)"]
+                },
+                "bottom": {
+                  "pass_intervals": [[-0.11, 2.0]],
+                  "limited_by": [
+                    "klayout:difftap.3",
+                    "magic:Diffusion spacing < 0.27um (diff/tap.3)",
+                    "magic:pFET cannot abut N-diffusion (diff/tap.3)"
+                  ]
+                },
+                "top": {
+                  "pass_intervals": [[-0.09, 2.0]],
+                  "limited_by": [
+                    "klayout:licon.14",
+                    "magic:poly contact spacing to diffusion < 0.19um (licon.14)"
+                  ]
+                }
+              },
+              "gap": {
+                "x": {
+                  "pass_intervals": [[-0.34, 2.0]],
+                  "limited_by": ["klayout:difftap.3", "magic:Diffusion spacing < 0.27um (diff/tap.3)"]
+                },
+                "y": {
+                  "r0_r0": {
+                    "pass_intervals": [[-0.17, 2.0]],
+                    "limited_by": ["klayout:poly.2", "magic:poly spacing < 0.21um (poly.2)"]
+                  },
+                  "r0_r180": {"pass_intervals": [[-0.09, 2.0]], "limited_by": ["klayout:npc.2"]},
+                  "m0_r0": {
+                    "pass_intervals": [[-0.82, -0.76], [-0.02, 2.0]],
+                    "limited_by": ["klayout:lvtn.2"]
+                  }
+                },
+                "x_routed": {
+                  "pass_intervals": [[-0.34, 2.0]],
+                  "limited_by": ["klayout:difftap.3", "magic:Diffusion spacing < 0.27um (diff/tap.3)"]
+                }
+              }
+            }
+          }
+        },
+        "pfet_01v8_hvt": {
+          "@set": {
+            "device_group": "LV",
+            "merge_layers": ["@psdm", "@npc", "@hvtp"],
+            "footprint": {
+              "w": {"1": 0.71},
+              "h": {"1": 1.11},
+              "x0": {"1": -0.305},
+              "y0": {"1": -0.38},
+              "inset_bottom": {"1": 0.18},
+              "inset_top": {"1": 0.2}
+            },
+            "pins": {"gate": {"w": {"1": -0.194844, "l": 0.862086}, "samples": 434}},
+            "clearance": {"left": -0.035, "right": -0.035, "bottom": -0.11, "top": -0.09},
+            "gap": {"x": -0.34, "y": {"r0_r0": -0.17, "r0_r180": -0.09, "m0_r0": -0.02}, "x_routed": -0.34},
+            "scans": {
+              "clearance": {
+                "left": {
+                  "pass_intervals": [[-0.035, 2.0]],
+                  "limited_by": ["klayout:difftap.3", "magic:Diffusion spacing < 0.27um (diff/tap.3)"]
+                },
+                "right": {
+                  "pass_intervals": [[-0.035, 2.0]],
+                  "limited_by": ["klayout:difftap.3", "magic:Diffusion spacing < 0.27um (diff/tap.3)"]
+                },
+                "bottom": {
+                  "pass_intervals": [[-0.11, 2.0]],
+                  "limited_by": [
+                    "klayout:difftap.3",
+                    "magic:Diffusion spacing < 0.27um (diff/tap.3)",
+                    "magic:pFET cannot abut N-diffusion (diff/tap.3)"
+                  ]
+                },
+                "top": {
+                  "pass_intervals": [[-0.09, 2.0]],
+                  "limited_by": [
+                    "klayout:licon.14",
+                    "magic:poly contact spacing to diffusion < 0.19um (licon.14)"
+                  ]
+                }
+              },
+              "gap": {
+                "x": {
+                  "pass_intervals": [[-0.34, 2.0]],
+                  "limited_by": ["klayout:difftap.3", "magic:Diffusion spacing < 0.27um (diff/tap.3)"]
+                },
+                "y": {
+                  "r0_r0": {
+                    "pass_intervals": [[-0.17, 2.0]],
+                    "limited_by": ["klayout:poly.2", "magic:poly spacing < 0.21um (poly.2)"]
+                  },
+                  "r0_r180": {"pass_intervals": [[-0.09, 2.0]], "limited_by": ["klayout:npc.2"]},
+                  "m0_r0": {
+                    "pass_intervals": [[-0.82, -0.76], [-0.02, 2.0]],
+                    "limited_by": ["klayout:hvtp.2"]
+                  }
+                },
+                "x_routed": {
+                  "pass_intervals": [[-0.34, 2.0]],
+                  "limited_by": ["klayout:difftap.3", "magic:Diffusion spacing < 0.27um (diff/tap.3)"]
+                }
+              }
+            }
+          }
+        },
+        "pfet_g5v0d10v5": {
+          "@set": {
+            "device_group": "HV",
+            "merge_layers": ["@psdm", "@npc", "@hvi"],
+            "footprint": {
+              "w": {"1": 1.03},
+              "h": {"1": 1.43},
+              "x0": {"1": -0.465},
+              "y0": {"1": -0.54},
+              "inset_bottom": {"1": 0.34},
+              "inset_top": {"1": 0.36}
+            },
+            "pins": {"gate": {"w": {"1": -0.281189, "l": 0.950192}, "samples": 364}},
+            "clearance": {"left": 0.43, "right": 0.43, "bottom": 0.43, "top": 0.43},
+            "gap": {"x": -0.63, "y": {"r0_r0": 0.7, "r0_r180": 0.7, "m0_r0": 0.7}, "x_routed": -0.63},
+            "scans": {
+              "clearance": {
+                "left": {"pass_intervals": [[0.43, 2.0]], "limited_by": ["klayout:hvdifftap.20"]},
+                "right": {"pass_intervals": [[0.43, 2.0]], "limited_by": ["klayout:hvdifftap.20"]},
+                "bottom": {"pass_intervals": [[0.43, 2.0]], "limited_by": ["klayout:hvdifftap.20"]},
+                "top": {"pass_intervals": [[0.43, 2.0]], "limited_by": ["klayout:hvdifftap.20"]}
+              },
+              "gap": {
+                "x": {
+                  "pass_intervals": [[-0.63, 2.0]],
+                  "limited_by": ["klayout:hvdifftap.15a", "magic:MV Diffusion spacing < 0.3um (diff/tap.15a)"]
+                },
+                "y": {
+                  "r0_r0": {
+                    "pass_intervals": [[-0.745, -0.7], [-0.49, 0.0], [0.7, 2.0]],
+                    "limited_by": ["klayout:hvi.2", "klayout:hvi.2a"]
+                  },
+                  "r0_r180": {
+                    "pass_intervals": [[-0.41, 0.0], [0.7, 2.0]],
+                    "limited_by": ["klayout:hvi.2", "klayout:hvi.2a"]
+                  },
+                  "m0_r0": {
+                    "pass_intervals": [[-0.45, 0.0], [0.7, 2.0]],
+                    "limited_by": ["klayout:hvi.2", "klayout:hvi.2a"]
+                  }
+                },
+                "x_routed": {
+                  "pass_intervals": [[-0.63, 2.0]],
+                  "limited_by": ["klayout:hvdifftap.15a", "magic:MV Diffusion spacing < 0.3um (diff/tap.15a)"]
+                }
+              }
+            }
+          }
+        }
+      },
+      "class": "pmos",
+      "terminals": ["drain", "gate", "source", "bulk"],
+      "pcell": "pfet",
+      "fixed": {
+        "type": "{name}",
+        "bulk": "None",
+        "gate_con_pos": "top",
+        "sd_con_col": 1,
+        "inter_sd_l": 0.5,
+        "con_bet_fin": 1
+      },
+      "map": {"w": "W/nf", "l": "L", "nf": "nf"},
+      "snap_params": {"w": 0.005, "l": 0.005},
+      "ring": "n_ring",
+      "footprint": {
+        "w": {"nf": 0.5, "nf*l": 1.0},
+        "h": {"w": 1.0},
+        "x0": {},
+        "y0": {},
+        "inset_bottom": {},
+        "inset_top": {},
+        "samples": 27,
+        "max_error_um": 0.0
+      },
+      "pins": {
+        "sd": "@sd",
+        "gate": {
+          "layer": "@met1",
+          "order": "x",
+          "count": "nf",
+          "cx": {"1": 0.3, "l": 0.5, "k": 0.5, "k*l": 1.0},
+          "cy": {"1": 0.365, "w": 1.0},
+          "w_min": 0.365,
+          "w": {},
+          "h": {"1": 0.23},
+          "size_exact": false
+        }
+      },
+      "clearance": {},
+      "gap": {"y": {}},
+      "scans": {
+        "clearance": {"left": {}, "right": {}, "bottom": {}, "top": {}},
+        "gap": {"x": {}, "y": {"r0_r0": {}, "r0_r180": {}, "m0_r0": {}}, "x_routed": {}}
+      },
+      "verification": {"tight_ring_2x2": "clean", "routed_pair": "clean"}
+    },
+    "res": {
+      "@name": "sky130_fd_pr__{key}",
+      "@members": {
+        "res_high_po_0p35": {
+          "@set": {
+            "pcell": "res_poly",
+            "fixed": {"type": "{name}"},
+            "map": {"len": "L-0.12"},
+            "snap_params": {"len": 0.01},
+            "merge_layers": ["@rpm", "@psdm", "@npc"],
+            "series": {"rcon": 589.99, "r_per_um": 1112.41, "L_min": 0.62},
+            "footprint": {
+              "w": {"1": 1.27},
+              "h": {"1": 4.72},
+              "x0": {"1": -0.635},
+              "y0": {"1": -2.36},
+              "samples": 4
+            },
+            "pins": {
+              "ends": {"cy": {"1": -1.0775, "k": 2.155}, "w": {"1": 0.25}, "h": {"1": 2.105}, "samples": 8}
+            },
+            "clearance": {"left": 0.155, "right": 0.155, "bottom": 0.415, "top": 0.415},
+            "gap": {"x": -0.71, "y": {"r0_r0": 0.84, "r0_r180": 0.84, "m0_r0": 0.84}},
+            "scans": {
+              "clearance": {
+                "left": {
+                  "pass_intervals": [[0.155, 2.0]],
+                  "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"]
+                },
+                "right": {
+                  "pass_intervals": [[0.155, 2.0]],
+                  "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"]
+                },
+                "bottom": {
+                  "pass_intervals": [[0.415, 2.0]],
+                  "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"]
+                },
+                "top": {
+                  "pass_intervals": [[0.415, 2.0]],
+                  "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"]
+                }
+              },
+              "gap": {
+                "x": {
+                  "pass_intervals": [[-0.71, 2.0]],
+                  "limited_by": [
+                    "klayout:poly.2",
+                    "magic:Distance between precision resistors < 0.21um (poly.2)",
+                    "magic:poly spacing < 0.21um (poly.2)"
+                  ]
+                },
+                "y": {
+                  "r0_r0": {"pass_intervals": [[0.84, 2.0]], "limited_by": ["klayout:rpm.2"]},
+                  "r0_r180": {"pass_intervals": [[0.84, 2.0]], "limited_by": ["klayout:rpm.2"]},
+                  "m0_r0": {"pass_intervals": [[0.84, 2.0]], "limited_by": ["klayout:rpm.2"]}
+                }
+              }
+            }
+          }
+        },
+        "res_high_po_0p69": {
+          "@set": {
+            "pcell": "res_poly",
+            "fixed": {"type": "{name}"},
+            "map": {"len": "L-0.12"},
+            "snap_params": {"len": 0.01},
+            "merge_layers": ["@rpm", "@psdm", "@npc"],
+            "series": {"rcon": 389.9, "r_per_um": 491.36, "L_min": 0.62},
+            "footprint": {
+              "w": {"1": 1.27},
+              "h": {"1": 4.72},
+              "x0": {"1": -0.635},
+              "y0": {"1": -2.36},
+              "samples": 4
+            },
+            "pins": {
+              "ends": {"cy": {"1": -1.0775, "k": 2.155}, "w": {"1": 0.59}, "h": {"1": 2.105}, "samples": 8}
+            },
+            "clearance": {"left": 0.325, "right": 0.325, "bottom": 0.415, "top": 0.415},
+            "gap": {"x": -0.37, "y": {"r0_r0": 0.84, "r0_r180": 0.84, "m0_r0": 0.84}},
+            "scans": {
+              "clearance": {
+                "left": {
+                  "pass_intervals": [[0.325, 2.0]],
+                  "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"]
+                },
+                "right": {
+                  "pass_intervals": [[0.325, 2.0]],
+                  "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"]
+                },
+                "bottom": {
+                  "pass_intervals": [[0.415, 2.0]],
+                  "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"]
+                },
+                "top": {
+                  "pass_intervals": [[0.415, 2.0]],
+                  "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"]
+                }
+              },
+              "gap": {
+                "x": {
+                  "pass_intervals": [[-0.37, 2.0]],
+                  "limited_by": [
+                    "klayout:poly.2",
+                    "magic:Distance between precision resistors < 0.21um (poly.2)",
+                    "magic:poly spacing < 0.21um (poly.2)"
+                  ]
+                },
+                "y": {
+                  "r0_r0": {"pass_intervals": [[0.84, 2.0]], "limited_by": ["klayout:rpm.2"]},
+                  "r0_r180": {"pass_intervals": [[0.84, 2.0]], "limited_by": ["klayout:rpm.2"]},
+                  "m0_r0": {"pass_intervals": [[0.84, 2.0]], "limited_by": ["klayout:rpm.2"]}
+                }
+              }
+            }
+          }
+        },
+        "res_high_po_1p41": {
+          "@set": {
+            "pcell": "res_poly",
+            "fixed": {"type": "{name}"},
+            "map": {"len": "L-0.12"},
+            "snap_params": {"len": 0.01},
+            "merge_layers": ["@rpm", "@psdm", "@npc"],
+            "series": {"rcon": 254.77, "r_per_um": 230.05, "L_min": 0.62},
+            "footprint": {
+              "w": {"1": 1.81},
+              "h": {"1": 4.72},
+              "x0": {"1": -0.905},
+              "y0": {"1": -2.36},
+              "samples": 4
+            },
+            "pins": {
+              "ends": {"cy": {"1": -1.0775, "k": 2.155}, "w": {"1": 1.31}, "h": {"1": 2.105}, "samples": 8}
+            },
+            "clearance": {"left": 0.415, "right": 0.415, "bottom": 0.415, "top": 0.415},
+            "gap": {"x": -0.19, "y": {"r0_r0": 0.84, "r0_r180": 0.84, "m0_r0": 0.84}},
+            "scans": {
+              "clearance": {
+                "left": {
+                  "pass_intervals": [[0.415, 2.0]],
+                  "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"]
+                },
+                "right": {
+                  "pass_intervals": [[0.415, 2.0]],
+                  "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"]
+                },
+                "bottom": {
+                  "pass_intervals": [[0.415, 2.0]],
+                  "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"]
+                },
+                "top": {
+                  "pass_intervals": [[0.415, 2.0]],
+                  "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"]
+                }
+              },
+              "gap": {
+                "x": {
+                  "pass_intervals": [[-0.19, 2.0]],
+                  "limited_by": [
+                    "klayout:poly.2",
+                    "magic:Distance between precision resistors < 0.21um (poly.2)",
+                    "magic:poly spacing < 0.21um (poly.2)"
+                  ]
+                },
+                "y": {
+                  "r0_r0": {"pass_intervals": [[0.84, 2.0]], "limited_by": ["klayout:rpm.2"]},
+                  "r0_r180": {"pass_intervals": [[0.84, 2.0]], "limited_by": ["klayout:rpm.2"]},
+                  "m0_r0": {"pass_intervals": [[0.84, 2.0]], "limited_by": ["klayout:rpm.2"]}
+                }
+              }
+            }
+          }
+        },
+        "res_high_po_2p85": {
+          "@set": {
+            "pcell": "res_poly",
+            "fixed": {"type": "{name}"},
+            "map": {"len": "L-0.12"},
+            "snap_params": {"len": 0.01},
+            "merge_layers": ["@rpm", "@psdm", "@npc"],
+            "series": {"rcon": 130.36, "r_per_um": 113.56, "L_min": 0.62},
+            "footprint": {
+              "w": {"1": 3.25},
+              "h": {"1": 4.72},
+              "x0": {"1": -1.625},
+              "y0": {"1": -2.36},
+              "samples": 4
+            },
+            "pins": {
+              "ends": {"cy": {"1": -1.0775, "k": 2.155}, "w": {"1": 2.75}, "h": {"1": 2.105}, "samples": 8}
+            },
+            "clearance": {"left": 0.415, "right": 0.415, "bottom": 0.415, "top": 0.415},
+            "gap": {"x": -0.19, "y": {"r0_r0": 0.84, "r0_r180": 0.84, "m0_r0": 0.84}},
+            "scans": {
+              "clearance": {
+                "left": {
+                  "pass_intervals": [[0.415, 2.0]],
+                  "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"]
+                },
+                "right": {
+                  "pass_intervals": [[0.415, 2.0]],
+                  "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"]
+                },
+                "bottom": {
+                  "pass_intervals": [[0.415, 2.0]],
+                  "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"]
+                },
+                "top": {
+                  "pass_intervals": [[0.415, 2.0]],
+                  "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"]
+                }
+              },
+              "gap": {
+                "x": {
+                  "pass_intervals": [[-0.19, 2.0]],
+                  "limited_by": [
+                    "klayout:poly.2",
+                    "magic:Distance between precision resistors < 0.21um (poly.2)",
+                    "magic:poly spacing < 0.21um (poly.2)"
+                  ]
+                },
+                "y": {
+                  "r0_r0": {"pass_intervals": [[0.84, 2.0]], "limited_by": ["klayout:rpm.2"]},
+                  "r0_r180": {"pass_intervals": [[0.84, 2.0]], "limited_by": ["klayout:rpm.2"]},
+                  "m0_r0": {"pass_intervals": [[0.84, 2.0]], "limited_by": ["klayout:rpm.2"]}
+                }
+              }
+            }
+          }
+        },
+        "res_high_po_5p73": {
+          "@set": {
+            "pcell": "res_poly",
+            "fixed": {"type": "{name}"},
+            "map": {"len": "L-0.12"},
+            "snap_params": {"len": 0.01},
+            "merge_layers": ["@rpm", "@psdm", "@npc"],
+            "series": {"rcon": 68.05, "r_per_um": 56.46, "L_min": 0.62},
+            "footprint": {
+              "w": {"1": 6.13},
+              "h": {"1": 4.72},
+              "x0": {"1": -3.065},
+              "y0": {"1": -2.36},
+              "samples": 4
+            },
+            "pins": {
+              "ends": {"cy": {"1": -1.0775, "k": 2.155}, "w": {"1": 5.63}, "h": {"1": 2.105}, "samples": 8}
+            },
+            "clearance": {"left": 0.415, "right": 0.415, "bottom": 0.415, "top": 0.415},
+            "gap": {"x": -0.19, "y": {"r0_r0": 0.84, "r0_r180": 0.84, "m0_r0": 0.84}},
+            "scans": {
+              "clearance": {
+                "left": {
+                  "pass_intervals": [[0.415, 2.0]],
+                  "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"]
+                },
+                "right": {
+                  "pass_intervals": [[0.415, 2.0]],
+                  "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"]
+                },
+                "bottom": {
+                  "pass_intervals": [[0.415, 2.0]],
+                  "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"]
+                },
+                "top": {
+                  "pass_intervals": [[0.415, 2.0]],
+                  "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"]
+                }
+              },
+              "gap": {
+                "x": {
+                  "pass_intervals": [[-0.19, 2.0]],
+                  "limited_by": [
+                    "klayout:poly.2",
+                    "magic:Distance between precision resistors < 0.21um (poly.2)",
+                    "magic:poly spacing < 0.21um (poly.2)"
+                  ]
+                },
+                "y": {
+                  "r0_r0": {"pass_intervals": [[0.84, 2.0]], "limited_by": ["klayout:rpm.2"]},
+                  "r0_r180": {"pass_intervals": [[0.84, 2.0]], "limited_by": ["klayout:rpm.2"]},
+                  "m0_r0": {"pass_intervals": [[0.84, 2.0]], "limited_by": ["klayout:rpm.2"]}
+                }
+              }
+            }
+          }
+        },
+        "res_xhigh_po_0p35": {
+          "@set": {
+            "pcell": "res_poly",
+            "fixed": {"type": "{name}"},
+            "map": {"len": "L-0.12"},
+            "snap_params": {"len": 0.01},
+            "merge_layers": ["@urpm", "@psdm", "@npc"],
+            "series": {"rcon": 587.8046, "r_per_um": 5714.2857, "L_min": 0.62},
+            "footprint": {
+              "w": {"1": 1.27},
+              "h": {"1": 4.72},
+              "x0": {"1": -0.635},
+              "y0": {"1": -2.36},
+              "samples": 4
+            },
+            "pins": {
+              "ends": {"cy": {"1": -1.0775, "k": 2.155}, "w": {"1": 0.25}, "h": {"1": 2.105}, "samples": 8}
+            },
+            "clearance": {"left": 0.155, "right": 0.155, "bottom": 0.415, "top": 0.415},
+            "gap": {"x": -0.71, "y": {"r0_r0": 0.84, "r0_r180": 0.84, "m0_r0": 0.84}},
+            "scans": {
+              "clearance": {
+                "left": {
+                  "pass_intervals": [[0.155, 2.0]],
+                  "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"]
+                },
+                "right": {
+                  "pass_intervals": [[0.155, 2.0]],
+                  "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"]
+                },
+                "bottom": {
+                  "pass_intervals": [[0.415, 2.0]],
+                  "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"]
+                },
+                "top": {
+                  "pass_intervals": [[0.415, 2.0]],
+                  "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"]
+                }
+              },
+              "gap": {
+                "x": {
+                  "pass_intervals": [[-0.71, 2.0]],
+                  "limited_by": [
+                    "klayout:poly.2",
+                    "magic:Distance between precision resistors < 0.21um (poly.2)",
+                    "magic:poly spacing < 0.21um (poly.2)"
+                  ]
+                },
+                "y": {
+                  "r0_r0": {"pass_intervals": [[0.84, 2.0]], "limited_by": ["klayout:urpm.2"]},
+                  "r0_r180": {"pass_intervals": [[0.84, 2.0]], "limited_by": ["klayout:urpm.2"]},
+                  "m0_r0": {"pass_intervals": [[0.84, 2.0]], "limited_by": ["klayout:urpm.2"]}
+                }
+              }
+            }
+          }
+        },
+        "res_xhigh_po_0p69": {
+          "@set": {
+            "pcell": "res_poly",
+            "fixed": {"type": "{name}"},
+            "map": {"len": "L-0.12"},
+            "snap_params": {"len": 0.01},
+            "merge_layers": ["@urpm", "@psdm", "@npc"],
+            "series": {"rcon": 403.4235, "r_per_um": 2898.5507, "L_min": 0.62},
+            "footprint": {
+              "w": {"1": 1.27},
+              "h": {"1": 4.72},
+              "x0": {"1": -0.635},
+              "y0": {"1": -2.36},
+              "samples": 4
+            },
+            "pins": {
+              "ends": {"cy": {"1": -1.0775, "k": 2.155}, "w": {"1": 0.59}, "h": {"1": 2.105}, "samples": 8}
+            },
+            "clearance": {"left": 0.325, "right": 0.325, "bottom": 0.415, "top": 0.415},
+            "gap": {"x": -0.37, "y": {"r0_r0": 0.84, "r0_r180": 0.84, "m0_r0": 0.84}},
+            "scans": {
+              "clearance": {
+                "left": {
+                  "pass_intervals": [[0.325, 2.0]],
+                  "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"]
+                },
+                "right": {
+                  "pass_intervals": [[0.325, 2.0]],
+                  "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"]
+                },
+                "bottom": {
+                  "pass_intervals": [[0.415, 2.0]],
+                  "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"]
+                },
+                "top": {
+                  "pass_intervals": [[0.415, 2.0]],
+                  "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"]
+                }
+              },
+              "gap": {
+                "x": {
+                  "pass_intervals": [[-0.37, 2.0]],
+                  "limited_by": [
+                    "klayout:poly.2",
+                    "magic:Distance between precision resistors < 0.21um (poly.2)",
+                    "magic:poly spacing < 0.21um (poly.2)"
+                  ]
+                },
+                "y": {
+                  "r0_r0": {"pass_intervals": [[0.84, 2.0]], "limited_by": ["klayout:urpm.2"]},
+                  "r0_r180": {"pass_intervals": [[0.84, 2.0]], "limited_by": ["klayout:urpm.2"]},
+                  "m0_r0": {"pass_intervals": [[0.84, 2.0]], "limited_by": ["klayout:urpm.2"]}
+                }
+              }
+            }
+          }
+        },
+        "res_xhigh_po_1p41": {
+          "@set": {
+            "pcell": "res_poly",
+            "fixed": {"type": "{name}"},
+            "map": {"len": "L-0.12"},
+            "snap_params": {"len": 0.01},
+            "merge_layers": ["@urpm", "@psdm", "@npc"],
+            "series": {"rcon": 232.396, "r_per_um": 1418.4397, "L_min": 0.62},
+            "footprint": {
+              "w": {"1": 1.81},
+              "h": {"1": 4.72},
+              "x0": {"1": -0.905},
+              "y0": {"1": -2.36},
+              "samples": 4
+            },
+            "pins": {
+              "ends": {"cy": {"1": -1.0775, "k": 2.155}, "w": {"1": 1.31}, "h": {"1": 2.105}, "samples": 8}
+            },
+            "clearance": {"left": 0.415, "right": 0.415, "bottom": 0.415, "top": 0.415},
+            "gap": {"x": -0.19, "y": {"r0_r0": 0.84, "r0_r180": 0.84, "m0_r0": 0.84}},
+            "scans": {
+              "clearance": {
+                "left": {
+                  "pass_intervals": [[0.415, 2.0]],
+                  "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"]
+                },
+                "right": {
+                  "pass_intervals": [[0.415, 2.0]],
+                  "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"]
+                },
+                "bottom": {
+                  "pass_intervals": [[0.415, 2.0]],
+                  "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"]
+                },
+                "top": {
+                  "pass_intervals": [[0.415, 2.0]],
+                  "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"]
+                }
+              },
+              "gap": {
+                "x": {
+                  "pass_intervals": [[-0.19, 2.0]],
+                  "limited_by": [
+                    "klayout:poly.2",
+                    "magic:Distance between precision resistors < 0.21um (poly.2)",
+                    "magic:poly spacing < 0.21um (poly.2)"
+                  ]
+                },
+                "y": {
+                  "r0_r0": {"pass_intervals": [[0.84, 2.0]], "limited_by": ["klayout:urpm.2"]},
+                  "r0_r180": {"pass_intervals": [[0.84, 2.0]], "limited_by": ["klayout:urpm.2"]},
+                  "m0_r0": {"pass_intervals": [[0.84, 2.0]], "limited_by": ["klayout:urpm.2"]}
+                }
+              }
+            }
+          }
+        },
+        "res_xhigh_po_2p85": {
+          "@set": {
+            "pcell": "res_poly",
+            "fixed": {"type": "{name}"},
+            "map": {"len": "L-0.12"},
+            "snap_params": {"len": 0.01},
+            "merge_layers": ["@urpm", "@psdm", "@npc"],
+            "series": {"rcon": 131.2329, "r_per_um": 701.7544, "L_min": 0.62},
+            "footprint": {
+              "w": {"1": 3.25},
+              "h": {"1": 4.72},
+              "x0": {"1": -1.625},
+              "y0": {"1": -2.36},
+              "samples": 4
+            },
+            "pins": {
+              "ends": {"cy": {"1": -1.0775, "k": 2.155}, "w": {"1": 2.75}, "h": {"1": 2.105}, "samples": 8}
+            },
+            "clearance": {"left": 0.415, "right": 0.415, "bottom": 0.415, "top": 0.415},
+            "gap": {"x": -0.19, "y": {"r0_r0": 0.84, "r0_r180": 0.84, "m0_r0": 0.84}},
+            "scans": {
+              "clearance": {
+                "left": {
+                  "pass_intervals": [[0.415, 2.0]],
+                  "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"]
+                },
+                "right": {
+                  "pass_intervals": [[0.415, 2.0]],
+                  "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"]
+                },
+                "bottom": {
+                  "pass_intervals": [[0.415, 2.0]],
+                  "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"]
+                },
+                "top": {
+                  "pass_intervals": [[0.415, 2.0]],
+                  "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"]
+                }
+              },
+              "gap": {
+                "x": {
+                  "pass_intervals": [[-0.19, 2.0]],
+                  "limited_by": [
+                    "klayout:poly.2",
+                    "magic:Distance between precision resistors < 0.21um (poly.2)",
+                    "magic:poly spacing < 0.21um (poly.2)"
+                  ]
+                },
+                "y": {
+                  "r0_r0": {"pass_intervals": [[0.84, 2.0]], "limited_by": ["klayout:urpm.2"]},
+                  "r0_r180": {"pass_intervals": [[0.84, 2.0]], "limited_by": ["klayout:urpm.2"]},
+                  "m0_r0": {"pass_intervals": [[0.84, 2.0]], "limited_by": ["klayout:urpm.2"]}
+                }
+              }
+            }
+          }
+        },
+        "res_xhigh_po_5p73": {
+          "@set": {
+            "pcell": "res_poly",
+            "fixed": {"type": "{name}"},
+            "map": {"len": "L-0.12"},
+            "snap_params": {"len": 0.01},
+            "merge_layers": ["@urpm", "@psdm", "@npc"],
+            "series": {"rcon": 77.0496, "r_per_um": 349.0401, "L_min": 0.62},
+            "footprint": {
+              "w": {"1": 6.13},
+              "h": {"1": 4.72},
+              "x0": {"1": -3.065},
+              "y0": {"1": -2.36},
+              "samples": 4
+            },
+            "pins": {
+              "ends": {"cy": {"1": -1.0775, "k": 2.155}, "w": {"1": 5.63}, "h": {"1": 2.105}, "samples": 8}
+            },
+            "clearance": {"left": 0.415, "right": 0.415, "bottom": 0.415, "top": 0.415},
+            "gap": {"x": -0.19, "y": {"r0_r0": 0.84, "r0_r180": 0.84, "m0_r0": 0.84}},
+            "scans": {
+              "clearance": {
+                "left": {
+                  "pass_intervals": [[0.415, 2.0]],
+                  "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"]
+                },
+                "right": {
+                  "pass_intervals": [[0.415, 2.0]],
+                  "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"]
+                },
+                "bottom": {
+                  "pass_intervals": [[0.415, 2.0]],
+                  "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"]
+                },
+                "top": {
+                  "pass_intervals": [[0.415, 2.0]],
+                  "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"]
+                }
+              },
+              "gap": {
+                "x": {
+                  "pass_intervals": [[-0.19, 2.0]],
+                  "limited_by": [
+                    "klayout:poly.2",
+                    "magic:Distance between precision resistors < 0.21um (poly.2)",
+                    "magic:poly spacing < 0.21um (poly.2)"
+                  ]
+                },
+                "y": {
+                  "r0_r0": {"pass_intervals": [[0.84, 2.0]], "limited_by": ["klayout:urpm.2"]},
+                  "r0_r180": {"pass_intervals": [[0.84, 2.0]], "limited_by": ["klayout:urpm.2"]},
+                  "m0_r0": {"pass_intervals": [[0.84, 2.0]], "limited_by": ["klayout:urpm.2"]}
+                }
+              }
+            }
+          }
+        },
+        "res_iso_pw": {
+          "@set": {
+            "pcell": "res_poly",
+            "fixed": {"type": "{name}"},
+            "map": {"w": "W", "len": "L"},
+            "snap_params": {"w": 0.005, "len": 0.005},
+            "merge_layers": ["@nsdm", "@psdm"],
+            "footprint": {
+              "w": {"w": 1.0},
+              "h": {"1": 1.31},
+              "x0": {"w": -0.5},
+              "y0": {"1": -0.655},
+              "samples": 9
+            },
+            "pins": {
+              "ends": {
+                "cy": {"1": -0.2175, "k": 0.435},
+                "w": {"1": -0.4, "w": 1.0},
+                "h": {"1": 0.325},
+                "samples": 18
+              }
+            },
+            "clearance": {"left": 0.43, "right": 0.43, "bottom": 0.505, "top": 0.505},
+            "gap": {"x": 0.005, "y": {"r0_r0": 0.38, "r0_r180": 0.38, "m0_r0": 0.38}},
+            "scans": {
+              "clearance": {
+                "left": {
+                  "pass_intervals": [[0.43, 2.0]],
+                  "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"]
+                },
+                "right": {
+                  "pass_intervals": [[0.43, 2.0]],
+                  "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"]
+                },
+                "bottom": {
+                  "pass_intervals": [[0.505, 2.0]],
+                  "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"]
+                },
+                "top": {
+                  "pass_intervals": [[0.505, 2.0]],
+                  "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"]
+                }
+              },
+              "gap": {
+                "x": {"pass_intervals": [[0.005, 2.0]], "limited_by": ["klayout:pwres.2"]},
+                "y": {
+                  "r0_r0": {
+                    "pass_intervals": [[0.38, 2.0]],
+                    "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"]
+                  },
+                  "r0_r180": {
+                    "pass_intervals": [[0.38, 2.0]],
+                    "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"]
+                  },
+                  "m0_r0": {
+                    "pass_intervals": [[0.38, 2.0]],
+                    "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "res_generic_nd": {
+          "@set": {
+            "pcell": "res_diff",
+            "fixed": {"type": "sky130_fd_pr__res_nd_lvt"},
+            "map": {"w": "W", "len": "L"},
+            "snap_params": {"w": 0.005, "len": 0.005},
+            "merge_layers": ["@nsdm", "@psdm"],
+            "footprint": {
+              "w": {"1": 0.25, "w": 1.0},
+              "h": {"1": 1.28},
+              "x0": {"1": -0.125, "w": -0.5},
+              "y0": {"1": -0.64},
+              "samples": 9
+            },
+            "pins": {
+              "ends": {
+                "cy": {"1": -0.27, "k": 0.54},
+                "w": {"1": -0.05, "w": 1.0},
+                "h": {"1": 0.49},
+                "samples": 18
+              }
+            },
+            "clearance": {"left": 0.145, "right": 0.145, "bottom": 0.145, "top": 0.145},
+            "gap": {"x": 0.02, "y": {"r0_r0": 0.38, "r0_r180": 0.38, "m0_r0": 0.38}},
+            "scans": {
+              "clearance": {
+                "left": {
+                  "pass_intervals": [[0.145, 2.0]],
+                  "limited_by": ["klayout:difftap.3", "magic:Diffusion spacing < 0.27um (diff/tap.3)"]
+                },
+                "right": {
+                  "pass_intervals": [[0.145, 2.0]],
+                  "limited_by": ["klayout:difftap.3", "magic:Diffusion spacing < 0.27um (diff/tap.3)"]
+                },
+                "bottom": {
+                  "pass_intervals": [[0.145, 2.0]],
+                  "limited_by": ["klayout:difftap.3", "magic:Diffusion spacing < 0.27um (diff/tap.3)"]
+                },
+                "top": {
+                  "pass_intervals": [[0.145, 2.0]],
+                  "limited_by": ["klayout:difftap.3", "magic:Diffusion spacing < 0.27um (diff/tap.3)"]
+                }
+              },
+              "gap": {
+                "x": {
+                  "pass_intervals": [[0.02, 2.0]],
+                  "limited_by": ["klayout:difftap.3", "magic:Diffusion spacing < 0.27um (diff/tap.3)"]
+                },
+                "y": {
+                  "r0_r0": {
+                    "pass_intervals": [[0.38, 2.0]],
+                    "limited_by": ["klayout:n/psdm.1", "klayout:nsdm.1"]
+                  },
+                  "r0_r180": {
+                    "pass_intervals": [[0.38, 2.0]],
+                    "limited_by": ["klayout:n/psdm.1", "klayout:nsdm.1"]
+                  },
+                  "m0_r0": {
+                    "pass_intervals": [[0.38, 2.0]],
+                    "limited_by": ["klayout:n/psdm.1", "klayout:nsdm.1"]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "res_generic_nd__hv": {
+          "@set": {
+            "pcell": "res_diff",
+            "fixed": {"type": "sky130_fd_pr__res_nd_hvt"},
+            "map": {"w": "W", "len": "L"},
+            "snap_params": {"w": 0.005, "len": 0.005},
+            "merge_layers": ["@nsdm", "@psdm", "@hvi", "@hvntm"],
+            "footprint": {
+              "w": {"1": 0.42, "w": 1.0},
+              "h": {"1": 1.4},
+              "x0": {"1": -0.21, "w": -0.5},
+              "y0": {"1": -0.7},
+              "samples": 9
+            },
+            "pins": {
+              "ends": {
+                "cy": {"1": -0.27, "k": 0.54},
+                "w": {"1": -0.05, "w": 1.0},
+                "h": {"1": 0.49},
+                "samples": 18
+              }
+            },
+            "clearance": {"left": 0.18, "right": 0.18, "bottom": 0.185, "top": 0.185},
+            "gap": {"x": -0.12, "y": {"r0_r0": 0.7, "r0_r180": 0.7, "m0_r0": 0.7}},
+            "scans": {
+              "clearance": {
+                "left": {"pass_intervals": [[0.18, 2.0]], "limited_by": ["klayout:hvdifftap.23"]},
+                "right": {"pass_intervals": [[0.18, 2.0]], "limited_by": ["klayout:hvdifftap.23"]},
+                "bottom": {"pass_intervals": [[0.185, 2.0]], "limited_by": ["klayout:hvntm.6a"]},
+                "top": {"pass_intervals": [[0.185, 2.0]], "limited_by": ["klayout:hvntm.6a"]}
+              },
+              "gap": {
+                "x": {
+                  "pass_intervals": [[-0.12, 2.0]],
+                  "limited_by": ["klayout:hvdifftap.15a", "magic:MV Diffusion spacing < 0.3um (diff/tap.15a)"]
+                },
+                "y": {
+                  "r0_r0": {
+                    "pass_intervals": [[0.7, 2.0]],
+                    "limited_by": [
+                      "klayout:hvi.2",
+                      "klayout:hvi.2a",
+                      "klayout:hvntm.2",
+                      "magic:HVNTM spacing < 0.7um (hvntm.2)"
+                    ]
+                  },
+                  "r0_r180": {
+                    "pass_intervals": [[0.7, 2.0]],
+                    "limited_by": [
+                      "klayout:hvi.2",
+                      "klayout:hvi.2a",
+                      "klayout:hvntm.2",
+                      "magic:HVNTM spacing < 0.7um (hvntm.2)"
+                    ]
+                  },
+                  "m0_r0": {
+                    "pass_intervals": [[0.7, 2.0]],
+                    "limited_by": [
+                      "klayout:hvi.2",
+                      "klayout:hvi.2a",
+                      "klayout:hvntm.2",
+                      "magic:HVNTM spacing < 0.7um (hvntm.2)"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "res_generic_pd": {
+          "@set": {
+            "pcell": "res_diff",
+            "fixed": {"type": "sky130_fd_pr__res_pd_lvt"},
+            "map": {"w": "W", "len": "L"},
+            "snap_params": {"w": 0.005, "len": 0.005},
+            "merge_layers": ["@nsdm", "@psdm"],
+            "footprint": {
+              "w": {"1": 0.25, "w": 1.0},
+              "h": {"1": 1.28},
+              "x0": {"1": -0.125, "w": -0.5},
+              "y0": {"1": -0.64},
+              "samples": 9
+            },
+            "pins": {
+              "ends": {
+                "cy": {"1": -0.27, "k": 0.54},
+                "w": {"1": -0.05, "w": 1.0},
+                "h": {"1": 0.49},
+                "samples": 18
+              }
+            },
+            "clearance": {"left": 0.505, "right": 0.505, "bottom": 0.505, "top": 0.505},
+            "gap": {"x": 0.02, "y": {"r0_r0": 0.38, "r0_r180": 0.38, "m0_r0": 0.38}},
+            "scans": {
+              "clearance": {
+                "left": {
+                  "pass_intervals": [[0.505, 2.0]],
+                  "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"]
+                },
+                "right": {
+                  "pass_intervals": [[0.505, 2.0]],
+                  "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"]
+                },
+                "bottom": {
+                  "pass_intervals": [[0.505, 2.0]],
+                  "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"]
+                },
+                "top": {
+                  "pass_intervals": [[0.505, 2.0]],
+                  "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"]
+                }
+              },
+              "gap": {
+                "x": {
+                  "pass_intervals": [[0.02, 2.0]],
+                  "limited_by": ["klayout:difftap.3", "magic:Diffusion spacing < 0.27um (diff/tap.3)"]
+                },
+                "y": {
+                  "r0_r0": {
+                    "pass_intervals": [[0.38, 2.0]],
+                    "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"]
+                  },
+                  "r0_r180": {
+                    "pass_intervals": [[0.38, 2.0]],
+                    "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"]
+                  },
+                  "m0_r0": {
+                    "pass_intervals": [[0.38, 2.0]],
+                    "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "res_generic_pd__hv": {
+          "@set": {
+            "pcell": "res_diff",
+            "fixed": {"type": "sky130_fd_pr__res_pd_hvt"},
+            "map": {"w": "W", "len": "L"},
+            "snap_params": {"w": 0.005, "len": 0.005},
+            "merge_layers": ["@nsdm", "@psdm", "@hvi"],
+            "footprint": {
+              "w": {"1": 0.42, "w": 1.0},
+              "h": {"1": 1.4},
+              "x0": {"1": -0.21, "w": -0.5},
+              "y0": {"1": -0.7},
+              "samples": 9
+            },
+            "pins": {
+              "ends": {
+                "cy": {"1": -0.27, "k": 0.54},
+                "w": {"1": -0.05, "w": 1.0},
+                "h": {"1": 0.49},
+                "samples": 18
+              }
+            },
+            "clearance": {"left": 0.42, "right": 0.42, "bottom": 0.445, "top": 0.445},
+            "gap": {"x": -0.12, "y": {"r0_r0": 0.7, "r0_r180": 0.7, "m0_r0": 0.7}},
+            "scans": {
+              "clearance": {
+                "left": {
+                  "pass_intervals": [[0.42, 2.0]],
+                  "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"]
+                },
+                "right": {
+                  "pass_intervals": [[0.42, 2.0]],
+                  "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"]
+                },
+                "bottom": {
+                  "pass_intervals": [[0.445, 2.0]],
+                  "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"]
+                },
+                "top": {
+                  "pass_intervals": [[0.445, 2.0]],
+                  "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"]
+                }
+              },
+              "gap": {
+                "x": {"pass_intervals": [[-0.12, 2.0]], "limited_by": ["klayout:hvdifftap.15a"]},
+                "y": {
+                  "r0_r0": {"pass_intervals": [[0.7, 2.0]], "limited_by": ["klayout:hvi.2", "klayout:hvi.2a"]},
+                  "r0_r180": {
+                    "pass_intervals": [[0.7, 2.0]],
+                    "limited_by": ["klayout:hvi.2", "klayout:hvi.2a"]
+                  },
+                  "m0_r0": {"pass_intervals": [[0.7, 2.0]], "limited_by": ["klayout:hvi.2", "klayout:hvi.2a"]}
+                }
+              }
+            }
+          }
+        }
+      },
+      "class": "res",
+      "device_group": "passive",
+      "terminals": ["n1", "n2", "substrate"],
+      "fixed": {"gr": false},
+      "map": {},
+      "snap_params": {},
+      "ring": "p_ring",
+      "footprint": {"w": {}, "h": {"len": 1.0}, "x0": {}, "y0": {"len": -0.5}, "max_error_um": 0.0},
+      "pins": {
+        "ends": {
+          "layer": "@met1",
+          "order": "y",
+          "count": "2",
+          "cx": {},
+          "cy": {"len": -0.5, "k*len": 1.0},
+          "w": {},
+          "h": {},
+          "size_exact": true
+        }
+      },
+      "clearance": {},
+      "gap": {"y": {}},
+      "scans": {
+        "clearance": {"left": {}, "right": {}, "bottom": {}, "top": {}},
+        "gap": {"x": {}, "y": {"r0_r0": {}, "r0_r180": {}, "m0_r0": {}}}
+      },
+      "verification": {"tight_ring_2x2": "clean"}
+    },
+    "rmetal": {
+      "@name": "sky130_fd_pr__{key}",
+      "@members": {
+        "res_generic_l1": {"@set": {"pins": {"ends": {"layer": "@li1"}}}},
+        "res_generic_m1": {"@set": {"pins": {"ends": {"layer": "@met1"}}}},
+        "res_generic_m2": {"@set": {"pins": {"ends": {"layer": "@met2"}}}},
+        "res_generic_m3": {"@set": {"pins": {"ends": {"layer": "@met3"}}}},
+        "res_generic_m4": {"@set": {"pins": {"ends": {"layer": "@met4"}}}},
+        "res_generic_m5": {"@set": {"pins": {"ends": {"layer": "@met5"}}}}
+      },
+      "class": "rmetal",
+      "device_group": "passive",
+      "terminals": ["n1", "n2"],
+      "pcell": "res_metal",
+      "fixed": {"type": "{name}", "gr": false},
+      "map": {"w": "W", "len": "L"},
+      "snap_params": {"w": 0.005, "len": 0.005},
+      "merge_layers": [],
+      "ring": null,
+      "footprint": {
+        "w": {"w": 1.0},
+        "h": {"1": 0.57, "len": 1.0},
+        "x0": {"w": -0.5},
+        "y0": {"1": -0.285, "len": -0.5},
+        "samples": 9,
+        "max_error_um": 0.0
+      },
+      "pins": {
+        "ends": {
+          "order": "y",
+          "count": "2",
+          "cx": {},
+          "cy": {"1": -0.1425, "len": -0.5, "k": 0.285, "k*len": 1.0},
+          "w": {"w": 1.0},
+          "h": {"1": 0.285},
+          "size_exact": true,
+          "samples": 18
+        }
+      }
+    },
+    "cap": {
+      "@name": "sky130_fd_pr__{key}",
+      "@members": {
+        "cap_mim_m3_1": {
+          "@set": {
+            "fixed": {"type": "sky130_fd_pr__model__cap_mim"},
+            "footprint": {"w": {"1": 1.86}, "h": {"1": 0.4}, "x0": {"1": -0.2}, "y0": {"1": -0.2}},
+            "pins": {
+              "top": {"layer": "@met4", "w": {"1": -0.39}, "h": {"1": -0.39}},
+              "bottom": {"layer": "@met4", "cx": {"1": 1.4}, "w": {"1": 0.48}, "h": {"1": 0.28}}
+            }
+          }
+        },
+        "cap_mim_m3_2": {
+          "@set": {
+            "fixed": {"type": "sky130_fd_pr__model__cap_mim_m4"},
+            "footprint": {"w": {"1": 3.62}, "h": {"1": 0.8}, "x0": {"1": -0.4}, "y0": {"1": -0.4}},
+            "pins": {
+              "top": {"layer": "@met5", "w": {"1": -0.16}, "h": {"1": -0.16}},
+              "bottom": {"layer": "@met5", "cx": {"1": 2.4}, "w": {"1": 1.6}, "h": {"1": 0.68}}
+            }
+          }
+        }
+      },
+      "class": "cap",
+      "device_group": "passive",
+      "terminals": ["n1", "n2"],
+      "pcell": "mim_cap",
+      "fixed": {},
+      "map": {"w": "W", "l": "L"},
+      "snap_params": {"w": 0.005, "l": 0.005},
+      "merge_layers": [],
+      "ring": null,
+      "footprint": {"w": {"w": 1.0}, "h": {"l": 1.0}, "x0": {}, "y0": {}, "samples": 9, "max_error_um": 0.0},
+      "pins": {
+        "top": {
+          "order": "x",
+          "count": "1",
+          "cx": {"w": 0.5},
+          "cy": {"l": 0.5},
+          "w": {"w": 1.0},
+          "h": {"l": 1.0},
+          "size_exact": true,
+          "samples": 9
+        },
+        "bottom": {
+          "order": "x",
+          "count": "1",
+          "cx": {"w": 1.0},
+          "cy": {"l": 0.5},
+          "w": {},
+          "h": {"l": 1.0},
+          "size_exact": true,
+          "samples": 9
+        }
+      }
+    },
+    "var": {
+      "@name": "sky130_fd_pr__{key}",
+      "@members": {
+        "cap_var_lvt": {"@set": {"merge_layers": ["@nsdm", "@npc"]}},
+        "cap_var_hvt": {"@set": {"merge_layers": ["@nsdm", "@npc", "@hvtp"]}}
+      },
+      "class": "var",
+      "device_group": "passive",
+      "terminals": ["c0", "c1", "b"],
+      "pcell": "cap_var",
+      "fixed": {"type": "{name}", "gr": false},
+      "map": {"w": "W", "l": "L"},
+      "snap_params": {"w": 0.005, "l": 0.005},
+      "ring": null,
+      "footprint": {
+        "w": {"1": 1.45, "l": 1.0},
+        "h": {"1": 1.0, "w": 1.0},
+        "x0": {"1": -0.18},
+        "y0": {"1": -0.5},
+        "samples": 9,
+        "max_error_um": 0.0
+      },
+      "pins": {}
+    },
+    "ndiode": {
+      "@name": "sky130_fd_pr__{key}",
+      "@members": {
+        "diode_pw2nd_05v5": {
+          "@set": {
+            "merge_layers": ["@nsdm", "@psdm"],
+            "footprint": {"w": {"1": 1.33}, "h": {"1": 1.33}, "x0": {"1": -0.665}, "y0": {"1": -0.665}}
+          }
+        },
+        "diode_pw2nd_05v5_lvt": {
+          "@set": {
+            "merge_layers": ["@nsdm", "@psdm", "@lvtn"],
+            "footprint": {"w": {"1": 1.33}, "h": {"1": 1.33}, "x0": {"1": -0.665}, "y0": {"1": -0.665}}
+          }
+        },
+        "diode_pw2nd_05v5_nvt": {
+          "@set": {
+            "merge_layers": ["@nsdm", "@psdm", "@lvtn", "@hvi", "@hvntm"],
+            "footprint": {"w": {"1": 1.45}, "h": {"1": 1.45}, "x0": {"1": -0.725}, "y0": {"1": -0.725}}
+          }
+        },
+        "diode_pw2nd_11v0": {
+          "@set": {
+            "merge_layers": ["@nsdm", "@psdm", "@hvi", "@hvntm"],
+            "footprint": {"w": {"1": 1.45}, "h": {"1": 1.45}, "x0": {"1": -0.725}, "y0": {"1": -0.725}}
+          }
+        }
+      },
+      "class": "ndiode",
+      "device_group": "passive",
+      "terminals": ["n", "p"],
+      "pcell": "n_diode",
+      "fixed": {"type": "{name}"},
+      "map": {"w": "@perim/4+sqrt(max(perim*p", "l": "@area/(perim/4+sqrt(max(p"},
+      "snap_params": {"w": 0.005, "l": 0.005},
+      "ring": null,
+      "footprint": {"w": {"w": 1.0}, "h": {"l": 1.0}, "x0": {}, "y0": {}, "samples": 9, "max_error_um": 0.0},
+      "pins": {}
+    },
+    "pdiode": {
+      "@name": "sky130_fd_pr__{key}",
+      "@members": {
+        "diode_pd2nw_05v5": {
+          "@set": {
+            "merge_layers": ["@nsdm", "@psdm"],
+            "footprint": {"w": {"1": 2.78}, "h": {"1": 2.78}, "x0": {"1": -1.39}, "y0": {"1": -1.39}}
+          }
+        },
+        "diode_pd2nw_05v5_lvt": {
+          "@set": {
+            "merge_layers": ["@nsdm", "@psdm", "@lvtn"],
+            "footprint": {"w": {"1": 2.78}, "h": {"1": 2.78}, "x0": {"1": -1.39}, "y0": {"1": -1.39}}
+          }
+        },
+        "diode_pd2nw_05v5_hvt": {
+          "@set": {
+            "merge_layers": ["@nsdm", "@psdm", "@hvtp"],
+            "footprint": {"w": {"1": 2.78}, "h": {"1": 2.78}, "x0": {"1": -1.39}, "y0": {"1": -1.39}}
+          }
+        },
+        "diode_pd2nw_11v0": {
+          "@set": {
+            "merge_layers": ["@nsdm", "@psdm", "@hvi"],
+            "footprint": {"w": {"1": 3.21}, "h": {"1": 3.21}, "x0": {"1": -1.605}, "y0": {"1": -1.605}}
+          }
+        }
+      },
+      "class": "pdiode",
+      "device_group": "passive",
+      "terminals": ["n", "p"],
+      "pcell": "p_diode",
+      "fixed": {"type": "{name}"},
+      "map": {"w": "@perim/4+sqrt(max(perim*p", "l": "@area/(perim/4+sqrt(max(p"},
+      "snap_params": {"w": 0.005, "l": 0.005},
+      "ring": null,
+      "footprint": {"w": {"w": 1.0}, "h": {"l": 1.0}, "x0": {}, "y0": {}, "samples": 9, "max_error_um": 0.0},
+      "pins": {}
+    },
+    "npn": {
+      "@name": "sky130_fd_pr__{key}",
+      "@members": {"npn_11v0_W1p00L1p00": {}, "npn_05v5_W1p00L2p00": {}, "npn_05v5_W1p00L1p00": {}},
+      "class": "npn",
+      "device_group": "passive",
+      "terminals": ["c", "b", "e", "s"],
+      "pcell": "npn_bjt",
+      "fixed": {"type": "{name}"},
+      "map": {},
+      "snap_params": {},
+      "merge_layers": [],
+      "ring": null,
+      "footprint": {
+        "w": {"1": 22.96},
+        "h": {"1": 22.96},
+        "x0": {"1": -6.836},
+        "y0": {"1": -6.681},
+        "samples": 1,
+        "max_error_um": 0.0
+      },
+      "pins": {}
+    },
+    "pnp": {
+      "@name": "sky130_fd_pr__{key}",
+      "@members": {
+        "pnp_05v5_W3p40L3p40": {"@set": {"footprint": {"w": {"1": 6.7}, "h": {"1": 6.7}}}},
+        "pnp_05v5_W0p68L0p68": {"@set": {"footprint": {"w": {"1": 3.98}, "h": {"1": 3.98}}}}
+      },
+      "class": "pnp",
+      "device_group": "passive",
+      "terminals": ["collector", "base", "emitter"],
+      "pcell": "pnp_bjt",
+      "fixed": {"Type": "{name}"},
+      "map": {},
+      "snap_params": {},
+      "merge_layers": [],
+      "ring": null,
+      "footprint": {"w": {}, "h": {}, "x0": {}, "y0": {}, "samples": 1, "max_error_um": 0.0},
+      "pins": {}
+    },
+    "sky130_fd_pr__photodiode": {
+      "class": "photodiode",
+      "device_group": "passive",
+      "terminals": ["d0", "d1"],
+      "pcell": "photodiode",
+      "fixed": {"Type": "sky130_fd_pr__photodiode"},
+      "map": {},
+      "snap_params": {},
+      "merge_layers": [],
+      "ring": null,
+      "footprint": {
+        "w": {"1": 21.36},
+        "h": {"1": 21.36},
+        "x0": {"1": -3.6},
+        "y0": {"1": -3.605},
+        "samples": 1,
+        "max_error_um": 0.0
+      },
+      "pins": {}
+    },
+    "vpp": {
+      "@name": "sky130_fd_pr__{key}",
+      "@members": {
+        "cap_vpp_11p5x11p7_m1m2m3m4_shieldm5": {
+          "@set": {"terminals": ["c0", "c1", "b", "m5"], "footprint": {"w": {"1": 11.41}, "h": {"1": 11.69}}}
+        },
+        "cap_vpp_03p9x03p9_m1m2_shieldl1_floatm3": {
+          "@set": {
+            "terminals": ["c0", "c1", "b", "m3"],
+            "footprint": {"w": {"1": 3.88}, "h": {"1": 3.88}, "x0": {"1": -1.055}, "y0": {"1": -1.055}}
+          }
+        },
+        "cap_vpp_11p5x11p7_l1m1m2m3m4_shieldpom5": {
+          "@set": {
+            "terminals": ["c0", "c1", "b", "m5"],
+            "footprint": {"w": {"1": 11.45}, "h": {"1": 11.73}, "x0": {"1": -0.02}, "y0": {"1": -0.02}}
+          }
+        },
+        "cap_vpp_06p8x06p1_l1m1m2m3_shieldpom4": {
+          "@set": {
+            "terminals": ["c0", "c1", "b", "m4"],
+            "footprint": {"w": {"1": 6.84}, "h": {"1": 6.13}, "x0": {"1": -0.02}, "y0": {"1": -0.02}}
+          }
+        },
+        "cap_vpp_11p3x11p8_l1m1m2m3m4_shieldm5_nhvtop": {
+          "@set": {
+            "terminals": ["c0", "m5", "sub"],
+            "footprint": {"w": {"1": 21.75}, "h": {"1": 23.23}, "y0": {"1": 0.065}}
+          }
+        },
+        "cap_vpp_02p7x41p1_m1m2m3m4_shieldl1_fingercap": {
+          "@set": {"terminals": ["c0", "c1", "b"], "footprint": {"w": {"1": 2.7}, "h": {"1": 41.1}}}
+        },
+        "cap_vpp_11p3x11p8_l1m1m2m3m4_shieldm5_nhv": {
+          "@set": {"terminals": ["c0", "c1", "b", "m5"], "footprint": {"w": {"1": 11.34}, "h": {"1": 11.69}}}
+        },
+        "cap_vpp_11p5x11p7_l1m1m2m3m4_shieldpom5_x9": {
+          "@set": {
+            "terminals": ["c0", "c1", "m5a", "sub"],
+            "footprint": {"w": {"1": 55.11}, "h": {"1": 32.895}, "x0": {"1": -21.85}, "y0": {"1": -8.605}}
+          }
+        },
+        "cap_vpp_11p5x11p7_l1m1m2m3m4_shieldm5_top": {
+          "@set": {
+            "terminals": ["c0", "c1", "m5", "sub"],
+            "footprint": {"w": {"1": 22.49}, "h": {"1": 23.05}}
+          }
+        },
+        "cap_vpp_04p4x04p6_m1m2_noshield_o2": {
+          "@set": {
+            "terminals": ["c0", "c1", "b"],
+            "footprint": {"w": {"1": 4.38}, "h": {"1": 4.59}, "x0": {"1": -0.44}}
+          }
+        },
+        "cap_vpp_11p3x11p3_m1m2m3m4_shieldl1_wafflecap": {
+          "@set": {"terminals": ["c0", "c1", "b"], "footprint": {"w": {"1": 11.33}, "h": {"1": 11.33}}}
+        },
+        "cap_vpp_08p6x07p8_m1m2m3_shieldl1": {
+          "@set": {"terminals": ["c0", "c1", "b"], "footprint": {"w": {"1": 8.58}, "h": {"1": 7.84}}}
+        },
+        "cap_vpp_08p6x07p8_m1m2m3_shieldl1m5_floatm4": {
+          "@set": {"terminals": ["c0", "c1", "b", "m5"], "footprint": {"w": {"1": 8.58}, "h": {"1": 7.84}}}
+        },
+        "cap_vpp_11p5x11p7_l1m1m2m3m4_shieldpom5_x": {
+          "@set": {
+            "terminals": ["c0", "c1", "b", "m5"],
+            "footprint": {"w": {"1": 11.45}, "h": {"1": 11.73}, "x0": {"1": -0.02}, "y0": {"1": -0.02}}
+          }
+        },
+        "cap_vpp_06p8x06p1_l1m1m2m3_shieldpom4_top": {
+          "@set": {
+            "terminals": ["c0", "c1", "m4", "sub"],
+            "footprint": {"w": {"1": 13.31}, "h": {"1": 11.89}, "x0": {"1": -0.02}, "y0": {"1": -0.02}}
+          }
+        },
+        "cap_vpp_11p5x11p7_m1m2m3m4_shieldl1m5_top": {
+          "@set": {
+            "terminals": ["c0", "c1", "m5", "sub"],
+            "footprint": {"w": {"1": 22.49}, "h": {"1": 23.05}}
+          }
+        },
+        "cap_vpp_44p7x23p1_pol1m1m2m3m4m5_noshield": {
+          "@set": {
+            "terminals": ["c0", "c1", "b"],
+            "footprint": {"w": {"1": 44.69}, "h": {"1": 23.09}, "x0": {"1": -0.02}, "y0": {"1": -0.02}}
+          }
+        },
+        "cap_vpp_11p5x11p7_l1m1m2m3_shieldm4": {
+          "@set": {"terminals": ["c0", "c1", "b", "m4"], "footprint": {"w": {"1": 11.41}, "h": {"1": 11.69}}}
+        },
+        "cap_vpp_11p5x11p7_l1m1m2m3_shieldm4_top": {
+          "@set": {
+            "terminals": ["c0", "c1", "m4", "sub"],
+            "footprint": {"w": {"1": 22.49}, "h": {"1": 23.05}}
+          }
+        },
+        "cap_vpp_04p4x04p6_l1m1m2_noshield": {
+          "@set": {"terminals": ["c0", "c1", "b"], "footprint": {"w": {"1": 4.38}, "h": {"1": 4.59}}}
+        },
+        "cap_vpp_04p4x04p6_m1m2_shieldl1": {
+          "@set": {"terminals": ["c0", "c1", "b"], "footprint": {"w": {"1": 4.38}, "h": {"1": 4.59}}}
+        },
+        "cap_vpp_11p5x11p7_m1m2m3m4_shieldl1m5": {
+          "@set": {"terminals": ["c0", "c1", "b", "m5"], "footprint": {"w": {"1": 11.41}, "h": {"1": 11.69}}}
+        },
+        "cap_vpp_11p5x11p7_m1m4_noshield": {
+          "@set": {"terminals": ["c0", "c1", "b"], "footprint": {"w": {"1": 11.41}, "h": {"1": 11.69}}}
+        },
+        "cap_vpp_06p8x06p1_m1m2m3_shieldl1m4_top": {
+          "@set": {
+            "terminals": ["c0", "c1", "m4", "sub"],
+            "footprint": {"w": {"1": 13.27}, "h": {"1": 11.85}}
+          }
+        },
+        "cap_vpp_11p5x11p7_m1m2_noshield": {
+          "@set": {"terminals": ["c0", "c1", "b"], "footprint": {"w": {"1": 11.41}, "h": {"1": 11.69}}}
+        },
+        "cap_vpp_02p7x06p1_m1m2m3m4_shieldl1_fingercap": {
+          "@set": {"terminals": ["c0", "c1", "b"], "footprint": {"w": {"1": 2.7}, "h": {"1": 6.1}}}
+        },
+        "cap_vpp_11p5x11p7_l1m1m2_shieldpom3": {
+          "@set": {
+            "terminals": ["c0", "c1", "b", "m3"],
+            "footprint": {"w": {"1": 11.45}, "h": {"1": 11.73}, "x0": {"1": -0.02}, "y0": {"1": -0.02}}
+          }
+        },
+        "cap_vpp_08p6x07p8_l1m1m2_noshield": {
+          "@set": {"terminals": ["c0", "c1", "b"], "footprint": {"w": {"1": 8.58}, "h": {"1": 7.84}}}
+        },
+        "cap_vpp_11p5x11p7_l1m1m2m3m4_shieldpom5_top": {
+          "@set": {
+            "terminals": ["c0", "c1", "m5", "sub"],
+            "footprint": {"w": {"1": 22.53}, "h": {"1": 23.09}, "x0": {"1": -0.02}, "y0": {"1": -0.02}}
+          }
+        },
+        "cap_vpp_08p6x07p8_l1m1m2_shieldpo_floatm3": {
+          "@set": {
+            "terminals": ["c0", "c1", "b", "m3"],
+            "footprint": {"w": {"1": 8.62}, "h": {"1": 7.88}, "x0": {"1": -0.02}, "y0": {"1": -0.02}}
+          }
+        },
+        "cap_vpp_11p5x11p7_l1m1m2m3_shieldpom4_top": {
+          "@set": {
+            "terminals": ["c0", "c1", "m4", "sub"],
+            "footprint": {"w": {"1": 22.53}, "h": {"1": 23.09}, "x0": {"1": -0.02}, "y0": {"1": -0.02}}
+          }
+        },
+        "cap_vpp_11p5x11p7_l1m1m2m3m4_shieldpom5_xtop": {
+          "@set": {
+            "terminals": ["c0", "c1", "m5", "sub"],
+            "footprint": {"w": {"1": 22.53}, "h": {"1": 23.09}, "x0": {"1": -0.02}, "y0": {"1": -0.02}}
+          }
+        },
+        "cap_vpp_06p8x06p1_m1m2m3_shieldl1m4": {
+          "@set": {"terminals": ["c0", "c1", "b", "m4"], "footprint": {"w": {"1": 6.8}, "h": {"1": 6.09}}}
+        },
+        "cap_vpp_11p5x11p7_l1m1m2m3m4_shieldpom5_x7": {
+          "@set": {
+            "terminals": ["c0", "c1", "m5a", "sub"],
+            "footprint": {"w": {"1": 11.45}, "h": {"1": 24.31}, "x0": {"1": -0.02}, "y0": {"1": -0.02}}
+          }
+        },
+        "cap_vpp_08p6x07p8_m1m2m3_shieldl1m5_floatm4_top": {
+          "@set": {
+            "terminals": ["c0", "c1", "m5", "sub"],
+            "footprint": {"w": {"1": 16.83}, "h": {"1": 15.35}}
+          }
+        },
+        "cap_vpp_04p4x04p6_m1m2m3_shieldl1m5_floatm4": {
+          "@set": {"terminals": ["c0", "c1", "b", "m5"], "footprint": {"w": {"1": 4.38}, "h": {"1": 4.59}}}
+        },
+        "cap_vpp_02p7x11p1_m1m2m3m4_shieldl1_fingercap": {
+          "@set": {"terminals": ["c0", "c1", "b"], "footprint": {"w": {"1": 2.7}, "h": {"1": 11.1}}}
+        },
+        "cap_vpp_04p4x04p6_m1m2m3_shieldl1": {
+          "@set": {"terminals": ["c0", "c1", "b"], "footprint": {"w": {"1": 4.38}, "h": {"1": 4.59}}}
+        },
+        "cap_vpp_04p4x04p6_m1m2_noshield": {
+          "@set": {"terminals": ["c0", "c1", "b"], "footprint": {"w": {"1": 4.38}, "h": {"1": 4.59}}}
+        },
+        "cap_vpp_08p6x07p8_m1m2_noshield": {
+          "@set": {
+            "terminals": ["c0", "c1", "b"],
+            "footprint": {"w": {"1": 8.58}, "h": {"1": 7.84}, "x0": {"1": -0.44}}
+          }
+        },
+        "cap_vpp_11p5x11p7_l1m1m2m3m4_shieldm5": {
+          "@set": {"terminals": ["c0", "c1", "b", "m5"], "footprint": {"w": {"1": 11.41}, "h": {"1": 11.69}}}
+        },
+        "cap_vpp_11p5x11p7_m1m2m3_shieldl1": {
+          "@set": {"terminals": ["c0", "c1", "b"], "footprint": {"w": {"1": 11.41}, "h": {"1": 11.69}}}
+        },
+        "cap_vpp_04p4x04p6_m1m2m3_shieldl1m5_floatm4_top": {
+          "@set": {"terminals": ["c0", "c1", "m5", "sub"], "footprint": {"w": {"1": 8.43}, "h": {"1": 8.85}}}
+        },
+        "cap_vpp_04p4x04p6_l1m1m2_shieldpo_floatm3": {
+          "@set": {
+            "terminals": ["c0", "c1", "b", "m3"],
+            "footprint": {"w": {"1": 4.42}, "h": {"1": 4.63}, "x0": {"1": -0.02}, "y0": {"1": -0.02}}
+          }
+        },
+        "cap_vpp_11p5x11p7_l1m1m2m3_shieldpom4": {
+          "@set": {
+            "terminals": ["c0", "c1", "b", "m4"],
+            "footprint": {"w": {"1": 11.45}, "h": {"1": 11.73}, "x0": {"1": -0.02}, "y0": {"1": -0.02}}
+          }
+        },
+        "cap_vpp_02p4x04p6_m1m2_noshield": {
+          "@set": {
+            "terminals": ["c0", "c1", "b"],
+            "footprint": {"w": {"1": 2.42}, "h": {"1": 4.59}, "x0": {"1": -0.44}}
+          }
+        },
+        "cap_vpp_11p5x11p7_m1m2m3_shieldl1m5_floatm4": {
+          "@set": {"terminals": ["c0", "c1", "b", "m5"], "footprint": {"w": {"1": 11.41}, "h": {"1": 11.69}}}
+        },
+        "cap_vpp_11p5x11p7_l1m1m2m3m4_shieldpom5_x8": {
+          "@set": {
+            "terminals": ["c0", "c1", "m5a", "sub"],
+            "footprint": {"w": {"1": 55.11}, "h": {"1": 32.895}, "x0": {"1": -21.85}, "y0": {"1": -8.605}}
+          }
+        },
+        "cap_vpp_02p9x06p1_m1m2m3m4_shieldl1_fingercap2": {
+          "@set": {"terminals": ["c0", "c1", "b"], "footprint": {"w": {"1": 2.85}, "h": {"1": 6.1}}}
+        },
+        "cap_vpp_11p5x11p7_m1m2m3_shieldl1m5_floatm4_top": {
+          "@set": {
+            "terminals": ["c0", "c1", "m5", "sub"],
+            "footprint": {"w": {"1": 22.49}, "h": {"1": 23.05}}
+          }
+        },
+        "cap_vpp_08p6x07p8_m1m2_shieldl1": {
+          "@set": {"terminals": ["c0", "c1", "b"], "footprint": {"w": {"1": 8.58}, "h": {"1": 7.84}}}
+        },
+        "cap_vpp_11p5x11p7_l1m1m2_noshield": {
+          "@set": {"terminals": ["c0", "c1", "b"], "footprint": {"w": {"1": 11.41}, "h": {"1": 11.69}}}
+        },
+        "cap_vpp_11p5x11p7_m1m2_shieldl1": {
+          "@set": {"terminals": ["c0", "c1", "b"], "footprint": {"w": {"1": 11.41}, "h": {"1": 11.69}}}
+        },
+        "cap_vpp_05p9x05p9_m1m2m3m4_shieldl1_wafflecap": {
+          "@set": {"terminals": ["c0", "c1", "b"], "footprint": {"w": {"1": 5.9}, "h": {"1": 5.9}}}
+        },
+        "cap_vpp_02p7x21p1_m1m2m3m4_shieldl1_fingercap": {
+          "@set": {"terminals": ["c0", "c1", "b"], "footprint": {"w": {"1": 2.7}, "h": {"1": 21.1}}}
+        },
+        "cap_vpp_11p5x11p7_l1m1m2m3m4_shieldpom5_x6": {
+          "@set": {
+            "terminals": ["c0", "c1", "m5a", "sub"],
+            "footprint": {"w": {"1": 11.45}, "h": {"1": 24.31}, "x0": {"1": -0.02}, "y0": {"1": -0.02}}
+          }
+        }
+      },
+      "class": "vpp",
+      "device_group": "passive",
+      "pcell": "cap_vpp",
+      "fixed": {"Type": "{name}"},
+      "map": {},
+      "snap_params": {},
+      "merge_layers": [],
+      "ring": null,
+      "footprint": {"w": {}, "h": {}, "x0": {}, "y0": {}, "samples": 1, "max_error_um": 0.0},
+      "pins": {}
+    }
+  },
+  "guard_rings": {
+    "all": {
+      "@name": "{key}",
+      "@members": {
+        "p_ring": {"@set": {"fixed": {"implant_type": "psdm"}, "for_class": ["nmos", "res"], "fill": []}},
+        "n_ring": {
+          "@set": {
+            "fixed": {"implant_type": "nsdm"},
+            "for_class": ["pmos"],
+            "fill": [{"name": "nwell", "layer": "@nwell", "enclosure": 0.18, "relative_to": "tap_layer"}],
+            "scans": {
+              "fill_enclosure": {
+                "pass_intervals": [[0.18, 2.0]],
+                "limited_by": ["klayout:difftap.10", "@magic:diff/tap.10"]
+              }
+            }
+          }
+        }
+      },
+      "pcell": "guard_ring_gen",
+      "fixed": {"con_lev": "metal1"},
+      "map": {"in_w": "IW", "in_l": "IL", "grw": "GRW"},
+      "opening": {"x0": "0", "y0": "0"},
+      "tap_layer": "@tap",
+      "tap_band": "GRW",
+      "footprint": {
+        "w": {"1": 0.25, "IW": 1.0, "GRW": 2.0},
+        "h": {"1": 0.25, "IL": 1.0, "GRW": 2.0},
+        "x0": {"1": -0.125, "GRW": -1.0},
+        "y0": {"1": -0.125, "GRW": -1.0},
+        "samples": 18,
+        "max_error_um": 0.0
+      },
+      "grw_min": 0.23,
+      "tap_inset": 0.125,
+      "scans": {"grw_min": {"pass_intervals": [[0.23, 0.58]], "limited_by": []}}
+    }
+  },
+  "structure_gap": {
+    "p_ring|p_ring": {
+      "min": 0.38,
+      "pass_intervals": [[0.38, 8.0]],
+      "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"],
+      "shared_edge_gap": -0.48,
+      "shared_edge_drc": "clean",
+      "verification": "clean"
+    },
+    "p_ring|n_ring": "@p_ring|n_ring",
+    "p_ring|cap": {"min": 0.0, "pass_intervals": [[0.0, 8.0]], "limited_by": [], "verification": "clean"},
+    "p_ring|rmetal": {
+      "min": 0.015,
+      "pass_intervals": [[0.015, 8.0]],
+      "limited_by": ["klayout:m1.2", "@magic:met1.2"],
+      "verification": "clean"
+    },
+    "p_ring|var": "@p_ring|var",
+    "p_ring|ndiode": {
+      "min": 0.38,
+      "pass_intervals": [[0.38, 8.0]],
+      "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"],
+      "verification": "clean"
+    },
+    "p_ring|pdiode": {
+      "min": 0.38,
+      "pass_intervals": [[0.38, 8.0]],
+      "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"],
+      "verification": "clean"
+    },
+    "p_ring|npn": {
+      "min": 0.38,
+      "pass_intervals": [[0.0, 0.0], [0.38, 8.0]],
+      "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"],
+      "verification": "clean"
+    },
+    "p_ring|pnp": {
+      "min": 0.38,
+      "pass_intervals": [[0.38, 8.0]],
+      "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"],
+      "verification": "clean"
+    },
+    "p_ring|photodiode": {
+      "min": 0.38,
+      "pass_intervals": [[0.38, 8.0]],
+      "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"],
+      "verification": "clean"
+    },
+    "p_ring|vpp": "@p_ring|vpp",
+    "n_ring|n_ring": {
+      "min": 1.27,
+      "pass_intervals": [[1.27, 8.0]],
+      "limited_by": ["klayout:nwell.2a", "@magic:nwell.2a"],
+      "shared_edge_gap": -0.59,
+      "shared_edge_drc": "clean",
+      "verification": "clean"
+    },
+    "n_ring|cap": {"min": 0.0, "pass_intervals": [[0.0, 8.0]], "limited_by": [], "verification": "clean"},
+    "n_ring|rmetal": {"min": 0.0, "pass_intervals": [[0.0, 8.0]], "limited_by": [], "verification": "clean"},
+    "n_ring|var": "@n_ring|var",
+    "n_ring|ndiode": "@p_ring|n_ring",
+    "n_ring|pdiode": "@n_ring|pdiode",
+    "n_ring|npn": {"min": 0.0, "pass_intervals": [[0.0, 8.0]], "limited_by": [], "verification": "clean"},
+    "n_ring|pnp": "@n_ring|pnp",
+    "n_ring|photodiode": {
+      "min": 3.62,
+      "pass_intervals": [[3.62, 8.0]],
+      "limited_by": ["@magic:nwell.7"],
+      "verification": "clean"
+    },
+    "n_ring|vpp": {
+      "min": 1.31,
+      "pass_intervals": [[1.31, 8.0]],
+      "limited_by": ["klayout:vpp.9"],
+      "verification": "clean"
+    },
+    "cap|cap": {
+      "min": 1.14,
+      "pass_intervals": [[0.0, 0.0], [1.14, 8.0]],
+      "limited_by": ["magic:MiM cap spacing to unrelated metal3 < 1.34um (capm.11)"],
+      "verification": "clean"
+    },
+    "cap|rmetal": {"min": 0.0, "pass_intervals": [[0.0, 8.0]], "limited_by": [], "verification": "clean"},
+    "cap|var": {"min": 0.0, "pass_intervals": [[0.0, 8.0]], "limited_by": [], "verification": "clean"},
+    "cap|ndiode": {"min": 0.0, "pass_intervals": [[0.0, 8.0]], "limited_by": [], "verification": "clean"},
+    "cap|pdiode": {"min": 0.0, "pass_intervals": [[0.0, 8.0]], "limited_by": [], "verification": "clean"},
+    "cap|npn": {"min": 0.0, "pass_intervals": [[0.0, 8.0]], "limited_by": [], "verification": "clean"},
+    "cap|pnp": {"min": 0.0, "pass_intervals": [[0.0, 8.0]], "limited_by": [], "verification": "clean"},
+    "cap|photodiode": {"min": 0.0, "pass_intervals": [[0.0, 8.0]], "limited_by": [], "verification": "clean"},
+    "cap|vpp": {
+      "min": 0.38,
+      "pass_intervals": [[0.38, 8.0]],
+      "limited_by": [
+        "klayout:m3.3ab",
+        "klayout:m3.3cd",
+        "magic:Metal3 > 3um spacing to unrelated m3 < 0.4um (met3.3d)"
+      ],
+      "verification": "clean"
+    },
+    "rmetal|rmetal": {
+      "min": 0.14,
+      "pass_intervals": [[0.0, 0.0], [0.14, 8.0]],
+      "limited_by": ["klayout:m1.2", "@magic:met1.2"],
+      "verification": "clean"
+    },
+    "rmetal|var": {"min": 0.0, "pass_intervals": [[0.0, 8.0]], "limited_by": [], "verification": "clean"},
+    "rmetal|ndiode": {"min": 0.0, "pass_intervals": [[0.0, 8.0]], "limited_by": [], "verification": "clean"},
+    "rmetal|pdiode": {"min": 0.0, "pass_intervals": [[0.0, 8.0]], "limited_by": [], "verification": "clean"},
+    "rmetal|npn": {"min": 0.0, "pass_intervals": [[0.0, 8.0]], "limited_by": [], "verification": "clean"},
+    "rmetal|pnp": {"min": 0.0, "pass_intervals": [[0.0, 8.0]], "limited_by": [], "verification": "clean"},
+    "rmetal|photodiode": {
+      "min": 0.0,
+      "pass_intervals": [[0.0, 8.0]],
+      "limited_by": [],
+      "verification": "clean"
+    },
+    "rmetal|vpp": {
+      "min": 0.12,
+      "pass_intervals": [[0.12, 8.0]],
+      "limited_by": ["klayout:m1.2", "@magic:met1.2"],
+      "verification": "clean"
+    },
+    "var|var": "@n_ring|var",
+    "var|ndiode": "@p_ring|var",
+    "var|pdiode": "@n_ring|pdiode",
+    "var|npn": {"min": 0.0, "pass_intervals": [[0.0, 8.0]], "limited_by": [], "verification": "clean"},
+    "var|pnp": "@n_ring|pnp",
+    "var|photodiode": {
+      "min": 3.62,
+      "pass_intervals": [[3.62, 8.0]],
+      "limited_by": ["@magic:nwell.7"],
+      "verification": "clean"
+    },
+    "var|vpp": {
+      "min": 1.31,
+      "pass_intervals": [[1.31, 8.0]],
+      "limited_by": ["klayout:vpp.9"],
+      "verification": "clean"
+    },
+    "ndiode|ndiode": {
+      "min": 0.38,
+      "pass_intervals": [[0.38, 8.0]],
+      "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"],
+      "verification": "clean"
+    },
+    "ndiode|pdiode": {
+      "min": 0.38,
+      "pass_intervals": [[0.38, 8.0]],
+      "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"],
+      "verification": "clean"
+    },
+    "ndiode|npn": {
+      "min": 0.38,
+      "pass_intervals": [[0.0, 0.0], [0.38, 8.0]],
+      "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"],
+      "verification": "clean"
+    },
+    "ndiode|pnp": {
+      "min": 0.38,
+      "pass_intervals": [[0.38, 8.0]],
+      "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"],
+      "verification": "clean"
+    },
+    "ndiode|photodiode": {
+      "min": 0.38,
+      "pass_intervals": [[0.38, 8.0]],
+      "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"],
+      "verification": "clean"
+    },
+    "ndiode|vpp": "@p_ring|vpp",
+    "pdiode|pdiode": {
+      "min": 0.38,
+      "pass_intervals": [[0.38, 8.0]],
+      "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"],
+      "verification": "clean"
+    },
+    "pdiode|npn": {
+      "min": 0.38,
+      "pass_intervals": [[0.0, 0.0], [0.38, 8.0]],
+      "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"],
+      "verification": "clean"
+    },
+    "pdiode|pnp": {
+      "min": 0.38,
+      "pass_intervals": [[0.38, 8.0]],
+      "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"],
+      "verification": "clean"
+    },
+    "pdiode|photodiode": {
+      "min": 2.955,
+      "pass_intervals": [[2.955, 8.0]],
+      "limited_by": ["@magic:nwell.7"],
+      "verification": "clean"
+    },
+    "pdiode|vpp": {
+      "min": 0.645,
+      "pass_intervals": [[0.645, 8.0]],
+      "limited_by": ["klayout:vpp.9"],
+      "verification": "clean"
+    },
+    "npn|npn": {
+      "min": 0.38,
+      "pass_intervals": [[0.0, 0.0], [0.38, 8.0]],
+      "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"],
+      "verification": "clean"
+    },
+    "npn|pnp": {
+      "min": 0.38,
+      "pass_intervals": [[0.0, 0.0], [0.38, 8.0]],
+      "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"],
+      "verification": "clean"
+    },
+    "npn|photodiode": {
+      "min": 0.38,
+      "pass_intervals": [[0.0, 0.0], [0.38, 8.0]],
+      "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"],
+      "verification": "clean"
+    },
+    "npn|vpp": {
+      "min": 0.725,
+      "pass_intervals": [[0.725, 8.0]],
+      "limited_by": ["klayout:vpp.5"],
+      "verification": "clean"
+    },
+    "pnp|pnp": {
+      "min": 0.38,
+      "pass_intervals": [[0.38, 8.0]],
+      "limited_by": ["klayout:n/psdm.1", "klayout:psdm.1"],
+      "verification": "clean"
+    },
+    "pnp|photodiode": {
+      "min": 2.855,
+      "pass_intervals": [[2.855, 8.0]],
+      "limited_by": ["@magic:nwell.7"],
+      "verification": "clean"
+    },
+    "pnp|vpp": {
+      "min": 0.545,
+      "pass_intervals": [[0.545, 8.0]],
+      "limited_by": ["klayout:vpp.9"],
+      "verification": "clean"
+    },
+    "photodiode|photodiode": {
+      "min": 4.54,
+      "pass_intervals": [[4.54, 8.0]],
+      "limited_by": ["klayout:dnwell.3", "magic:Deep N-well spacing < 6.3um (dnwell.3)"],
+      "verification": "clean"
+    },
+    "photodiode|vpp": {
+      "min": 0.83,
+      "pass_intervals": [[0.83, 8.0]],
+      "limited_by": ["klayout:vpp.9"],
+      "verification": "clean"
+    },
+    "vpp|vpp": {
+      "min": 1.56,
+      "pass_intervals": [[1.56, 8.0]],
+      "limited_by": ["klayout:m5.2", "magic:Metal5 spacing < 1.6um (met5.2)"],
+      "verification": "clean"
+    }
+  },
+  "intrinsic_violations": {
+    "sky130_fd_pr__pfet_g5v0d10v5": [
+      "klayout:nwell.9",
+      "magic:All HV nwell can contain only HV diffusion (diff/tap.21)",
+      "@magic:diff/tap.18,20"
+    ],
+    "sky130_fd_pr__res_high_po_0p35": ["klayout:licon.7", "@magic:rpm.1"],
+    "sky130_fd_pr__res_high_po_0p69": ["klayout:licon.7", "@magic:rpm.1"],
+    "sky130_fd_pr__res_high_po_1p41": ["klayout:licon.7"],
+    "sky130_fd_pr__res_high_po_2p85": ["klayout:licon.7"],
+    "sky130_fd_pr__res_high_po_5p73": ["klayout:licon.7"],
+    "sky130_fd_pr__res_xhigh_po_0p35": ["klayout:licon.1", "klayout:licon.7", "@magic:rpm.1"],
+    "sky130_fd_pr__res_xhigh_po_0p69": ["klayout:licon.1", "klayout:licon.7", "@magic:rpm.1"],
+    "sky130_fd_pr__res_xhigh_po_1p41": ["klayout:licon.1", "klayout:licon.7"],
+    "sky130_fd_pr__res_xhigh_po_2p85": ["klayout:licon.1", "klayout:licon.7"],
+    "sky130_fd_pr__res_xhigh_po_5p73": ["klayout:licon.1", "klayout:licon.7"],
+    "sky130_fd_pr__res_iso_pw": ["klayout:pwres.3"],
+    "sky130_fd_pr__res_generic_pd": ["klayout:n/psdm.8"],
+    "sky130_fd_pr__res_generic_pd__hv": ["klayout:n/psdm.8"],
+    "sky130_fd_pr__cap_var_lvt": [
+      "klayout:licon.17",
+      "klayout:varac.5",
+      "magic:N-well overlap of varactor poly < 0.15um (varac.5)"
+    ],
+    "sky130_fd_pr__cap_var_hvt": ["klayout:licon.17", "klayout:varac.5"],
+    "sky130_fd_pr__diode_pd2nw_05v5": [
+      "klayout:n/psdm.8",
+      "@magic:nsd.10b",
+      "@magic:licon.7",
+      "@magic:psd.10b",
+      "@magic:diff/tap.11",
+      "@magic:diff/tap.11#2"
+    ],
+    "sky130_fd_pr__diode_pd2nw_05v5_lvt": "@sky130_fd_pr__diode_pd2nw_05v5_lvt",
+    "sky130_fd_pr__diode_pd2nw_05v5_hvt": "@sky130_fd_pr__diode_pd2nw_05v5_lvt",
+    "sky130_fd_pr__diode_pd2nw_11v0": [
+      "klayout:hvdifftap.20",
+      "klayout:n/psdm.8",
+      "@magic:diff/tap.20 + diff/tap.17,19",
+      "@magic:nsd.10b",
+      "@magic:licon.7",
+      "@magic:psd.10b",
+      "@magic:diff/tap.11",
+      "@magic:diff/tap.11#2",
+      "@magic:diff/tap.18,20"
+    ],
+    "sky130_fd_pr__npn_11v0_W1p00L1p00": [
+      "klayout:ct_OFFGRID",
+      "klayout:diff_OFFGRID",
+      "klayout:dnwell_OFFGRID",
+      "klayout:hvdifftap.16",
+      "klayout:hvi_OFFGRID",
+      "klayout:li_OFFGRID",
+      "klayout:licon.17",
+      "klayout:licon_OFFGRID",
+      "klayout:m1_OFFGRID",
+      "klayout:npc_OFFGRID",
+      "klayout:nsdm_OFFGRID",
+      "klayout:nwell.5",
+      "klayout:nwell_OFFGRID",
+      "klayout:poly.10",
+      "klayout:poly_OFFGRID",
+      "klayout:psdm_OFFGRID",
+      "klayout:tap_OFFGRID",
+      "@magic:diff/tap.20 + diff/tap.17,19",
+      "magic:MV NMOS minimum length < 0.5um (poly.13)",
+      "magic:N-Diffusion overhang of nFET < 0.25um (poly.7)",
+      "@magic:nwell.5a, 7",
+      "magic:N-well overlap of P-Diffusion < 0.33um (diff/tap.17)",
+      "magic:No bends in transistors (poly.11)",
+      "magic:Only 90 degree angles permitted on poly (x.2)",
+      "magic:pFET cannot abut N-diffusion (diff/tap.3)",
+      "magic:poly spacing to diffusion tap < 0.055um (poly.5)"
+    ],
+    "sky130_fd_pr__npn_05v5_W1p00L2p00": "@sky130_fd_pr__npn_05v5_W1p00L2p00",
+    "sky130_fd_pr__npn_05v5_W1p00L1p00": "@sky130_fd_pr__npn_05v5_W1p00L2p00",
+    "sky130_fd_pr__photodiode": ["klayout:dnwell.2", "klayout:photo.9", "@magic:nwell.5a, 7"],
+    "sky130_fd_pr__cap_vpp_03p9x03p9_m1m2_shieldl1_floatm3": [
+      "magic:Via1 spacing < 0.06um (via.2 - 2 * via.4a)"
+    ],
+    "sky130_fd_pr__cap_vpp_11p5x11p7_l1m1m2m3m4_shieldpom5": ["klayout:vpp.3"],
+    "sky130_fd_pr__cap_vpp_06p8x06p1_l1m1m2m3_shieldpom4": ["klayout:vpp.3"],
+    "sky130_fd_pr__cap_vpp_11p3x11p8_l1m1m2m3m4_shieldm5_nhvtop": [
+      "klayout:hvdifftap.16",
+      "klayout:hvdifftap.25",
+      "klayout:licon.12",
+      "klayout:vpp.3",
+      "klayout:vpp.5"
+    ],
+    "sky130_fd_pr__cap_vpp_02p7x41p1_m1m2m3m4_shieldl1_fingercap": ["klayout:vpp.3"],
+    "sky130_fd_pr__cap_vpp_11p3x11p8_l1m1m2m3m4_shieldm5_nhv": [
+      "klayout:hvdifftap.16",
+      "klayout:licon.12",
+      "klayout:vpp.3"
+    ],
+    "sky130_fd_pr__cap_vpp_11p5x11p7_l1m1m2m3m4_shieldpom5_x9": "@sky130_fd_pr__cap_vpp_11p5x11p7_l1m1m2m3m4_shieldpom5_x9",
+    "sky130_fd_pr__cap_vpp_11p5x11p7_l1m1m2m3m4_shieldm5_top": ["klayout:vpp.5"],
+    "sky130_fd_pr__cap_vpp_11p3x11p3_m1m2m3m4_shieldl1_wafflecap": [
+      "klayout:vpp.3",
+      "@magic:via3.2 - 2 * via3.4"
+    ],
+    "sky130_fd_pr__cap_vpp_11p5x11p7_l1m1m2m3m4_shieldpom5_x": ["klayout:vpp.3"],
+    "sky130_fd_pr__cap_vpp_06p8x06p1_l1m1m2m3_shieldpom4_top": ["klayout:vpp.3"],
+    "sky130_fd_pr__cap_vpp_44p7x23p1_pol1m1m2m3m4m5_noshield": [
+      "klayout:li.1",
+      "klayout:li.3",
+      "klayout:vpp.3",
+      "@magic:li.3",
+      "magic:Local interconnect width < 0.17um (li.1)"
+    ],
+    "sky130_fd_pr__cap_vpp_11p5x11p7_l1m1m2m3_shieldm4_top": ["klayout:vpp.5"],
+    "sky130_fd_pr__cap_vpp_02p7x06p1_m1m2m3m4_shieldl1_fingercap": ["klayout:vpp.3"],
+    "sky130_fd_pr__cap_vpp_11p5x11p7_l1m1m2_shieldpom3": ["klayout:vpp.3"],
+    "sky130_fd_pr__cap_vpp_11p5x11p7_l1m1m2m3m4_shieldpom5_top": ["klayout:vpp.3"],
+    "sky130_fd_pr__cap_vpp_08p6x07p8_l1m1m2_shieldpo_floatm3": ["klayout:vpp.3"],
+    "sky130_fd_pr__cap_vpp_11p5x11p7_l1m1m2m3_shieldpom4_top": ["klayout:vpp.3"],
+    "sky130_fd_pr__cap_vpp_11p5x11p7_l1m1m2m3m4_shieldpom5_xtop": ["klayout:vpp.3"],
+    "sky130_fd_pr__cap_vpp_11p5x11p7_l1m1m2m3m4_shieldpom5_x7": ["klayout:vpp.3"],
+    "sky130_fd_pr__cap_vpp_02p7x11p1_m1m2m3m4_shieldl1_fingercap": ["klayout:vpp.3"],
+    "sky130_fd_pr__cap_vpp_04p4x04p6_l1m1m2_shieldpo_floatm3": ["klayout:vpp.3"],
+    "sky130_fd_pr__cap_vpp_11p5x11p7_l1m1m2m3_shieldpom4": ["klayout:vpp.3"],
+    "sky130_fd_pr__cap_vpp_11p5x11p7_l1m1m2m3m4_shieldpom5_x8": "@sky130_fd_pr__cap_vpp_11p5x11p7_l1m1m2m3m4_shieldpom5_x9",
+    "sky130_fd_pr__cap_vpp_02p9x06p1_m1m2m3m4_shieldl1_fingercap2": ["klayout:vpp.3"],
+    "sky130_fd_pr__cap_vpp_05p9x05p9_m1m2m3m4_shieldl1_wafflecap": [
+      "klayout:vpp.3",
+      "@magic:via3.2 - 2 * via3.4"
+    ],
+    "sky130_fd_pr__cap_vpp_02p7x21p1_m1m2m3m4_shieldl1_fingercap": ["klayout:vpp.3"],
+    "sky130_fd_pr__cap_vpp_11p5x11p7_l1m1m2m3m4_shieldpom5_x6": ["klayout:vpp.3"]
+  },
+  "tracks": {
+    "layer": "@met2",
+    "width": 0.14,
+    "space": 0.14,
+    "pitch": 0.28,
+    "scans": {
+      "width": {
+        "pass_intervals": [[0.14, 0.955]],
+        "limited_by": ["klayout:m2.1", "magic:Metal2 width < 0.14um (met2.1)"]
+      },
+      "space": {
+        "pass_intervals": [[0.14, 0.955]],
+        "limited_by": ["klayout:m2.2", "magic:Metal2 spacing < 0.14um (met2.2)"]
+      }
+    },
+    "verification": "clean"
+  }
+}

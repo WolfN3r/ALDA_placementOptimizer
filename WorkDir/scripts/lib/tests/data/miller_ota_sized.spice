@@ -1,0 +1,44 @@
+** sch_path: /foss/designs/05_miller_ota_tutorial/miller_ota.sch
+.subckt miller_ota VDD OUT inm inp bias VSS
+*.PININFO inm:I inp:I bias:I OUT:O VDD:B VSS:B
+XM1 n1 inm tail VSS sky130_fd_pr__nfet_01v8 L=0.585 W=2.17 nf=1 ad='int((1 + 1)/2) * 2.17 / 1 * 0.29'
++ as='int((1 + 2)/2) * 2.17 / 1 * 0.29' pd='2*int((1 + 1)/2) * (2.17 / 1 + 0.29)' ps='2*int((1 + 2)/2) * (2.17 / 1 + 0.29)'
++ nrd='0.29 / 2.17 ' nrs='0.29 / 2.17 ' sa=0 sb=0 sd=0 mult=2 m=2
+XM2 n2 inp tail VSS sky130_fd_pr__nfet_01v8 L=0.585 W=2.17 nf=1 ad='int((1 + 1)/2) * 2.17 / 1 * 0.29'
++ as='int((1 + 2)/2) * 2.17 / 1 * 0.29' pd='2*int((1 + 1)/2) * (2.17 / 1 + 0.29)' ps='2*int((1 + 2)/2) * (2.17 / 1 + 0.29)'
++ nrd='0.29 / 2.17 ' nrs='0.29 / 2.17 ' sa=0 sb=0 sd=0 mult=2 m=2
+XM3 n1 n1 VDD VDD sky130_fd_pr__pfet_01v8 L=0.86 W=1.61 nf=1 ad='int((1 + 1)/2) * 1.61 / 1 * 0.29'
++ as='int((1 + 2)/2) * 1.61 / 1 * 0.29' pd='2*int((1 + 1)/2) * (1.61 / 1 + 0.29)' ps='2*int((1 + 2)/2) * (1.61 / 1 + 0.29)'
++ nrd='0.29 / 1.61 ' nrs='0.29 / 1.61 ' sa=0 sb=0 sd=0 mult=2 m=2
+XM4 n2 n1 VDD VDD sky130_fd_pr__pfet_01v8 L=0.86 W=1.61 nf=1 ad='int((1 + 1)/2) * 1.61 / 1 * 0.29'
++ as='int((1 + 2)/2) * 1.61 / 1 * 0.29' pd='2*int((1 + 1)/2) * (1.61 / 1 + 0.29)' ps='2*int((1 + 2)/2) * (1.61 / 1 + 0.29)'
++ nrd='0.29 / 1.61 ' nrs='0.29 / 1.61 ' sa=0 sb=0 sd=0 mult=2 m=2
+XM5 tail bias VSS VSS sky130_fd_pr__nfet_01v8 L=0.525 W=2.125 nf=1 ad='int((1 + 1)/2) * 2.125 / 1 * 0.29' as='int((1 + 2)/2) * 2.125 / 1 * 0.29'
++ pd='2*int((1 + 1)/2) * (2.125 / 1 + 0.29)' ps='2*int((1 + 2)/2) * (2.125 / 1 + 0.29)' nrd='0.29 / 2.125 '
++ nrs='0.29 / 2.125 ' sa=0 sb=0 sd=0 mult=4 m=4
+XM6 OUT n2 VDD VDD sky130_fd_pr__pfet_01v8 L=0.38 W=11.42 nf=4 ad='int((4 + 1)/2) * 11.42 / 4 * 0.29'
++ as='int((4 + 2)/2) * 11.42 / 4 * 0.29' pd='2*int((4 + 1)/2) * (11.42 / 4 + 0.29)' ps='2*int((4 + 2)/2) * (11.42 / 4 + 0.29)'
++ nrd='0.29 / 11.42 ' nrs='0.29 / 11.42 ' sa=0 sb=0 sd=0 mult=1 m=1
+XM7 OUT bias VSS VSS sky130_fd_pr__nfet_01v8 L=0.525 W=2.125 nf=1 ad='int((1 + 1)/2) * 2.125 / 1 * 0.29' as='int((1 + 2)/2) * 2.125 / 1 * 0.29'
++ pd='2*int((1 + 1)/2) * (2.125 / 1 + 0.29)' ps='2*int((1 + 2)/2) * (2.125 / 1 + 0.29)' nrd='0.29 / 2.125 '
++ nrs='0.29 / 2.125 ' sa=0 sb=0 sd=0 mult=12 m=12
+XM8 bias bias VSS VSS sky130_fd_pr__nfet_01v8 L=0.525 W=2.125 nf=1 ad='int((1 + 1)/2) * 2.125 / 1 * 0.29' as='int((1 + 2)/2) * 2.125 / 1 * 0.29'
++ pd='2*int((1 + 1)/2) * (2.125 / 1 + 0.29)' ps='2*int((1 + 2)/2) * (2.125 / 1 + 0.29)' nrd='0.29 / 2.125 '
++ nrs='0.29 / 2.125 ' sa=0 sb=0 sd=0 mult=4 m=4
+XC1 nz OUT sky130_fd_pr__cap_mim_m3_1 W=8 L=12.67 MF=1 m=1
+XR1A n2 nr1 VSS sky130_fd_pr__res_xhigh_po_0p35 L=1.27 mult=1 m=1
+XR1B nr2 nr1 VSS sky130_fd_pr__res_xhigh_po_0p35 L=1.27 mult=1 m=1
+XR1C nr3 nr2 VSS sky130_fd_pr__res_xhigh_po_0p35 L=1.27 mult=1 m=1
+XR1D nz nr3 VSS sky130_fd_pr__res_xhigh_po_0p35 L=1.27 mult=1 m=1
+XRD1 VSS VSS VSS sky130_fd_pr__res_xhigh_po_0p35 L=1.27 mult=1 m=1
+XRD2 VSS VSS VSS sky130_fd_pr__res_xhigh_po_0p35 L=1.27 mult=1 m=1
+XMD1 VSS VSS VSS VSS sky130_fd_pr__nfet_01v8 L=0.585 W=2.17 nf=1 ad='int((1 + 1)/2) * 2.17 / 1 * 0.29'
++ as='int((1 + 2)/2) * 2.17 / 1 * 0.29' pd='2*int((1 + 1)/2) * (2.17 / 1 + 0.29)' ps='2*int((1 + 2)/2) * (2.17 / 1 + 0.29)'
++ nrd='0.29 / 2.17 ' nrs='0.29 / 2.17 ' sa=0 sb=0 sd=0 mult=4 m=4
+XMD3 VDD VDD VDD VDD sky130_fd_pr__pfet_01v8 L=0.86 W=1.61 nf=1 ad='int((1 + 1)/2) * 1.61 / 1 * 0.29'
++ as='int((1 + 2)/2) * 1.61 / 1 * 0.29' pd='2*int((1 + 1)/2) * (1.61 / 1 + 0.29)' ps='2*int((1 + 2)/2) * (1.61 / 1 + 0.29)'
++ nrd='0.29 / 1.61 ' nrs='0.29 / 1.61 ' sa=0 sb=0 sd=0 mult=2 m=2
+XMD8 VSS VSS VSS VSS sky130_fd_pr__nfet_01v8 L=0.525 W=2.125 nf=1 ad='int((1 + 1)/2) * 2.125 / 1 * 0.29' as='int((1 + 2)/2) * 2.125 / 1 * 0.29'
++ pd='2*int((1 + 1)/2) * (2.125 / 1 + 0.29)' ps='2*int((1 + 2)/2) * (2.125 / 1 + 0.29)' nrd='0.29 / 2.125 ' nrs='0.29 / 2.125 '
++ sa=0 sb=0 sd=0 mult=4 m=4
+.ends
