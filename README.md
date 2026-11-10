@@ -19,7 +19,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Python 3.9+. Gurobi (free academic licence) is required for ILP-based optimizers — all other topologies work without it.
+Python 3.13 (the version this project is developed and tested on; the code uses 3.10+ syntax such as `str | None`). Gurobi (free academic licence, installed via `requirements.txt`) is required for ILP-based optimizers and needs a Python version that `gurobipy` supports — all other topologies work without it.
 
 ## Run the optimizer
 
