@@ -481,3 +481,89 @@ def test_b12_dp_even_fingers_drains_routed():
     assert all(len(c) == 1 for c in comps.values()), [c for c in comps.values() if len(c) > 1]
     for net in external:
         assert len({find(i) for i, (n, _, _) in enumerate(nodes) if n == net}) == 1, net
+
+
+# --- D1, D2: channel choice by DP (approved 2026-11-10) -------------------------------------------
+
+def _orientations(v, members):
+    return [v] + ([sp.flip_variant(PDK, v, members, "vss")] if v.get("kind") in ("mirror", "single") else [])
+
+
+@pytest.mark.parametrize("kind, members", [
+    ("cc", [_mos(0, 2, "n1", "inm", "tail"), _mos(1, 2, "n2", "inp", "tail")]),
+    ("mirror", [_mos(4, 4, "tail", "bias", "vss", W=2.125, L=0.525), _mos(6, 12, "out", "bias", "vss", W=2.125, L=0.525),
+                _mos(7, 4, "bias", "bias", "vss", W=2.125, L=0.525)]),
+    ("mirror", [_mos(0, 2, "out", "bias", "vss"), _mos(1, 2, "bias", "bias", "vss")]),
+    ("mirror", [_mos(0, 4, "out", "bias", "vss"), _mos(1, 4, "bias", "bias", "vss")]),
+])
+def test_d1_dp_equals_brute_force(kind, members):
+    # [USER 2026-11-10] the DP channel choice reaches the smallest routed block area of all combinations;
+    # oracle = brute force over every combination in this test
+    by_id = {m["block_id"]: m for m in members}
+    ru = br._rules(_pdk())
+    external = {n for m in members for t, n in m["terminals"].items() if t != "bulk" and n != "vss"}
+    checked = 0
+    for v0 in sp.structure_variants(PDK, members, kind, "vss", AR):
+        for v in _orientations(v0, members):
+            ctx = br._plan_ctx(v, br._rows(_pdk(), v, by_id, "vss"), "vss", [], external, ru)
+            areas = [res[0][0] for ch in itertools.product(*ctx["options"]) if (res := br._evaluate(ctx, ch))]
+            choice = br._dp_choice(ctx)
+            if not areas:
+                assert choice is None
+                continue
+            assert choice is not None
+            assert br._evaluate(ctx, choice)[0][0] == pytest.approx(min(areas), abs=1e-6)
+            checked += 1
+    assert checked
+
+
+def test_d2_big_mirror_routes_both_orientations():
+    # [USER 2026-11-10] a mirror with more S/D choices than MAX_SIDE_COMBOS (sky01 [3,7,8,12]-like: two outputs,
+    # a tail and a diode on one bias, sources on the rail) routes in both row orientations (gates in / gates out)
+    # and every routed block passes the routed-block checks
+    members = [_mos(3, 12, "outm", "vb", "vss"), _mos(7, 12, "outp", "vb", "vss"),
+               _mos(8, 4, "tail", "vb", "vss"), _mos(12, 4, "vb", "vb", "vss")]
+    external = {"outm", "outp", "tail", "vb"}
+    by_id = {m["block_id"]: m for m in members}
+    ru = br._rules(_pdk())
+    big = 0
+    for v0 in sp.structure_variants(PDK, members, "mirror", "vss", AR):
+        ctx = br._plan_ctx(v0, br._rows(_pdk(), v0, by_id, "vss"), "vss", [], external, ru)
+        if math.prod(len(o) for o in ctx["options"]) <= br.MAX_SIDE_COMBOS:
+            continue
+        big += 1
+        for v in _orientations(v0, members):
+            r = br._route_one(_pdk(), v, members, "vss", external, ru)
+            assert r is not None, v["orient"]
+            r["routing"]["power_pins"] = br._power_pins(r, "vss")
+            _check_routed(r, members, "vss", external)
+    assert big
+
+
+# --- R1: same-net spacing (approved 2026-11-10) ----------------------------------------------
+
+def test_r1_same_net_met2_and_via2_spacing():
+    # [USER 2026-11-10] sky01 LS run, B10003 (5x14 [3,7,8,12] mirror): two outm stubs from the rows below and
+    # above landed 0.285 apart -> met2 gap 0.005 (KLayout m2.2) and via2 cuts 0.085 apart (via2.2).
+    # [DRC] m2.2 0.14: two met2 shapes of one net either touch or keep 0.14; via2.2 0.20 between cuts.
+    members = [_mos(3, 12, "outm", "vb", "vss"), _mos(7, 12, "outp", "vb", "vss"),
+               _mos(8, 4, "tail", "vb", "vss"), _mos(12, 4, "vb", "vb", "vss")]
+    external = {"outm", "outp", "tail", "vb"}
+    ru = br._rules(_pdk())
+    routed = 0
+    for v0 in sp.structure_variants(PDK, members, "mirror", "vss", AR):
+        for v in _orientations(v0, members):
+            r = br._route_one(_pdk(), v, members, "vss", external, ru)
+            if r is None:
+                continue
+            routed += 1
+            shapes = r["routing"]["shapes"] + r["routing"]["pins"]
+            m2 = [(s["net"], tuple(s["rect"])) for s in shapes if s["layer"] == "met2"]
+            for (na, ra), (nb, rb) in itertools.combinations(m2, 2):
+                if na == nb:
+                    d = _dist(ra, rb)
+                    assert d < TOL or d >= 0.14 - TOL, ("met2 same-net gap", na, ra, rb, d, v["orient"])
+            cuts = [tuple(s["rect"]) for s in shapes if s["layer"] == "via2"]
+            for ra, rb in itertools.combinations(cuts, 2):
+                assert _dist(ra, rb) >= 0.20 - TOL, ("via2 spacing", ra, rb, v["orient"])
+    assert routed

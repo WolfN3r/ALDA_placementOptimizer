@@ -14,7 +14,8 @@ Composite blocks take their variant from groups[group_id].matching_variants
 [variant_index], single blocks from blocks[].variants[variant_index] (rotated
 by rotation_deg). A variant's in-block routing (lib/block_router) is drawn on the
 pdk.json "routing" layers, block pins also on their pin and label layers (net
-name). Nothing between blocks is routed.
+name), its outer-router blockage boxes on the spec's blockage_layer (viewing
+only, no mask layer). Nothing between blocks is routed.
 
 Host:    .venv/bin/python WorkDir/pdk/export_gds.py <s*_py101_*.json> <out.gds> [--drc]
          (copies itself, drc_tools.py, the JSON and pdk.json into the
@@ -110,7 +111,8 @@ def _variant_of(data: dict, bid: int, pb: dict) -> tuple:
     return blk["variants"][idx], by_id, blk["inst"]
 
 
-def build_block(ly, cells: _Cells, pdk: dict, variant: dict, by_id: dict, name: str, text_layer: list):
+def build_block(ly, cells: _Cells, pdk: dict, variant: dict, by_id: dict, name: str, text_layer: list,
+                blockage_layer: list):
     """One flat cell in the variant's own (unrotated) frame, origin at its bbox corner."""
     cell = ly.create_cell(name)
     rows: dict = {}
@@ -158,7 +160,9 @@ def build_block(ly, cells: _Cells, pdk: dict, variant: dict, by_id: dict, name: 
             for key in ("gds", "pin"):
                 cell.shapes(ly.layer(*lay[key])).insert(b)
             cell.shapes(ly.layer(*lay["label"])).insert(pya.DText(p["net"], b.center().x, b.center().y))
-    cell.flatten(False)                 # keep the PCell variants: later blocks reuse them
+        for b in routing.get("blockages", []):     # viewing only: one box per block, all blocked metals
+            cell.shapes(ly.layer(*blockage_layer)).insert(pya.DBox(*b["rect"]))
+    cell.flatten(False)               # keep the PCell variants: later blocks reuse them
     for t in texts:
         cell.shapes(ly.layer(*text_layer)).insert(t)
     return cell
@@ -172,7 +176,7 @@ def _placed_blocks(data: dict) -> dict:
     return best["placed_blocks"]
 
 
-def build(data: dict, pdk: dict, text_layer: list):
+def build(data: dict, pdk: dict, text_layer: list, blockage_layer: list):
     """(layout, top cell, {block title: absolute DBox})."""
     ly = pya.Layout()
     ly.dbu = pdk["dbu"]
@@ -185,7 +189,7 @@ def build(data: dict, pdk: dict, text_layer: list):
         if "main_bbox" not in pb:
             continue
         variant, by_id, title = _variant_of(data, int(key), pb)
-        cell = build_block(ly, cells, pdk, variant, by_id, f"B{key}_{title}", text_layer)
+        cell = build_block(ly, cells, pdk, variant, by_id, f"B{key}_{title}", text_layer, blockage_layer)
         mb = pb["main_bbox"]
         if variant.get("rotation_deg", 0) == 90:
             # 90° CW maps the unrotated frame (0..W0, 0..H0) to (0..H0, -W0..0); W0 = rotated height
@@ -228,7 +232,7 @@ def main_container(placement: str, pdk_path: str, spec_path: str, out: str, drc:
     data = json.loads(Path(placement).read_text(encoding="utf-8"))
     pdk = pdk_tree.load(pdk_path)
     spec = pdk_tree.load(spec_path)
-    ly, top, boxes = build(data, pdk, spec["annotation_layer"])
+    ly, top, boxes = build(data, pdk, spec["annotation_layer"], spec["blockage_layer"])
     ly.write(out)
     logger.info("wrote %s: %d blocks", out, len(boxes))
     if drc:

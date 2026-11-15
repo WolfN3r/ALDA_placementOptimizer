@@ -141,3 +141,103 @@ def test_t1_unused_trunk_end_cut():
             assert any(s["net"] == net and s["layer"] == "met3" and s["rect"][2] - s["rect"][0] > 0.5   # trunk, not landing
                        and s["rect"][0] <= cx <= s["rect"][2] and s["rect"][1] <= cy <= s["rect"][3]
                        for s in shapes), (net, via)
+
+
+# --- P1..P4: outer trunks as pins, blockages over the devices (approved 2026-11-10) ----------------
+
+def _outer_trunks(r, nets):
+    """[(net, rect, side)] met3 trunks of `nets` below the lowest / above the highest device row."""
+    bottom = min(s["y"] - s["h"] / 2 for s in r["slots"])
+    top = max(s["y"] + s["h"] / 2 for s in r["slots"])
+    return [(s["net"], s["rect"], "bottom" if s["rect"][3] <= bottom + TOL else "top") for s in r["routing"]["shapes"]
+            if s["net"] in nets and s["layer"] == "met3" and s["rect"][2] - s["rect"][0] > 0.5
+            and (s["rect"][3] <= bottom + TOL or s["rect"][1] >= top - TOL)]
+
+
+def test_p1_outer_trunk_is_pin():
+    # [USER 2026-11-10] an outer-channel trunk of an external net is a pin over its whole M3 (the outer router
+    # comes in with M2 through the ring or M3); no M2 drop through the ring is drawn inside the block, also not
+    # after that pin is chosen
+    members = [_mos(0, 2, "out", "bias", "vss"), _mos(1, 2, "bias", "bias", "vss")]
+    v = next(c for c in sp.structure_variants(PDK, members, "mirror", "vss", AR) if c["rows"] == 1)
+    external = {"out", "bias"}
+    r = br.route_structure(_pdk(), v, members, "vss", external)
+    assert r is not None
+    outer = _outer_trunks(r, external)
+    assert outer
+    o = r["guard_ring"]["opening"]
+    for net, trunk, side in outer:
+        assert any(p["net"] == net and p["layer"] == "met3" and p["side"] == side
+                   and p["rect"] == pytest.approx(trunk, abs=TOL) for p in r["routing"]["pins"]), (net, side)
+        a = next(a for a in r["routing"]["access"] if a["net"] == net and a["side"] == side)
+        t = br.apply_access(r, [{"net": net, "side": side, "point": a["seg"][:2]}])
+        pins = [p for p in t["routing"]["pins"] if p["net"] == net]
+        # [USER 2026-11-10] after the choice the unused trunk ends are cut (T1): the pin is the trimmed trunk
+        cut = [s["rect"] for s in t["routing"]["shapes"] if s["net"] == net and s["layer"] == "met3"
+               and abs((s["rect"][1] + s["rect"][3]) - (trunk[1] + trunk[3])) < TOL and s["rect"][2] - s["rect"][0] > 0.5]
+        assert len(cut) == 1, cut
+        assert len(pins) == 1 and pins[0]["side"] == side and pins[0]["rect"] == pytest.approx(cut[0], abs=TOL), pins
+        for s in t["routing"]["shapes"]:
+            if s["net"] == net:
+                assert o["y_min"] - TOL <= s["rect"][1] and s["rect"][3] <= o["y_max"] + TOL, s
+
+
+def test_p2_inner_trunk_no_pin():
+    # [USER 2026-11-10] only outer-channel trunks become pins (no wire deep into the block); a net without an
+    # outer trunk keeps only its left / right edge pins
+    members = [_mos(4, 4, "tail", "bias", "vss", W=2.125, L=0.525),
+               _mos(6, 12, "out", "bias", "vss", W=2.125, L=0.525),
+               _mos(7, 4, "bias", "bias", "vss", W=2.125, L=0.525)]
+    v = sp.structure_variants(PDK, members, "mirror", "vss", AR)[0]
+    external = {"tail", "out", "bias"}
+    r = br.route_structure(_pdk(), v, members, "vss", external)
+    assert r is not None
+    bottom = min(s["y"] - s["h"] / 2 for s in r["slots"])
+    top = max(s["y"] + s["h"] / 2 for s in r["slots"])
+    with_outer = {net for net, _, _ in _outer_trunks(r, external)}
+    for p in r["routing"]["pins"]:
+        if p["side"] in ("top", "bottom"):
+            assert p["rect"][3] <= bottom + TOL or p["rect"][1] >= top - TOL, p
+        if p["net"] not in with_outer:
+            assert p["side"] in ("left", "right"), p
+
+
+def test_p3_dp_edge_pins_only():
+    # [USER 2026-11-09/10] DP: nothing enters from top / bottom, so no trunk pins either
+    members = [_mos(0, 2, "n1", "inm", "tail"), _mos(1, 2, "n2", "inp", "tail")]
+    v = sp.structure_variants(PDK, members, "cc", "vss", AR)[0]
+    r = br.route_structure(_pdk(), v, members, "vss", {"n1", "n2", "inm", "inp", "tail"})
+    assert r is not None
+    assert r["routing"]["pins"]
+    assert all(p["side"] in ("left", "right") for p in r["routing"]["pins"])
+
+
+def test_p4_blockages_over_devices():
+    # [USER 2026-11-10, updated] after in-block routing, ONE blockage per block for the outer router only: the
+    # bounding box of all slots (devices and dummies) on met1/met2/met3.blockage (sky130 69/10 ..., non-mask);
+    # no pin lies on it and every top / bottom trunk pin is reachable straight from its block edge without
+    # crossing it
+    members = [_mos(4, 4, "tail", "bias", "vss", W=2.125, L=0.525),
+               _mos(6, 12, "out", "bias", "vss", W=2.125, L=0.525),
+               _mos(7, 4, "bias", "bias", "vss", W=2.125, L=0.525)]
+    v = sp.structure_variants(PDK, members, "mirror", "vss", AR)[0]
+    r = br.route_structure(_pdk(), v, members, "vss", {"tail", "out", "bias"})
+    assert r is not None
+    blk = r["routing"]["blockages"]
+    assert any(sl["block_id"] is None for sl in r["slots"])
+    box = (min(s["x"] - s["w"] / 2 for s in r["slots"]), min(s["y"] - s["h"] / 2 for s in r["slots"]),
+           max(s["x"] + s["w"] / 2 for s in r["slots"]), max(s["y"] + s["h"] / 2 for s in r["slots"]))
+    assert len(blk) == 1
+    assert blk[0]["rect"] == pytest.approx(box, abs=TOL)
+    assert set(blk[0]["layers"]) == {"met1.blockage", "met2.blockage", "met3.blockage"}
+
+    def hit(x, b):
+        return x[0] < b[2] - TOL and b[0] < x[2] - TOL and x[1] < b[3] - TOL and b[1] < x[3] - TOL
+
+    H = r["height_um"]
+    for p in r["routing"]["pins"]:
+        q = p["rect"]
+        assert not any(hit(q, b["rect"]) for b in blk), p
+        if p["side"] in ("top", "bottom"):
+            lane = (q[0], 0.0, q[2], q[1]) if p["side"] == "bottom" else (q[0], q[3], q[2], H)
+            assert not any(hit(lane, b["rect"]) for b in blk), p

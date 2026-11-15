@@ -7,7 +7,7 @@ bottom edge over an outer-channel trunk, side-channel tracks), not only at one p
   frame (rotated variants turned 90 deg CW); pin_positions moved to the mean access point (the ILP
   and the old pin placer still use one fixed point per pin).
 - net_hpwl(pins): HPWL of one net where every pin takes the point of its segments nearest to the
-  other pins (used in the placement cost).
+  other pins (used by assign; the placement cost uses block centres, user 2026-11-10).
 - assign(placed, nets, blocks, variant_map): after placement, the chosen point per net and routed
   block becomes its pin; the trunk ends nobody uses are cut (block_router.apply_access) and the
   result is stored as placed[bid]["routing"]; the chosen points replace the old pin placer's
@@ -158,10 +158,11 @@ def assign(placed: dict, nets: list, blocks: dict, variant_map: dict) -> dict:
                      and a["seg"][0] - _TOL <= px <= a["seg"][2] + _TOL and a["seg"][1] - _TOL <= py <= a["seg"][3] + _TOL)
             out.append({"pname": pname, "net": net, "side": a["side"], "point": [px, py]})
         pb["routing"] = block_router.apply_access(routed, out)["routing"]
-        for c in out:                       # the block pin drawn at that point, absolute
+        for c in out:                       # the block pin drawn at that point (outer trunk pins carry it), absolute
             r = next(p["rect"] for p in pb["routing"]["pins"] if p["net"] == c["net"] and p["side"] == c["side"]
-                     and p["rect"][0] - _TOL <= c["point"][0] <= p["rect"][2] + _TOL
-                     and p["rect"][1] - _TOL <= c["point"][1] <= p["rect"][3] + _TOL)
+                     and (p.get("point") == c["point"]
+                          or p["rect"][0] - _TOL <= c["point"][0] <= p["rect"][2] + _TOL
+                          and p["rect"][1] - _TOL <= c["point"][1] <= p["rect"][3] + _TOL))
             pb["pins"][c["pname"]] = {"layer": next(p["layer"] for p in pb["routing"]["pins"] if p["rect"] == r),
                                       "side": c["side"], "x_min": round(bx + r[0], 6), "y_min": round(by + r[1], 6),
                                       "x_max": round(bx + r[2], 6), "y_max": round(by + r[3], 6)}

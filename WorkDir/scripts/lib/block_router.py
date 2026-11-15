@@ -26,8 +26,13 @@ MOS structures (cc, mirror, single):
   right edge (cc: inputs left, outputs and tail right, nothing else); a trunk in an outer channel
   also anywhere along it from the top / bottom edge (M2 straight through the ring), a side-channel
   track at its x; among equal areas the plan with external nets in outer channels wins;
-- block pins: by default each external net's first trunk on its edge(s) (met3 to the block edge);
-  apply_access puts them at the access points chosen after placement and cuts unused trunk ends;
+- block pins: by default each external net's first trunk on its edge(s) (met3 to the block edge) and
+  every outer-channel trunk as a whole (user 2026-11-10: the outer router drops onto it, no M2 drawn
+  through the ring here); apply_access keeps only the pins chosen after placement and cuts unused
+  trunk ends;
+- blockages (routing["blockages"], user 2026-11-10): one box over all slots (devices, dummies, inner
+  channels) on the metN.blockage layers (non-mask, BLOCKAGE_METALS), made after the in-block routing,
+  for the outer router only;
   power pins (routing["power_pins"]): the guard ring band, tied to the rail, on all four sides;
 - each block is also routed with every device rotated 180 deg (not cc); the smaller routed
   footprint wins. Rows, ring and block grow to hold the channels (structure_placer.ring_wrap).
@@ -56,6 +61,7 @@ DEBUG = False
 
 EXHAUSTIVE_TRACKS = 7       # nets per channel ordered exhaustively up to this, greedy above
 MAX_SIDE_COMBOS = 20000     # S/D side choices searched exhaustively up to this, else first option
+BLOCKAGE_METALS = ("met1", "met2", "met3")  # outer router kept off the devices on these (add "met4" to block it too)
 _ROUND = 6
 _EPS = 1e-9
 _GRID_TOL = 1e-6            # in grid steps
@@ -366,19 +372,15 @@ def _extras(v: dict, rows: list, bounds: list, tracks: list, sides: dict, stack_
 
 # --- MOS: plan -------------------------------------------------------------------------
 
-def _plan(v: dict, rows: list, rail: str, matched: list, external: set, ru: dict) -> dict | None:
-    """Exit channel (and rail drop or trunk) per (row, S/D net) and track order per channel:
-    smallest routed block area, then fewest external nets without an outer-channel trunk (those
-    can be entered from the top / bottom edge), then fewest crossed tracks."""
+def _plan_ctx(v: dict, rows: list, rail: str, matched: list, external: set, ru: dict) -> dict:
+    """Everything a channel plan is chosen from; options[i] = exit choices (channel, "trunk" | "drop")
+    of keys[i] = (row, S/D net)."""
     n, g = len(rows), ru["grid"]
     kind = v.get("kind")
     modes = _gate_modes(rows, kind)
-    gstubs = _gate_stubs(rows, modes, g)
-    gvias = {r: [_gate_x(q, g) for q in row if not q["dummy"]] for r, row in enumerate(rows) if modes[r] == "pad"}
     units = _sd_units(rows, g)
     keys = sorted(units)
     gch = [exit_channels(r, rows[r][0]["slot"]["orient"], "gate")[0] for r in range(n)]
-    gate_nets = {q["gate_net"] for row in rows for q in row if not q["dummy"]}
     options = []
     for r, net in keys:
         opts = []
@@ -389,60 +391,138 @@ def _plan(v: dict, rows: list, rail: str, matched: list, external: set, ru: dict
                 opts.append((c, "drop"))
             opts.append((c, "trunk"))
         options.append(opts)
-    if math.prod(len(o) for o in options) > MAX_SIDE_COMBOS:
-        logger.warning("block_router: too many S/D side choices, using the first option per net")
-        options = [o[:1] for o in options]
-    bounds = _bounds(v, rows, modes, ru)
+    return {"v": v, "rows": rows, "rail": rail, "matched": matched, "external": external, "ru": ru, "n": n,
+            "kind": kind, "modes": modes, "gstubs": _gate_stubs(rows, modes, g), "units": units, "keys": keys,
+            "gvias": {r: [_gate_x(q, g) for q in row if not q["dummy"]] for r, row in enumerate(rows) if modes[r] == "pad"},
+            "gch": gch, "gate_nets": {q["gate_net"] for row in rows for q in row if not q["dummy"]},
+            "options": options, "bounds": _bounds(v, rows, modes, ru)}
 
+
+def _channel(ctx: dict, c: int, items: list) -> tuple | None:
+    """(track order, crossed tracks) of channel c holding the gate stubs facing it and the S/D units of
+    items = [(row, net)] routed into it as trunks; None when illegal."""
+    ru, gch, gvias = ctx["ru"], ctx["gch"], ctx["gvias"]
+    st = [(s["x"], s["net"], s["side"]) for s in ctx["gstubs"] if s["ch"] == c]
+    for r, net in items:
+        for u in ctx["units"][(r, net)]:
+            if c == gch[r] and r in gvias and any(abs(u["x"] - x) < ru["gate_keep"] - _EPS for x in gvias[r]):
+                return None
+            st.append((u["x"], net, "below" if c == r + 1 else "above"))
+    if any(a[2] == b[2] and a[1] != b[1] and abs(a[0] - b[0]) < ru["pitch2"] - _EPS
+           for a, b in itertools.combinations(st, 2)):
+        return None
+    return _order(st, ru["pitch2"], ctx["matched"]) if st else ({}, 0)
+
+
+def _evaluate(ctx: dict, choice: tuple) -> tuple | None:
+    """(key, plan) of one full choice (one option per key), None when illegal; key = (area, external nets
+    without an outer-channel trunk, crossed tracks)."""
+    n, rows, rail, v, ru = ctx["n"], ctx["rows"], ctx["rail"], ctx["v"], ctx["ru"]
+    items, drops = [[] for _ in range(n + 1)], set()
+    for (r, net), (c, mode) in zip(ctx["keys"], choice):
+        if mode == "drop":
+            drops.add(c)
+        else:
+            items[c].append((r, net))
+    if any(items[c] or any(s["ch"] == c for s in ctx["gstubs"]) for c in drops):
+        return None
+    orders, stub_cost = [], 0
+    for c in range(n + 1):
+        res = _channel(ctx, c, items[c])
+        if res is None:
+            return None
+        orders.append(res[0])
+        stub_cost += res[1]
+    trunks: dict = {}
+    for c, tr in enumerate(orders):
+        for net in tr:
+            trunks.setdefault(net, []).append(("c", c))
+    for r in ctx["gvias"]:
+        trunks.setdefault(next(q["gate_net"] for q in rows[r] if not q["dummy"]), []).append(("p", r))
+    sides = {"left": [], "right": []}
+    for net in sorted(trunks):
+        if net != rail and len(trunks[net]) > 1:
+            sides["left" if ctx["kind"] != "cc" or net in ctx["gate_nets"] else "right"].append(net)
+    stack_side = None
+    if rail in trunks:
+        stack_side = "right" if not sides["right"] else ("left" if not sides["left"] else "right")
+    ch, grow = _extras(v, rows, ctx["bounds"], orders, sides, stack_side, ru)
+    area = (v["width_um"] + grow["left"] + grow["right"]) * (v["height_um"] + sum(ch))
+    inner = sum(1 for net in ctx["external"] if any(t[0] == "c" for t in trunks.get(net, []))
+                and not any(net in orders[c] for c in (0, n)))
+    return (round(area, _ROUND), inner, stub_cost), \
+        {"choice": dict(zip(ctx["keys"], choice)), "tracks": orders, "trunks": trunks, "sides": sides,
+         "stack_side": stack_side, "extra_ch": ch, "grow": grow, "modes": ctx["modes"], "gate_nets": ctx["gate_nets"]}
+
+
+def _dp_choice(ctx: dict) -> tuple | None:
+    """Choice with the smallest total channel growth (then crossed tracks), exact: channel c only holds
+    nets of rows c-1 and c, so a DP over rows with state = one row's options (Viterbi) finds it.
+    Side channels and the outer-channel tie-break are global and scored afterwards by _evaluate.
+    Knowledge: notes/2026-11-10_block-router-channel-dp.md."""
+    n, ru, keys, options = ctx["n"], ctx["ru"], ctx["keys"], ctx["options"]
+    idx = [[i for i, (r, _) in enumerate(keys) if r == row] for row in range(n)]
+    states = [list(itertools.product(*(options[i] for i in idx[r]))) for r in range(n)]
+    gated = {s["ch"] for s in ctx["gstubs"]}
+    memo: dict = {}
+
+    def cost(c, below, above):          # below / above: state of row c-1 / row c (None outside the block)
+        if (c, below, above) not in memo:
+            items, drop = [], False
+            for r, st in ((c - 1, below), (c, above)):
+                for i, o in zip(idx[r] if st is not None else (), st or ()):
+                    if o[0] == c:
+                        drop |= o[1] == "drop"
+                        if o[1] == "trunk":
+                            items.append((r, keys[i][1]))
+            res = None if drop and (items or c in gated) else _channel(ctx, c, items)
+            lo, hi = ctx["bounds"][c]
+            memo[(c, below, above)] = None if res is None else \
+                (_ceil_grid(max(0.0, _need(len(res[0]), ru) - (hi - lo)), ru["grid"]), res[1])
+        return memo[(c, below, above)]
+
+    best = {}                           # state of the current row -> ((growth, crossings), path of states)
+    for s in states[0]:
+        if (cc := cost(0, None, s)) is not None:
+            best[s] = (cc, [s])
+    for r in range(1, n):
+        nxt = {}
+        for s in states[r]:
+            for p, (acc, path) in best.items():
+                cc = cost(r, p, s)
+                if cc is None:
+                    continue
+                tot = (acc[0] + cc[0], acc[1] + cc[1])
+                if s not in nxt or tot < nxt[s][0]:
+                    nxt[s] = (tot, path + [s])
+        best = nxt
+    ends = [((acc[0] + cc[0], acc[1] + cc[1]), path) for s, (acc, path) in best.items()
+            if (cc := cost(n, s, None)) is not None]
+    if not ends:
+        return None
+    path = min(ends, key=lambda e: e[0])[1]
+    choice = [None] * len(keys)
+    for r, st in enumerate(path):
+        for i, o in zip(idx[r], st):
+            choice[i] = o
+    return tuple(choice)
+
+
+def _plan(v: dict, rows: list, rail: str, matched: list, external: set, ru: dict) -> dict | None:
+    """Exit channel (and rail drop or trunk) per (row, S/D net) and track order per channel:
+    smallest routed block area, then fewest external nets without an outer-channel trunk (those
+    can be entered from the top / bottom edge), then fewest crossed tracks. Every combination up
+    to MAX_SIDE_COMBOS, above that the exact-area DP (_dp_choice)."""
+    ctx = _plan_ctx(v, rows, rail, matched, external, ru)
+    if math.prod(len(o) for o in ctx["options"]) > MAX_SIDE_COMBOS:
+        choice = _dp_choice(ctx)
+        res = _evaluate(ctx, choice) if choice else None
+        return res[1] if res else None
     best = None
-    for choice in itertools.product(*options):
-        per = [[] for _ in range(n + 1)]
-        drops, ok = set(), True
-        for st in gstubs:
-            per[st["ch"]].append((st["x"], st["net"], st["side"]))
-        for (r, net), (c, mode) in zip(keys, choice):
-            if mode == "drop":
-                drops.add(c)
-                continue
-            for u in units[(r, net)]:
-                if c == gch[r] and r in gvias and any(abs(u["x"] - x) < ru["gate_keep"] - _EPS for x in gvias[r]):
-                    ok = False
-                per[c].append((u["x"], net, "below" if c == r + 1 else "above"))
-        if not ok or any(per[c] for c in drops):
-            continue
-        orders, stub_cost = [], 0
-        for st in per:
-            close = any(a[2] == b[2] and a[1] != b[1] and abs(a[0] - b[0]) < ru["pitch2"] - _EPS
-                        for a, b in itertools.combinations(st, 2))
-            res = None if close else (_order(st, ru["pitch2"], matched) if st else ({}, 0))
-            if res is None:
-                break
-            orders.append(res[0])
-            stub_cost += res[1]
-        if len(orders) < n + 1:
-            continue
-        trunks: dict = {}
-        for c, tr in enumerate(orders):
-            for net in tr:
-                trunks.setdefault(net, []).append(("c", c))
-        for r in gvias:
-            trunks.setdefault(next(q["gate_net"] for q in rows[r] if not q["dummy"]), []).append(("p", r))
-        sides = {"left": [], "right": []}
-        for net in sorted(trunks):
-            if net != rail and len(trunks[net]) > 1:
-                sides["left" if kind != "cc" or net in gate_nets else "right"].append(net)
-        stack_side = None
-        if rail in trunks:
-            stack_side = "right" if not sides["right"] else ("left" if not sides["left"] else "right")
-        ch, grow = _extras(v, rows, bounds, orders, sides, stack_side, ru)
-        area = (v["width_um"] + grow["left"] + grow["right"]) * (v["height_um"] + sum(ch))
-        inner = sum(1 for net in external if any(t[0] == "c" for t in trunks.get(net, []))
-                    and not any(net in orders[c] for c in (0, n)))
-        key = (round(area, _ROUND), inner, stub_cost)
-        if best is None or key < best[0]:
-            best = (key, {"choice": dict(zip(keys, choice)), "tracks": orders, "trunks": trunks, "sides": sides,
-                          "stack_side": stack_side, "extra_ch": ch, "grow": grow, "modes": modes,
-                          "gate_nets": gate_nets})
+    for choice in itertools.product(*ctx["options"]):
+        res = _evaluate(ctx, choice)
+        if res and (best is None or res[0] < best[0]):
+            best = res
     return best[1] if best else None
 
 
@@ -609,9 +689,14 @@ def _realize(v: dict, rows: list, plan: dict, rail: str, external: set, ru: dict
                # wire sizes apply_access needs to place pins after placement (no pdk there)
                "rules": {k: ru[k] for k in ("grid", "trunk_w", "stub_w", "side_w", "cut2", "v2m2", "v2m3")}}
     default = []
-    for net in sorted(external):        # first trunk, on the edge(s) the block's rule allows
+    for net in sorted(external):        # first trunk, on the edge(s) the block's rule allows; every outer trunk
         ends = [a for a in routing["access"] if a["net"] == net and a["side"] in ("left", "right")]
         default += [{"net": net, "side": a["side"], "point": a["seg"][:2]} for a in ends if a["trunk"] == ends[0]["trunk"]]
+        outer = {}
+        for a in routing["access"]:
+            if a["net"] == net and a["side"] in ("top", "bottom") and "trunk" in a:
+                outer.setdefault(tuple(a["trunk"]), {"net": net, "side": a["side"], "point": a["seg"][:2]})
+        default += list(outer.values())
     _connect(v, routing, default, ru)
     return routing
 
@@ -685,6 +770,7 @@ def _connect(v: dict, routing: dict, chosen: list, ru: dict) -> None:
     shapes, pins = routing["shapes"], routing["pins"]
     xs = {(t["net"], *t["key"]): [t["x0"], t["x1"]] for t in routing["trunks"]}
     y_of = {(t["net"], *t["key"]): t["y"] for t in routing["trunks"]}
+    trunk_pins = {}                 # outer trunk -> (side, chosen point): the whole trunk is the pin
 
     def add(net, layer, rect, tag, side=None):
         sh = {"net": net, "layer": layer, "rect": list(_r(*rect))}
@@ -710,21 +796,20 @@ def _connect(v: dict, routing: dict, chosen: list, ru: dict) -> None:
                 add(net, "met3", (o["x_max"], y - half, W, y + half), None, side)
             continue
         bottom = side == "bottom"
-        if "trunk" in a:            # M2 drop from the trunk through the ring
-            k = (net, *a["trunk"])
-            x, y, w = min(max(round(_floor_grid(px + g / 2, g), _ROUND), a["seg"][0]), a["seg"][2]), y_of[k], ru["stub_w"]
-            xs[k].append(x)
-            add(net, "met2", (x - w / 2, o["y_min"], x + w / 2, y) if bottom else (x - w / 2, y, x + w / 2, o["y_max"]), "access")
-            for layer, (bw, bh) in (("via2", (ru["cut2"], ru["cut2"])), ("met2", ru["v2m2"]), ("met3", ru["v2m3"])):
-                add(net, layer, _box(x, y, bw, bh), "access")
-        else:                       # the side-channel track continued to the edge
-            x, lo, hi = a["track"]
-            w = ru["side_w"]
-            add(net, "met2", (x - w / 2, o["y_min"], x + w / 2, lo) if bottom else (x - w / 2, hi, x + w / 2, o["y_max"]), "access")
+        if "trunk" in a:            # [USER 2026-11-10] the outer router drops onto the trunk itself
+            trunk_pins[(net, *a["trunk"])] = (side, [px, py])
+            continue
+        x, lo, hi = a["track"]      # the side-channel track continued to the edge
+        w = ru["side_w"]
+        add(net, "met2", (x - w / 2, o["y_min"], x + w / 2, lo) if bottom else (x - w / 2, hi, x + w / 2, o["y_max"]), "access")
         add(net, "met2", (x - w / 2, 0.0, x + w / 2, o["y_min"]) if bottom else (x - w / 2, o["y_max"], x + w / 2, H), None, side)
     for k, xx in xs.items():
         y = y_of[k]
-        add(k[0], "met3", (min(xx) - half, y - half, max(xx) + half, y + half), "trunk")
+        rect = (min(xx) - half, y - half, max(xx) + half, y + half)
+        add(k[0], "met3", rect, "trunk")
+        if k in trunk_pins:
+            add(k[0], "met3", rect, None, trunk_pins[k][0])
+            pins[-1]["point"] = trunk_pins[k][1]
 
 
 def apply_access(v: dict, chosen: list) -> dict:
@@ -736,7 +821,7 @@ def apply_access(v: dict, chosen: list) -> dict:
         return out
     nets = {c["net"] for c in chosen}
     keep = [{"net": p["net"], "side": p["side"],
-             "point": [(p["rect"][0] + p["rect"][2]) / 2 if p["side"] in ("top", "bottom") else
+             "point": p.get("point") or [(p["rect"][0] + p["rect"][2]) / 2 if p["side"] in ("top", "bottom") else
                        (0.0 if p["side"] == "left" else out["width_um"]),
                        (p["rect"][1] + p["rect"][3]) / 2 if p["side"] in ("left", "right") else
                        (0.0 if p["side"] == "bottom" else out["height_um"])]}
@@ -779,7 +864,12 @@ def _route_one(pdk: dict, v: dict, members: list, rail: str, external: set, ru: 
         return None
     out = _relayout(pdk, v, members[0]["model"], plan)
     rows = _rows(pdk, out, by_id, rail)
-    out["routing"] = {**_realize(out, rows, plan, rail, external, ru), "devices": _devices(rows)}
+    # [USER 2026-11-10] made after the in-block routing, for the outer router only: one box over all devices
+    # and dummies (rows and inner channels), non-mask blockage layers; outer channels stay free
+    box = _r(min(s["x"] - s["w"] / 2 for s in out["slots"]), min(s["y"] - s["h"] / 2 for s in out["slots"]),
+             max(s["x"] + s["w"] / 2 for s in out["slots"]), max(s["y"] + s["h"] / 2 for s in out["slots"]))
+    blockages = [{"layers": [f"{m}.blockage" for m in BLOCKAGE_METALS], "rect": list(box)}]
+    out["routing"] = {**_realize(out, rows, plan, rail, external, ru), "devices": _devices(rows), "blockages": blockages}
     return out
 
 
