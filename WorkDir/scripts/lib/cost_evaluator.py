@@ -8,8 +8,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from pin_access import net_hpwl
-
 
 # =============================================================================
 # CONSTANTS
@@ -188,7 +186,7 @@ class CostEvaluator:
         """Half-perimeter wirelength summed over all nets."""
         total = 0.0
         pin_pos = self._build_pin_positions(positions, variant_map)
-        pin_segs = self._build_pin_access(positions, variant_map)
+        centre = self._build_pin_centres(positions, variant_map)
         if self._use_power_rails:
             y_top, y_bot = self._rail_bounds(positions, variant_map)
         for net in self._nets:
@@ -209,11 +207,9 @@ class CostEvaluator:
                     total += sum(py - y_bot for py in ys)
                     continue
             if len(xs) >= 2:
-                if any(p in pin_segs for p in pins):     # routed block: nearest point of its access segments
-                    total += net_hpwl([pin_segs.get(p) or [(*pin_pos[p], *pin_pos[p])]
-                                       for p in pins if p in pin_pos])[0]
-                    continue
-                total += (max(xs) - min(xs)) + (max(ys) - min(ys))
+                cx = [centre[p][0] for p in pins if p in pin_pos]
+                cy = [centre[p][1] for p in pins if p in pin_pos]
+                total += (max(cx) - min(cx)) + (max(cy) - min(cy))
         return total
 
     def _aspect_ratio(
@@ -269,15 +265,17 @@ class CostEvaluator:
                 pin_pos[key] = (bx + pcoord["x"], by + pcoord["y"])
         return pin_pos
 
-    def _build_pin_access(
+    def _build_pin_centres(
         self,
         positions: dict[str, tuple[float, float]],
         variant_map: dict[str, int],
-    ) -> dict[str, list]:
-        """Map pin name → absolute access segments (lib/pin_access) of routed blocks."""
-        out: dict[str, list] = {}
+    ) -> dict[str, tuple[float, float]]:
+        """Map pin name → absolute centre of its block (signal-net HPWL, as the ILP)."""
+        out: dict[str, tuple[float, float]] = {}
         for bid, (bx, by) in positions.items():
             variant = self._active_variant(self._blocks.get(bid, {}), bid, variant_map)
-            for pname, acc in variant.get("pin_access", {}).items():
-                out[f"B{bid}_{pname}"] = [(bx + s[0], by + s[1], bx + s[2], by + s[3]) for s in acc["segs"]]
+            bb = variant.get("main_bbox", {})
+            c = (bx + bb.get("x_max", 0.0) / 2, by + bb.get("y_max", 0.0) / 2)
+            for pname in variant.get("pin_positions", {}):
+                out[f"B{bid}_{pname}"] = c
         return out

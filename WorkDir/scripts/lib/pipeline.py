@@ -19,7 +19,6 @@ from cost_evaluator import (
     resolve_variant as _active_variant,
 )
 import pin_access
-from pin_access import net_hpwl
 from sa_optimizer import (
     SimulatedAnnealingOptimizer, SAConfig, SAResult, NullObserver,
     calibrate_initial_temperature,
@@ -567,13 +566,13 @@ def _hpwl(
 ) -> float:
     vm = variant_map or {}
     pin_pos: dict[str, tuple[float, float]] = {}
-    pin_segs: dict[str, list] = {}
+    centre: dict[str, tuple[float, float]] = {}     # signal nets: block centre, as the ILP
     for bid, (bx, by) in positions.items():
         v = _active_variant(blocks.get(bid, {}), bid, vm)
+        bb = v.get("main_bbox", {})
         for pname, pcoord in v.get("pin_positions", {}).items():
             pin_pos[f"B{bid}_{pname}"] = (bx + pcoord["x"], by + pcoord["y"])
-        for pname, acc in v.get("pin_access", {}).items():
-            pin_segs[f"B{bid}_{pname}"] = [(bx + s[0], by + s[1], bx + s[2], by + s[3]) for s in acc["segs"]]
+            centre[f"B{bid}_{pname}"] = (bx + bb.get("x_max", 0.0) / 2, by + bb.get("y_max", 0.0) / 2)
     if use_power_rails and positions:
         y_top = max(
             by + _active_variant(blocks.get(bid, {}), bid, vm).get("main_bbox", {}).get("y_max", 0.0)
@@ -597,10 +596,9 @@ def _hpwl(
                 total += sum(py - y_bot for py in ys)
                 continue
         if len(xs) >= 2:
-            if any(p in pin_segs for p in pins):     # routed block: nearest point of its access segments
-                total += net_hpwl([pin_segs.get(p) or [(*pin_pos[p], *pin_pos[p])] for p in pins if p in pin_pos])[0]
-                continue
-            total += (max(xs) - min(xs)) + (max(ys) - min(ys))
+            cx = [centre[p][0] for p in pins if p in pin_pos]
+            cy = [centre[p][1] for p in pins if p in pin_pos]
+            total += (max(cx) - min(cx)) + (max(cy) - min(cy))
     return total
 
 

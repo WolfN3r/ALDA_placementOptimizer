@@ -107,8 +107,9 @@ def _hpwl_fixture():
 
 
 @pytest.mark.parametrize("net_id, rails, expected", [
-    ("n1",  False, 2.0),   # [HAND] |2.5 - 1| + |1 - 0.5| = 1.5 + 0.5
-    ("VDD", False, 2.0),   # rails off: a supply net is an ordinary net
+    # [USER 2026-11-10] signal nets centre to centre, as the ILP: A centre (1, 0.5), B centre (4, 1)
+    ("n1",  False, 3.5),   # [HAND] |4 - 1| + |1 - 0.5| = 3 + 0.5
+    ("VDD", False, 3.5),   # rails off: a supply net is an ordinary net
     ("VDD", True,  2.5),   # [HAND] top rail y = max(0 + 1, 0 + 2) = 2: (2 - 0.5) + (2 - 1)
     ("VSS", True,  1.5),   # [HAND] bottom rail y = 0: (0.5 - 0) + (1 - 0)
 ])
