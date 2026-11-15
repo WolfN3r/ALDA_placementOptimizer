@@ -1,5 +1,6 @@
 {
   "@refs": {
+    "areaid.photo": [81, 81],
     "capm": [89, 44],
     "capm2": [97, 44],
     "diff": [65, 20],
@@ -7,17 +8,29 @@
     "hvntm": [125, 20],
     "hvtp": [78, 44],
     "li1": [67, 20],
+    "li1.label": [67, 5],
+    "li1.pin": [67, 16],
     "li1.res": [67, 13],
     "lvtn": [125, 44],
     "met1": [68, 20],
+    "met1.label": [68, 5],
+    "met1.pin": [68, 16],
     "met1.res": [68, 13],
     "met2": [69, 20],
+    "met2.label": [69, 5],
+    "met2.pin": [69, 16],
     "met2.res": [69, 13],
     "met3": [70, 20],
+    "met3.label": [70, 5],
+    "met3.pin": [70, 16],
     "met3.res": [70, 13],
     "met4": [71, 20],
+    "met4.label": [71, 5],
+    "met4.pin": [71, 16],
     "met4.res": [71, 13],
     "met5": [72, 20],
+    "met5.label": [72, 5],
+    "met5.pin": [72, 16],
     "met5.res": [72, 13],
     "npc": [95, 20],
     "nsdm": [93, 44],
@@ -25,11 +38,26 @@
     "poly": [66, 20],
     "prBoundary": [235, 4],
     "psdm": [94, 20],
+    "pwell": [64, 44],
+    "pwell.label": [64, 59],
+    "pwell.pin": [122, 16],
     "rpm": [86, 20],
     "tap": [65, 44],
     "urpm": [79, 20],
     "via1": [68, 44],
     "via2": [69, 44],
+    "diode_pins": {
+      "n": {"layer": "@met1", "order": "x", "count": "1", "terms": ["1", "w", "l"], "centre_tol": 0.005},
+      "p": {
+        "layer": "@li1",
+        "interacting": "@tap",
+        "order": "x",
+        "count": "1",
+        "terms": ["1", "w", "l"],
+        "ring": true,
+        "centre_tol": 0.005
+      }
+    },
     "mos_pins": {
       "sd": {
         "layer": "@met1",
@@ -125,7 +153,7 @@
       "terms": ["1", "IW", "IL", "GRW"]
     }
   },
-  "_comment_pins": "Pin shapes per device class (the PCells carry no pin labels); a device's own \"pins\" replaces its class's. Each group: merged shapes on `layer`, minus `minus` if given, optionally only those interacting / not interacting another layer, sorted along `order`; `count` shapes expected. Every rect edge is fitted linearly in `terms` over the device sweep, with k = shape index, first/last = 1 on the end shapes; centres must fit exactly. A size that is not linear (S/D strip length steps with the contact count, w - len in 0.07..0.42; width 0.29 instead of 0.23 on short strips) is stored as a lower bound over the sweep plus the dense bound_sweep (slopes fitted to all samples, constant lowered to the worst one) and <size>_min = smallest sample; size = max of both, so the pin rect lies inside the real metal. size_terms: own terms per size. Gate pad width grows with l: bound over a dense L sweep. MOS: sd = met1 S/D columns (k = 0..nf, none connected; even/odd columns are the two terminals, which one is source is the router's choice), gate = met1 gate pads, one per finger, not connected. res: n1/n2 met1 end pads (k = 0 bottom). cap: met4 top plate over capm, met4 bottom-plate strap. Classes without pins (var, diodes, bjt, photodiode, vpp) are placed but not routed inside the block.",
+  "_comment_pins": "Pin shapes per device class (the PCells carry no pin labels); a device's own \"pins\" replaces its class's. Each group: merged shapes on `layer`, minus `minus` if given, optionally only those interacting / not interacting another layer, sorted along `order`; `count` shapes expected. Every rect edge is fitted linearly in `terms` over the device sweep, with k = shape index, first/last = 1 on the end shapes; centres must fit exactly. A size that is not linear (S/D strip length steps with the contact count, w - len in 0.07..0.42; width 0.29 instead of 0.23 on short strips) is stored as a lower bound over the sweep plus the dense bound_sweep (slopes fitted to all samples, constant lowered to the worst one) and <size>_min = smallest sample; size = max of both, so the pin rect lies inside the real metal. size_terms: own terms per size. Gate pad width grows with l: bound over a dense L sweep. MOS: sd = met1 S/D columns (k = 0..nf, none connected; even/odd columns are the two terminals, which one is source is the router's choice), gate = met1 gate pads, one per finger, not connected. res: n1/n2 met1 end pads (k = 0 bottom). cap: met4 top plate over capm, met4 bottom-plate strap. Groups named after a terminal are that terminal's pins (viewer / 012 detail); ring = the shape is a closed ring: the rect is its outer bbox, ring_w its narrowest band. centre_tol (um): centres may miss the linear fit by this much (diodes: the PCell rounds the off-grid w / l of the area-perim sweep, met1 centre off by up to 3 nm; viewer pins only, not routed). Terminal order from the PDK's extraction (magic sky130A.tech device lines, KLayout LVS deck): var c0 = gate (met1 pads on the poly ends), c1 = n-well taps (met1 strips), b = substrate (nothing drawn); diodes: first terminal n = the diffusion (met1), second p = the well tap ring (li1); photodiode d0 = P (outer p-tap ring, li1), d1 = N (the small n-tap in the centre). var / diodes / bjt / photodiode / vpp are placed but not routed inside the block.",
   "pins": {
     "nmos": "@mos_pins",
     "pmos": "@mos_pins",
@@ -139,7 +167,42 @@
         "count": "1",
         "terms": ["1", "w", "l"]
       }
+    },
+    "var": {
+      "c0": {
+        "layer": "@met1",
+        "interacting": "@poly",
+        "order": "y",
+        "count": "2",
+        "terms": ["1", "w", "l", "k", "k*w", "k*l"]
+      },
+      "c1": {
+        "layer": "@met1",
+        "interacting": "@tap",
+        "order": "x",
+        "count": "2",
+        "terms": ["1", "w", "l", "k", "k*w", "k*l"]
+      }
+    },
+    "ndiode": "@diode_pins",
+    "pdiode": "@diode_pins",
+    "photodiode": {
+      "d0": {"layer": "@li1", "interacting": "@psdm", "order": "x"},
+      "d1": {"layer": "@li1", "interacting": "@areaid.photo", "order": "x"}
     }
+  },
+  "_comment_pin_labels": "Fixed cells (BJTs, VPP) without a pins group: a terminal's pin = the shape under its text label. Layers [drawing, pin, label] searched in this order (a terminal labelled on two layers takes the first); per label the pin-purpose shape under it, else the drawn one. Label = terminal name (any case) or its alias, else a label starting with the terminal name (npn s = SUBSTRATE, c = C). vpp: b = SUB, m3/m4/m5 = MET3/MET4/MET5.",
+  "pin_labels": {
+    "layers": [
+      ["@met5", "@met5.pin", "@met5.label"],
+      ["@met4", "@met4.pin", "@met4.label"],
+      ["@met3", "@met3.pin", "@met3.label"],
+      ["@met2", "@met2.pin", "@met2.label"],
+      ["@met1", "@met1.pin", "@met1.label"],
+      ["@li1", "@li1.pin", "@li1.label"],
+      ["@pwell", "@pwell.pin", "@pwell.label"]
+    ],
+    "alias": {"b": "SUB", "m3": "MET3", "m4": "MET4", "m5": "MET5"}
   },
   "_comment_routing_rules": "In-block routing (lib/block_router), copied into pdk.json as is: SkyWater periphery rules m1.1/m1.2, m2.1/m2.2, m3.1/m3.2, m4.1/m4.2, m5.1/m5.2 (width/space; met4/met5 only for MIM cap pins), via.1a/via.4a/via.5a, m2.4/m2.5 (via1 cut and met1/met2 enclosure on two / the other two sides), via2.1a/via2.4/via2.5, m3.4. pin / label: the purpose layers export_gds writes block pins and net names on.",
   "routing": {
@@ -155,6 +218,7 @@
         "gds": ["{n}", 20],
         "pin": ["{n}", 16],
         "label": ["{n}", 5],
+        "blockage": ["{n}", 10],
         "width": "{w}",
         "space": "{w}"
       }
@@ -193,6 +257,8 @@
   "layout_policy": {"row_gap_poly_min": 1.0, "row_gap_round": 0.1},
   "_comment_annotation": "Non-mask layer for the slot names export_gds.py writes (235/4 prBoundary.boundary is ignored by DRC and LVS).",
   "annotation_layer": "@prBoundary",
+  "_comment_blockage": "Layer for the outer-router blockage box of each routed block (lib/block_router routing.blockages), drawn by export_gds.py for viewing only. 250/0 is in no sky130 layer map, so DRC and LVS ignore it (metN.blockage 6x/10 is checked by the KLayout deck: m1.3ab, m2.3ab, m3.3ab).",
+  "blockage_layer": [250, 0],
   "_comment_drc_samples": "Per class: the model (and netlist values) drawn wherever a class sample is needed (baseline, structure gaps); a model's own drc_sample replaces the netlist values for its own scans. One class per kind of outer layers (npn has deep n-well, pnp not; n/p diodes differ by n-well), since structure gaps are per class.",
   "drc_samples": {
     "nmos": {"model": "sky130_fd_pr__nfet_01v8", "params": {"W": 2.0, "L": 0.5, "nf": 1}},

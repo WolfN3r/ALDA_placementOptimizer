@@ -77,8 +77,11 @@ def pin_rects(pdk: dict, model: str, params: dict, group: str) -> list:
     """Pin rects (x0, y0, x1, y1) of one copy in the PCell frame, one per shape of
     the pins group in its order. Size = max(fitted size, <size>_min) (a lower bound
     where the fit is not exact); every edge snapped inward to the grid, so the
-    rect is on grid and inside the real metal."""
+    rect is on grid and inside the real metal. A fixed cell stores its rects as is
+    ("rects"); a ring group ("ring_w") gives the four bands of each fitted outer rect."""
     g, grid = pdk["devices"][model]["pins"][group], pdk["grid"]
+    if "rects" in g:
+        return [tuple(r) for r in g["rects"]]
     n = round(eval_expr(g["count"], params))
     out = []
     for k in range(n):
@@ -86,6 +89,11 @@ def pin_rects(pdk: dict, model: str, params: dict, group: str) -> list:
         cx, cy = _linear(g["cx"], env), _linear(g["cy"], env)
         w = max(_linear(g["w"], env), g.get("w_min", 0.0))
         h = max(_linear(g["h"], env), g.get("h_min", 0.0))
-        out.append((_snap_up(cx - w / 2, grid), _snap_up(cy - h / 2, grid),
-                    _snap_down(cx + w / 2, grid), _snap_down(cy + h / 2, grid)))
+        r = (_snap_up(cx - w / 2, grid), _snap_up(cy - h / 2, grid), _snap_down(cx + w / 2, grid), _snap_down(cy + h / 2, grid))
+        if "ring_w" in g:
+            b = _snap_down(g["ring_w"], grid)
+            out += [(r[0], r[1], r[2], r[1] + b), (r[0], r[3] - b, r[2], r[3]),
+                    (r[0], r[1] + b, r[0] + b, r[3] - b), (r[2] - b, r[1] + b, r[2], r[3] - b)]
+        else:
+            out.append(r)
     return out

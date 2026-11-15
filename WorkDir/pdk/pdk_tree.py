@@ -48,9 +48,12 @@ _VAR = re.compile(r"\{(\w+)\}")
 
 def merge(base, over, refs: dict | None = None):
     """Deep merge (copies): dicts recursively, other values replaced, 'key+' appends to a list.
-    A "@ref" in base that over changes in part is resolved first (needs refs)."""
+    A "@ref" in base that over changes in part is resolved first (needs refs); a "@ref"
+    in over on a dict base too (hoist may turn a partial override into a ref)."""
     if _is_ref(base, refs) and isinstance(over, dict):
         base = _walk(base, refs)
+    if _is_ref(over, refs) and isinstance(base, dict):
+        over = _walk(over, refs)
     if not (isinstance(base, dict) and isinstance(over, dict)):
         return copy.deepcopy(over)
     out = copy.deepcopy(base)
@@ -259,9 +262,11 @@ def hoist(tree: dict, refs: dict) -> dict:
             for k, v in obj.items():
                 if not k.startswith("@"):
                     scan(v, path + [k])
-                elif k == "@members":
+                elif k == "@members":           # a member's data is its @set (repl hoists there too)
                     for mk, mv in v.items():
-                        scan(mv, path + [mk])
+                        for mk2, mv2 in mv.items():
+                            if mk2 == "@set" or not mk2.startswith("@"):
+                                scan(mv2, path + [mk])
         elif isinstance(obj, list):
             for x in obj:
                 scan(x, path)
@@ -276,7 +281,8 @@ def hoist(tree: dict, refs: dict) -> dict:
             by_value[s] = name
             refs[name] = json.loads(s)
             for inner, k in _inner(json.loads(s), {}).items():
-                count[inner] -= k * (n - 1)            # now written once, inside the ref
+                if inner in count:                     # scan skips directive values (@name, ...)
+                    count[inner] -= k * (n - 1)        # now written once, inside the ref
 
     def repl(obj, top=False):
         s = _json(obj)

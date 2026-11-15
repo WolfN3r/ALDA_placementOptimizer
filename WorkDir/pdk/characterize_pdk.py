@@ -7,7 +7,10 @@ generator and the placer read PDK values from.
    fits bbox width, height and origin as a linear combination of the spec's
    terms (e.g. "nf*L"). Fails unless the fit is exact to half a dbu.
    Pins: over the same sweep, the spec's pin shapes per device class (e.g.
-   met1 S/D columns, gate pads) fitted the same way, with k = shape index.
+   met1 S/D columns, gate pads) fitted the same way, with k = shape index; a
+   "ring" group also gets its band width. Fixed cells (no sweep) store plain
+   rects: the spec's groups, else the shapes under the cell's text labels
+   (spec pin_labels).
 2. Device-level minima (phase 1, per model): ring width, well fill around the
    ring tap, device-to-ring clearance per side, device-to-device gap in a row
    (x) and between rows for three orientation pairs (y). Same-model neighbours in
@@ -281,10 +284,9 @@ def fit_footprint(lab: Lab, entry: dict, env_defaults: dict, insets: bool = Fals
     } | {"samples": len(rows), "max_error_um": round(err, 6)}
 
 
-def _pin_shapes(lab: Lab, cid: int, g: dict) -> list:
+def _pin_region(lab: Lab, cid: int, g: dict):
     """Merged g["layer"] shapes of the cell, minus g["minus"] (e.g. a metal resistor's
-    marker splits its strip into the two ends), filtered by g's (not_)interacting
-    layer, sorted along g["order"]."""
+    marker splits its strip into the two ends), filtered by g's (not_)interacting layer."""
     cell = lab.ly.cell(cid)
     reg = pya.Region(cell.begin_shapes_rec(lab.ly.layer(*g["layer"]))).merged()
     if "minus" in g:
@@ -293,8 +295,87 @@ def _pin_shapes(lab: Lab, cid: int, g: dict) -> list:
         if key in g:
             other = pya.Region(cell.begin_shapes_rec(lab.ly.layer(*g[key])))
             reg = reg.interacting(other) if keep else reg.not_interacting(other)
-    boxes = [p.bbox().to_dtype(lab.ly.dbu) for p in reg.each()]
+    return reg
+
+
+def _pin_shapes(lab: Lab, cid: int, g: dict) -> list:
+    """Bboxes of _pin_region, sorted along g["order"] (a ring: its outer bbox)."""
+    boxes = [p.bbox().to_dtype(lab.ly.dbu) for p in _pin_region(lab, cid, g).each()]
     return sorted(boxes, key=lambda b: (b.left, b.bottom) if g["order"] == "x" else (b.bottom, b.left))
+
+
+def _ring_width(lab: Lab, entry: dict, env_defaults: dict, g: dict, name: str) -> float:
+    """Narrowest band of the group's ring shapes (one hole each) over the device sweep."""
+    out = math.inf
+    for combo in itertools.product(*(_sweep_values(v) for v in entry["sweep"].values())):
+        params = pcell_params(entry, {**env_defaults, **dict(zip(entry["sweep"].keys(), combo))})
+        for p in _pin_region(lab, lab.variant(entry["pcell"], {**entry["fixed"], **params}), g).each():
+            if p.holes() != 1:
+                raise ValueError(f"{entry['pcell']} {params}: {name} pin is not a ring ({p.holes()} holes)")
+            o, h = p.bbox(), pya.Polygon(list(p.each_point_hole(0))).bbox()
+            out = min(out, (h.left - o.left) * lab.ly.dbu, (o.right - h.right) * lab.ly.dbu,
+                      (h.bottom - o.bottom) * lab.ly.dbu, (o.top - h.top) * lab.ly.dbu)
+    return round(out, 6)
+
+
+def _pieces(region, dbu: float) -> list:
+    """[x0, y0, x1, y1] per polygon of the region; a polygon with holes (a ring) as
+    its trapezoid pieces, so every rect lies on the metal."""
+    out = []
+    for p in region.each():
+        parts = p.decompose_trapezoids() if p.holes() else [p]
+        out += [[round(c, 6) for c in (b.left * dbu, b.bottom * dbu, b.right * dbu, b.top * dbu)]
+                for b in (q.bbox() for q in parts)]
+    return sorted(out)
+
+
+def _label_match(term: str, text: str, alias: dict, exact: bool) -> bool:
+    t, x = term.lower(), text.lower()
+    return (x == t or x == alias.get(term, "").lower()) if exact else x.startswith(t)
+
+
+def _label_pins(lab: Lab, model: str, cid: int, terminals: list, have: set) -> dict:
+    """Pins of a fixed cell from its text labels (spec pin_labels): per terminal not in
+    `have`, the labels naming it (same name or the alias, else a name starting with the
+    terminal) on the first pin_labels layer that has one; per label the pin-purpose shape
+    under it, else the drawn shape under it."""
+    cell, pl = lab.ly.cell(cid), lab.spec.get("pin_labels")
+    if not pl:
+        return {}
+    texts = []          # (layer triple, text, point)
+    for trip in pl["layers"]:
+        it = cell.begin_shapes_rec(lab.ly.layer(*trip[2]))
+        while not it.at_end():
+            if it.shape().is_text():
+                texts.append((trip, it.shape().text_string, it.shape().text.transformed(it.trans()).trans.disp))
+            it.next()
+    out = {}
+    for term in terminals:
+        if term in have:
+            continue
+        hits = next((h for exact in (True, False) for trip in pl["layers"]
+                     for h in [[(t, p) for t, s, p in texts if t is trip and _label_match(term, s, pl["alias"], exact)]]
+                     if h), [])
+        if not hits:
+            logger.warning("%s: no label for terminal %s, no pin", lab.spec["devices"][model]["fixed"], term)
+            continue
+        marks = pya.Region([pya.Box(p.x - 1, p.y - 1, p.x + 1, p.y + 1) for _, p in hits])
+        for layer in (hits[0][0][1], hits[0][0][0]):        # pin purpose, else drawing
+            reg = pya.Region(cell.begin_shapes_rec(lab.ly.layer(*layer))).merged().interacting(marks)
+            if not reg.is_empty():
+                out[term] = {"layer": layer, "rects": _pieces(reg, lab.ly.dbu)}
+                break
+    return out
+
+
+def fixed_pins(lab: Lab, model: str) -> dict:
+    """Pins of a fixed cell (no sweep) as plain rects: the spec's pin groups, then
+    _label_pins for the terminals they leave out."""
+    spec, d = lab.spec, lab.spec["devices"][model]
+    cid = lab.variant(d["pcell"], d["fixed"])
+    out = {name: {"layer": g["layer"], "rects": _pieces(_pin_region(lab, cid, g), lab.ly.dbu)}
+           for name, g in d.get("pins", spec["pins"].get(d["class"], {})).items()}
+    return out | _label_pins(lab, model, cid, d["terminals"], set(out))
 
 
 def _sweep_values(v) -> list:
@@ -341,9 +422,9 @@ def fit_pins(lab: Lab, entry: dict, env_defaults: dict, groups: dict) -> dict:
                 raise ValueError(f"{entry['pcell']}: sweep too small to fit {name} pin {q} terms {terms}")
             coef, *_ = np.linalg.lstsq(A, Y[:, j], rcond=None)
             err = float(np.abs(A @ coef - Y[:, j]).max())
-            if err > tol and j < 2:
+            if err > g.get("centre_tol", tol) and j < 2:
                 raise ValueError(f"{entry['pcell']}: {name} pin {q} not linear in {terms} (max error {err:.4f} µm)")
-            if err > tol:
+            if err > tol and j >= 2:        # a centre within centre_tol keeps its least-squares fit
                 exact = False
                 if bound is None:
                     bound = _pin_samples(lab, entry, env_defaults, g, name, g["bound_sweep"]) \
@@ -356,15 +437,18 @@ def fit_pins(lab: Lab, entry: dict, env_defaults: dict, groups: dict) -> dict:
             fit[q] = {t: round(float(c), 6) for t, c in zip(terms, coef) if abs(c) > _COEF_EPS}
         out[name] = {"layer": g["layer"], "order": g["order"], "count": g["count"], **fit,
                      "size_exact": exact, "samples": len(envs) + (len(bound[0]) if bound else 0)}
+        if g.get("ring"):           # the fitted rect is the ring's outer bbox
+            out[name]["ring_w"] = _ring_width(lab, entry, env_defaults, g, name)
     return out
 
 
 def fit_one(lab: Lab, model: str) -> dict:
-    """{"footprint", "pins"} of one spec device."""
+    """{"footprint", "pins"} of one spec device (a fixed cell: fixed_pins)."""
     spec, d = lab.spec, lab.spec["devices"][model]
     return {"footprint": fit_footprint(lab, d, spec["netlist_defaults"],
                                        insets=d["class"] in spec["sd_via"]["for_class"]),
-            "pins": fit_pins(lab, d, spec["netlist_defaults"], d.get("pins", spec["pins"].get(d["class"], {})))}
+            "pins": fit_pins(lab, d, spec["netlist_defaults"], d.get("pins", spec["pins"].get(d["class"], {})))
+            if d["sweep"] else fixed_pins(lab, model)}
 
 
 def fit_devices(spec: dict) -> dict:
@@ -860,6 +944,8 @@ def main_container(spec_path: str, out_path: str) -> None:
     with open(spec_path, encoding="utf-8") as f:
         tree = json.load(f)
     pdk = run(pdk_tree.expand(tree))
+    with open(f"{_CONTAINER_DIR}/pdk_plain.json", "w", encoding="utf-8") as f:
+        json.dump(pdk, f)       # the run's result even if write_pdk fails (re-compress it, no 25-min rerun)
     layers = {k: v for k, v in tree.get("@refs", {}).items() if isinstance(v, list)}
     write_pdk(pdk, layers, out_path)
     logger.info("wrote %s", out_path)
