@@ -66,6 +66,7 @@ _PASSIVE_CLASSES = frozenset({"res", "cap"})
 _MOS_CLASSES = frozenset({"nmos", "pmos"})
 _CC_TOPOLOGIES = frozenset({"diff_pair", "cross_coupled"})   # gates inward, common centroid first
 _COPY_ROW_NETS = 3          # gate + source + drain wires in the channel between copy rows
+_ENDS = ("n1", "n2")        # res "ends" pin group, k = 0 (bottom) first
 _IDENT_RE = re.compile(r"[A-Za-z_]\w*(?!\w|\s*\()")     # names, not function calls (sqrt(...))
 _ROUND = 6
 
@@ -231,6 +232,28 @@ def _cap_detail(pdk: dict, model: str, params: dict, slots: list, terminals: dic
     return {"shapes": [], "pins": pins, "devices": devices}
 
 
+def _pin_detail(pdk: dict, model: str, params: dict, slots: list, terminals: dict) -> dict:
+    """Viewer detail of a variant without in-block routing: per copy every pdk.json pin
+    rect in the block frame with its layer (gds) and terminal. A group named after a
+    terminal is that terminal; "ends" (res) are _ENDS by order; others (MOS sd) have none."""
+    fp = pdk["devices"][model]["footprint"]
+    x0, y0 = pcell._linear(fp["x0"], params), pcell._linear(fp["y0"], params)
+    rects = {g: pcell.pin_rects(pdk, model, params, g) for g in pdk["devices"][model]["pins"]}
+    devices = []
+    for s in slots:
+        ox, oy = s["x"] - s["w"] / 2 - x0, s["y"] - s["h"] / 2 - y0
+        pins = []
+        for g, rs in rects.items():
+            for k, r in enumerate(rs):
+                term = g if g in terminals else _ENDS[k] if g == "ends" and k < len(_ENDS) else None
+                pins.append({"terminal": term or g, "net": terminals.get(term) or "",
+                             "layer": pdk["devices"][model]["pins"][g]["layer"],
+                             "rect": [round(r[0] + ox, _ROUND), round(r[1] + oy, _ROUND),
+                                      round(r[2] + ox, _ROUND), round(r[3] + oy, _ROUND)]})
+        devices.append({"row": s["row"], "col": s["col"], "block_id": s["block_id"], "pins": pins})
+    return {"devices": devices}
+
+
 # --- 4c. Blocks --------------------------------------------------------------------
 
 def _device_block(dev: dict, pdk: dict, hierarchy_map: dict) -> dict:
@@ -260,6 +283,8 @@ def _device_block(dev: dict, pdk: dict, hierarchy_map: dict) -> dict:
             v["unit_pcell"] = shape
             if cls == "cap":
                 v["routing"] = _cap_detail(pdk, model, shape, v["slots"], dev["terminals"])
+            else:
+                v["detail"] = _pin_detail(pdk, model, shape, v["slots"], dev["terminals"])
             variants.append(v)
     if len(shapes) > 1:
         variants.sort(key=lambda v: max(v["layout"]["aspect_ratio"], 1 / v["layout"]["aspect_ratio"]))
@@ -272,8 +297,9 @@ def _device_block(dev: dict, pdk: dict, hierarchy_map: dict) -> dict:
                 rv = g01.rotate_variant_90cw(v, pdk["grid"])
                 # slots stay in the unrotated frame; consumers rotate them by rotation_deg (90° CW)
                 rv["slots"], rv["guard_ring"], rv["unit_pcell"] = v["slots"], v["guard_ring"], v["unit_pcell"]
-                if "routing" in v:
-                    rv["routing"] = v["routing"]
+                for key in ("routing", "detail"):
+                    if key in v:
+                        rv[key] = v[key]
                 variants.append(rv)
     num_pins = len(dev["terminals"])
     for v in variants:

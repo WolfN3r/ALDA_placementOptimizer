@@ -24,6 +24,7 @@ as "@name", in recipe order) and num("0p69") -> 0.69.
 
 Input:   <pdk_dir>/convert.json
 Output:  <pdk_dir>/characterize.json (written only when composition succeeds),
+         <pdk_dir>/layers.json (every .lyp layer: gds number, fill colour; the viewer's palette),
          <pdk_dir>/discovery.json (the facts, for review), report on the log
 Usage:   .venv/bin/python WorkDir/pdk/pdk_convert.py WorkDir/pdk/sky130/convert.json [--characterize]
 Inside:  klayout -b -rm <pcell_macro> -r pdk_convert.py -rd recipe=<convert.json> -rd out=<discovery.json>
@@ -121,6 +122,17 @@ def read_lyp(path: str) -> dict:
     return out
 
 
+def read_lyp_colours(path: str) -> dict:
+    """{name (as read_lyp): fill colour '#rrggbb'}."""
+    out = {}
+    for p in ET.parse(path).getroot().iter("properties"):
+        m = _LYP_RE.match((p.findtext("name") or "").strip())
+        if m and p.findtext("fill-color"):
+            n = m.group(1)[:-len(".drawing")] if m.group(1).endswith(".drawing") else m.group(1)
+            out.setdefault(n, p.findtext("fill-color").strip())
+    return out
+
+
 def _logical(text: str) -> list:
     lines = []
     for raw in text.splitlines():
@@ -168,7 +180,15 @@ def discover(recipe: dict) -> dict:
     names = sorted({p for f in recipe["families"].values() for p in f["pcells"]})
     return {"pcells": discover_pcells(recipe["spec"]["library"], recipe["spec"].get("technology"), names),
             "layers": read_lyp(os.path.expandvars(src["lyp"])),
+            "colours": read_lyp_colours(os.path.expandvars(src["lyp"])),
             "models": read_models(src["models"])}
+
+
+def layer_table(disc: dict) -> str:
+    """layers.json text: {name: {"gds", "colour"}} of every .lyp layer, one per line (viewer)."""
+    rows = [f'  {json.dumps(n)}: {json.dumps({"gds": g, "colour": disc["colours"].get(n)})}'
+            for n, g in sorted(disc["layers"].items(), key=lambda kv: kv[1])]
+    return "{\n" + ",\n".join(rows) + "\n}\n"
 
 
 # --- 4b. Composition (host) ------------------------------------------------------
@@ -304,7 +324,8 @@ def main_host() -> None:
     for line in report:
         logger.info("%s", line)
     (pdk_dir / "characterize.json").write_text(pdk_tree.dumps(tree) + "\n", encoding="utf-8")
-    logger.info("wrote %s", pdk_dir / "characterize.json")
+    (pdk_dir / "layers.json").write_text(layer_table(disc), encoding="utf-8")
+    logger.info("wrote %s, %s", pdk_dir / "characterize.json", pdk_dir / "layers.json")
     if "--characterize" in sys.argv:
         subprocess.run([sys.executable, str(Path(__file__).resolve().parent / "characterize_pdk.py"),
                         str(pdk_dir / "characterize.json")], check=True)

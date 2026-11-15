@@ -9,12 +9,19 @@ Modes (user 2026-11-09):
   "abstract" — slots filled in their group colour with the gate side as a bar, routing as
                centrelines (met3 thick, met2 / met1 thin), via2 dots.
 MIM caps (012 cap detail): met3 bottom plate, capm, met4 top plate and bottom-plate strap.
+Unrouted variants (012 "detail": every other class) draw their pdk.json pin rects per copy:
+"layers" hatched in the pin layer's colour, "abstract" outlined in the group colour.
+Layer colours come from the run's PDK (set_pdk: WorkDir/pdk/<pdk>/layers.json, written by
+pdk_convert from the PDK's .lyp), else the built-in table.
 Both draw the guard ring, its power pins (band outlined in the rail colour) and the block
 pins (tab + net name). Coordinates are the
 variant's own frame (µm, y up); `place(x, y)` maps a point to the scene (offset, y flip,
 90° rotation), so one routine serves both views.
 """
 from __future__ import annotations
+
+import json
+from pathlib import Path
 
 from PyQt6.QtCore import QRectF, Qt
 from PyQt6.QtGui import QBrush, QColor, QFont, QPen
@@ -26,20 +33,45 @@ PALETTE = ["#d9772b", "#2f6db5", "#2e9e6a", "#a64ca6", "#b5a12f", "#c2413b", "#3
 DUMMY = "#7d828a"
 RING = {"p_ring": "#4f9fbf", "n_ring": "#c98a3a"}
 ACTIVE = "#4caf68"
-LAYER = {"met1": "#9b87e8", "met2": "#4f9ff0", "met3": "#f0b341", "met4": "#e86f8a"}
+_BUILTIN_LAYER = {"met1": "#9b87e8", "met2": "#4f9ff0", "met3": "#f0b341", "met4": "#e86f8a"}
+LAYER = dict(_BUILTIN_LAYER)        # name -> colour; set_pdk replaces it with the PDK's
 CAPM = "#c88be0"
 PIN = "#ffffff"
 POWER = {"p_ring": "#5588FF", "n_ring": "#FF5555"}       # ring tied to VSS / VDD (placement canvas rail colours)
 _HATCH = {"met1": Qt.BrushStyle.FDiagPattern, "met2": Qt.BrushStyle.BDiagPattern, "met3": Qt.BrushStyle.HorPattern,
           "met4": Qt.BrushStyle.VerPattern}
+_OTHER_HATCH = Qt.BrushStyle.DiagCrossPattern      # every other layer (li1, met5, pin purposes, wells)
 _CENTRE_PX = {"met1": 1.0, "met2": 1.6, "met3": 3.0, "met4": 3.0}     # abstract centreline widths, screen px
+_CENTRE_PX_OTHER = 1.6
 _LANDING_MAX = 0.45     # µm: a metal shape shorter than this is a via landing, no centreline
 _GATE_BAR = 0.12        # abstract: fraction of the slot height drawn as the gate side
 _LABEL_PT = 8.0
+_PDK_DIR = Path(__file__).resolve().parents[1] / "pdk"
+_MIN_LIGHTNESS = 170   # .lyp colours are for KLayout's black canvas; darker ones (met1 #0000ff) are lifted to this
+_PIN_FILL_ALPHA = 60
+_GDS_NAME: dict = {}    # (layer, datatype) -> name, from set_pdk
+
+
+def set_pdk(name: str | None) -> None:
+    """Layer names and colours of the run's PDK (WorkDir/pdk/<name>/layers.json); none
+    there (e.g. gpdk090 runs): the built-in colours."""
+    LAYER.clear()
+    LAYER.update(_BUILTIN_LAYER)
+    _GDS_NAME.clear()
+    path = _PDK_DIR / str(name) / "layers.json"
+    if not name or not path.exists():
+        return
+    for n, entry in json.loads(path.read_text(encoding="utf-8")).items():
+        _GDS_NAME[tuple(entry["gds"])] = n
+        if entry["colour"]:
+            c = QColor(entry["colour"])
+            h, s, light, _ = c.getHsl()
+            c.setHsl(h, s, max(light, _MIN_LIGHTNESS))
+            LAYER[n] = c.name()
 
 
 def has_detail(v: dict) -> bool:
-    return bool((v.get("routing") or {}).get("devices"))
+    return bool((v.get("routing") or {}).get("devices") or (v.get("detail") or {}).get("devices"))
 
 
 def group_colours(v: dict) -> dict:
@@ -57,7 +89,7 @@ def draw_variant(scene, v: dict, names: dict, place, mode: str, device_labels: b
     device_labels False: no per-device names (full-chip view, where they would pile up)."""
     items: list = []
     colours = group_colours(v)
-    routing = v["routing"]
+    routing = v.get("routing") or {"shapes": [], "pins": [], "devices": (v.get("detail") or {}).get("devices", [])}
     devices = {(d["row"], d["col"]): d for d in routing["devices"]}
 
     def qrect(r) -> QRectF:
@@ -148,6 +180,15 @@ def draw_variant(scene, v: dict, names: dict, place, mode: str, device_labels: b
             for p in d.get("pads", []):
                 box(p, QBrush(QColor(LAYER["met1"]), _HATCH["met1"]), cpen(LAYER["met1"]), f"{name} end pad (met1)")
             box(r, pen=cpen(col, 1.6), tip=f"{name}  {s.get('orient', 'R0')}")
+        for p in d.get("pins", []):          # unrouted variant (012 detail)
+            lname = _GDS_NAME.get(tuple(p["layer"]), "/".join(map(str, p["layer"])))
+            tip = f"{name} {p['terminal']}: {p['net'] or '-'} ({lname})"
+            if mode == "layers":
+                lc = LAYER.get(lname, PIN)
+                box(p["rect"], QBrush(translucent(lc, _PIN_FILL_ALPHA)), cpen(lc), tip)
+                box(p["rect"], QBrush(QColor(lc), _HATCH.get(lname, _OTHER_HATCH)))
+            else:
+                box(p["rect"], QBrush(translucent(col.lighter(150), _PIN_FILL_ALPHA)), cpen(col.lighter(150)), tip)
         if bid is not None and device_labels:
             label(name, r[0], r[3], col.lighter(140))
 
@@ -165,20 +206,22 @@ def draw_variant(scene, v: dict, names: dict, place, mode: str, device_labels: b
             elif layer == "via2":
                 box(r, QBrush(QColor("#ffffff")), tip=tip)
             continue
+        lc = LAYER.get(layer, PIN)
         if mode == "layers":
-            fill = translucent(LAYER[layer], 30)
-            box(r, QBrush(fill), cpen(LAYER[layer], 0.8), tip)
-            box(r, QBrush(QColor(LAYER[layer]), _HATCH[layer]))
+            fill = translucent(lc, 30)
+            box(r, QBrush(fill), cpen(lc, 0.8), tip)
+            box(r, QBrush(QColor(lc), _HATCH.get(layer, _OTHER_HATCH)))
         else:
             w, h = r[2] - r[0], r[3] - r[1]
             if max(w, h) < _LANDING_MAX:
                 continue
+            px = _CENTRE_PX.get(layer, _CENTRE_PX_OTHER)
             if w >= h:
                 cy = (r[1] + r[3]) / 2
-                line(r[0], cy, r[2], cy, cpen(LAYER[layer], _CENTRE_PX[layer]), tip)
+                line(r[0], cy, r[2], cy, cpen(lc, px), tip)
             else:
                 cx = (r[0] + r[2]) / 2
-                line(cx, r[1], cx, r[3], cpen(LAYER[layer], _CENTRE_PX[layer]), tip)
+                line(cx, r[1], cx, r[3], cpen(lc, px), tip)
 
     # power pins: the guard ring band (outlined in the rail colour)
     if ring:

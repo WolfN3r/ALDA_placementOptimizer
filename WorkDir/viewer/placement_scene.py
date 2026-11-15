@@ -667,26 +667,17 @@ class PlacementScene(QGraphicsScene):
             return
         names = {b.block_id: (b.inst or f"B{b.block_id}") for b in self._data.blocks}
         groups = {g["group_id"]: g for g in self._data.groups}
-        for bid, pb in pr.placed_blocks.items():
-            if pb.is_composite:
-                mv = (groups.get(pb.group_id) or {}).get("matching_variants") or []
-                if not mv:
-                    continue
-                idx = pb.variant_index if pb.variant_index is not None else \
-                    next((i for i, v in enumerate(mv) if v.get("is_used")), 0)
-                v = mv[idx]
-                if pb.routing:                      # pins chosen after placement, unused trunk ends cut
-                    v = {**v, "routing": pb.routing}
-            else:                                   # plain block (e.g. MIM cap with its 012 detail)
-                block = self._data.block_by_id(bid)
-                var = self._data.active_variant(block) if block else None
-                if var is None or not var.routing:
-                    continue
-                v = {"slots": var.slots, "routing": var.routing, "guard_ring": var.guard_ring,
-                     "rotation_deg": var.rotation_deg, "height_um": var.bbox[3]}
-            if not block_detail.has_detail(v):
-                continue
-            x0, y0 = pb.main_bbox[0], pb.main_bbox[1]
+
+        def plain(block_id: int) -> dict | None:
+            """A device block's own variant (MIM cap routing, other classes' pin detail), or None."""
+            block = self._data.block_by_id(block_id)
+            var = self._data.active_variant(block) if block else None
+            if var is None or not (var.routing or var.detail):
+                return None
+            return {"slots": var.slots, "routing": var.routing, "detail": var.detail, "guard_ring": var.guard_ring,
+                    "rotation_deg": var.rotation_deg, "width_um": var.bbox[2], "height_um": var.bbox[3]}
+
+        def draw(v: dict, x0: float, y0: float) -> None:
             if v.get("rotation_deg") == 90:     # 90° CW: (x, y) -> (y, W0 - x), W0 = height_um
                 w0 = v["height_um"]
                 place = lambda x, y, x0=x0, y0=y0, w0=w0: QPointF(x0 + y, self._sy(y0 + w0 - x))
@@ -696,6 +687,35 @@ class PlacementScene(QGraphicsScene):
             for item in items:
                 item.setZValue(5)
             self._detail_items += items
+
+        for bid, pb in pr.placed_blocks.items():
+            x0, y0 = pb.main_bbox[0], pb.main_bbox[1]
+            if pb.is_composite:
+                g = groups.get(pb.group_id) or {}
+                mv = g.get("matching_variants") or []
+                if not mv:
+                    continue
+                idx = pb.variant_index if pb.variant_index is not None else \
+                    next((i for i, v in enumerate(mv) if v.get("is_used")), 0)
+                v = mv[idx]
+                if "slots" not in v:
+                    # passive pair (011 summary, no slots): members abut left to right, each with its own variant
+                    members = [plain(m) for m in g["block_ids"]]
+                    if None in members:
+                        continue
+                    for mv_ in members:
+                        draw(mv_, x0, y0)
+                        x0 += mv_["width_um"]
+                else:
+                    if pb.routing:                  # pins chosen after placement, unused trunk ends cut
+                        v = {**v, "routing": pb.routing}
+                    # unrouted structure (block_router failed): slots only
+                    draw(v, x0, y0)
+            else:
+                v = plain(bid)
+                if v is None or not block_detail.has_detail(v):
+                    continue
+                draw(v, x0, y0)
             self._detailed.add(bid)
             for item, _ in self._sub_items.get(bid, []):
                 item.setVisible(False)

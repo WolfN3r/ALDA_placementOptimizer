@@ -46,7 +46,7 @@ def structure_for_block(data: PlacementData, bid: int) -> dict | None:
         return None
     variants = [{"slots": v.slots, "guard_ring": v.guard_ring, "rows": v.rows, "cols": v.cols,
                  "rotation_deg": v.rotation_deg, "width_um": v.bbox[2], "height_um": v.bbox[3],
-                 **({"routing": v.routing} if v.routing else {})}
+                 **({"routing": v.routing} if v.routing else {}), **({"detail": v.detail} if v.detail else {})}
                 for v in block.variants]
     return {"title": f"copies of {names[bid]}", "variants": variants,
             "chosen": data.active_variant(block).index, "names": names}

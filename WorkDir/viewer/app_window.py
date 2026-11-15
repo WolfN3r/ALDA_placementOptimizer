@@ -23,6 +23,7 @@ from PyQt6.QtGui import (
 )
 from PyQt6.QtCore import Qt, QPointF, QLineF, pyqtSignal, QSettings
 
+import block_detail
 import json_loader
 from layer_manager import LayerManager, LayerDef
 from scene import BlockScene
@@ -2553,6 +2554,7 @@ class MainWindow(QMainWindow):
             self._tikz_window = None
 
         self._data = data
+        block_detail.set_pdk(data.generation_params.get("pdk"))
         self._scenes.clear()
         self._views.clear()
         self.lm._callbacks.clear()

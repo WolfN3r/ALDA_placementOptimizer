@@ -25,6 +25,7 @@ class Variant:
     slots: list = field(default_factory=list)       # 012: copy positions (unrotated frame)
     guard_ring: dict | None = None                  # 012: ring around the copies
     routing: dict | None = None                     # 012: block_router / MIM cap detail (block_detail)
+    detail: dict | None = None                      # 012: per-copy pin rects of an unrouted variant (block_detail)
 
 
 @dataclass
@@ -227,6 +228,7 @@ def _parse_variant(idx: int, raw: dict) -> Variant:
         slots=list(raw.get("slots", [])),
         guard_ring=raw.get("guard_ring"),
         routing=raw.get("routing"),
+        detail=raw.get("detail"),
     )
 
 
