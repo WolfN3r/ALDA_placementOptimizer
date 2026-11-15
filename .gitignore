@@ -7,6 +7,10 @@ logs/*
 !logs/.gitkeep
 .env
 *.jsonl
+WorkDir/gds_out/
+WorkDir/output.drc.json
+*.gds
+*.lyp
 
 # WorkDir logs and temp files
 *.log
@@ -42,3 +46,4 @@ __pycache__/
 # OS junk
 .DS_Store
 Thumbs.db
+*.numbers
