@@ -1,0 +1,97 @@
+** sch_path: /foss/designs/11_cm_separation/ota1_c3.sch
+.subckt ota1_c3 INM INP OUTM OUTP VBIAS_P VDD VREF VSS
+*.PININFO INM:I INP:I OUTM:O OUTP:O VBIAS_P:I VDD:B VREF:I VSS:B
+XMP1b intp VBIAS_P VDD VDD sky130_fd_pr__pfet_01v8 L={LPU} W={WPU} nf={NFPU} ad='int(({NFPU} + 1)/2) * {WPU} / {NFPU} * 0.29' as='int(({NFPU} + 2)/2) * {WPU} / {NFPU} * 0.29'
++ pd='2*int(({NFPU} + 1)/2) * ({WPU} / {NFPU} + 0.29)' ps='2*int(({NFPU} + 2)/2) * ({WPU} / {NFPU} + 0.29)' nrd='0.29 / {WPU} ' nrs='0.29 / {WPU} '
++ sa=0 sb=0 sd=0 mult={nint(MP1_M)} m={nint(MP1_M)}
+XM0 intp INM tail VSS sky130_fd_pr__nfet_01v8 L={L1} W={W1/W1_M} nf={NF1} ad='int(({NF1} + 1)/2) * {W1/W1_M} / {NF1} * 0.29' as='int(({NF1} + 2)/2) * {W1/W1_M} / {NF1} * 0.29'
++ pd='2*int(({NF1} + 1)/2) * ({W1/W1_M} / {NF1} + 0.29)' ps='2*int(({NF1} + 2)/2) * ({W1/W1_M} / {NF1} + 0.29)' nrd='0.29 / {W1/W1_M} '
++ nrs='0.29 / {W1/W1_M} ' sa=0 sb=0 sd=0 mult={W1_M} m={W1_M}
+XM1 OUTM intp VDD VDD sky130_fd_pr__pfet_01v8_lvt L={L2} W={W2/W2_M} nf={NF2} ad='int(({NF2} + 1)/2) * {W2/W2_M} / {NF2} * 0.29' as='int(({NF2} + 2)/2) * {W2/W2_M} / {NF2} * 0.29'
++ pd='2*int(({NF2} + 1)/2) * ({W2/W2_M} / {NF2} + 0.29)' ps='2*int(({NF2} + 2)/2) * ({W2/W2_M} / {NF2} + 0.29)' nrd='0.29 / {W2/W2_M} '
++ nrs='0.29 / {W2/W2_M} ' sa=0 sb=0 sd=0 mult={W2_M} m={W2_M}
+XM9 d9 vbias_n VSS VSS sky130_fd_pr__nfet_01v8_lvt L={LNU} W={WNU} nf={NFNU} ad='int(({NFNU} + 1)/2) * {WNU} / {NFNU} * 0.29' as='int(({NFNU} + 2)/2) * {WNU} / {NFNU} * 0.29'
++ pd='2*int(({NFNU} + 1)/2) * ({WNU} / {NFNU} + 0.29)' ps='2*int(({NFNU} + 2)/2) * ({WNU} / {NFNU} + 0.29)' nrd='0.29 / {WNU} ' nrs='0.29 / {WNU} '
++ sa=0 sb=0 sd=0 mult={2*nint(M6_M/2)} m={2*nint(M6_M/2)}
+XR25 net037 intp VSS sky130_fd_pr__res_high_po_0p69 L={RZ_L} mult=1
+XC1 net037 OUTM sky130_fd_pr__cap_mim_m3_1 W={CC_W} L={CC_W} MF=1
+XMP1a intm VBIAS_P VDD VDD sky130_fd_pr__pfet_01v8 L={LPU} W={WPU} nf={NFPU} ad='int(({NFPU} + 1)/2) * {WPU} / {NFPU} * 0.29' as='int(({NFPU} + 2)/2) * {WPU} / {NFPU} * 0.29'
++ pd='2*int(({NFPU} + 1)/2) * ({WPU} / {NFPU} + 0.29)' ps='2*int(({NFPU} + 2)/2) * ({WPU} / {NFPU} + 0.29)' nrd='0.29 / {WPU} ' nrs='0.29 / {WPU} '
++ sa=0 sb=0 sd=0 mult={nint(MP1_M)} m={nint(MP1_M)}
+XM2 intm INP tail VSS sky130_fd_pr__nfet_01v8 L={L1} W={W1/W1_M} nf={NF1} ad='int(({NF1} + 1)/2) * {W1/W1_M} / {NF1} * 0.29' as='int(({NF1} + 2)/2) * {W1/W1_M} / {NF1} * 0.29'
++ pd='2*int(({NF1} + 1)/2) * ({W1/W1_M} / {NF1} + 0.29)' ps='2*int(({NF1} + 2)/2) * ({W1/W1_M} / {NF1} + 0.29)' nrd='0.29 / {W1/W1_M} '
++ nrs='0.29 / {W1/W1_M} ' sa=0 sb=0 sd=0 mult={W1_M} m={W1_M}
+XM3 OUTP intm VDD VDD sky130_fd_pr__pfet_01v8_lvt L={L2} W={W2/W2_M} nf={NF2} ad='int(({NF2} + 1)/2) * {W2/W2_M} / {NF2} * 0.29' as='int(({NF2} + 2)/2) * {W2/W2_M} / {NF2} * 0.29'
++ pd='2*int(({NF2} + 1)/2) * ({W2/W2_M} / {NF2} + 0.29)' ps='2*int(({NF2} + 2)/2) * ({W2/W2_M} / {NF2} + 0.29)' nrd='0.29 / {W2/W2_M} '
++ nrs='0.29 / {W2/W2_M} ' sa=0 sb=0 sd=0 mult={W2_M} m={W2_M}
+XM6 d6 vbias_n VSS VSS sky130_fd_pr__nfet_01v8_lvt L={LNU} W={WNU} nf={NFNU} ad='int(({NFNU} + 1)/2) * {WNU} / {NFNU} * 0.29' as='int(({NFNU} + 2)/2) * {WNU} / {NFNU} * 0.29'
++ pd='2*int(({NFNU} + 1)/2) * ({WNU} / {NFNU} + 0.29)' ps='2*int(({NFNU} + 2)/2) * ({WNU} / {NFNU} + 0.29)' nrd='0.29 / {WNU} ' nrs='0.29 / {WNU} '
++ sa=0 sb=0 sd=0 mult={2*nint(M6_M/2)} m={2*nint(M6_M/2)}
+XR23 net047 intm VSS sky130_fd_pr__res_high_po_0p69 L={RZ_L} mult=1
+XC0 net047 OUTP sky130_fd_pr__cap_mim_m3_1 W={CC_W} L={CC_W} MF=1
+XM10 dt vbias_n VSS VSS sky130_fd_pr__nfet_01v8_lvt L={LNU} W={WNU} nf={NFNU} ad='int(({NFNU} + 1)/2) * {WNU} / {NFNU} * 0.29' as='int(({NFNU} + 2)/2) * {WNU} / {NFNU} * 0.29'
++ pd='2*int(({NFNU} + 1)/2) * ({WNU} / {NFNU} + 0.29)' ps='2*int(({NFNU} + 2)/2) * ({WNU} / {NFNU} + 0.29)' nrd='0.29 / {WNU} ' nrs='0.29 / {WNU} '
++ sa=0 sb=0 sd=0 mult={2*nint(MP1_M)-4} m={2*nint(MP1_M)-4}
+XM11 dt vcmfb VSS VSS sky130_fd_pr__nfet_01v8_lvt L={LNU} W={WNU} nf={NFNU} ad='int(({NFNU} + 1)/2) * {WNU} / {NFNU} * 0.29' as='int(({NFNU} + 2)/2) * {WNU} / {NFNU} * 0.29'
++ pd='2*int(({NFNU} + 1)/2) * ({WNU} / {NFNU} + 0.29)' ps='2*int(({NFNU} + 2)/2) * ({WNU} / {NFNU} + 0.29)' nrd='0.29 / {WNU} ' nrs='0.29 / {WNU} '
++ sa=0 sb=0 sd=0 mult=4 m=4
+XM5 VBIAS_P VBIAS_P VDD VDD sky130_fd_pr__pfet_01v8 L={LPU} W={WPU} nf={NFPU} ad='int(({NFPU} + 1)/2) * {WPU} / {NFPU} * 0.29' as='int(({NFPU} + 2)/2) * {WPU} / {NFPU} * 0.29'
++ pd='2*int(({NFPU} + 1)/2) * ({WPU} / {NFPU} + 0.29)' ps='2*int(({NFPU} + 2)/2) * ({WPU} / {NFPU} + 0.29)' nrd='0.29 / {WPU} ' nrs='0.29 / {WPU} '
++ sa=0 sb=0 sd=0 mult=2 m=2
+XM7 vbias_n VBIAS_P VDD VDD sky130_fd_pr__pfet_01v8 L={LPU} W={WPU} nf={NFPU} ad='int(({NFPU} + 1)/2) * {WPU} / {NFPU} * 0.29' as='int(({NFPU} + 2)/2) * {WPU} / {NFPU} * 0.29'
++ pd='2*int(({NFPU} + 1)/2) * ({WPU} / {NFPU} + 0.29)' ps='2*int(({NFPU} + 2)/2) * ({WPU} / {NFPU} + 0.29)' nrd='0.29 / {WPU} ' nrs='0.29 / {WPU} '
++ sa=0 sb=0 sd=0 mult=2 m=2
+XM4 vbias_n vbias_n VSS VSS sky130_fd_pr__nfet_01v8_lvt L={LNU} W={WNU} nf={NFNU} ad='int(({NFNU} + 1)/2) * {WNU} / {NFNU} * 0.29'
++ as='int(({NFNU} + 2)/2) * {WNU} / {NFNU} * 0.29' pd='2*int(({NFNU} + 1)/2) * ({WNU} / {NFNU} + 0.29)' ps='2*int(({NFNU} + 2)/2) * ({WNU} / {NFNU} + 0.29)'
++ nrd='0.29 / {WNU} ' nrs='0.29 / {WNU} ' sa=0 sb=0 sd=0 mult=2 m=2
+XM15 vcmfb OUTP net020 VDD sky130_fd_pr__pfet_01v8_lvt L={LCM} W={WCM/WCM_M} nf={NFCM} ad='int(({NFCM} + 1)/2) * {WCM/WCM_M} / {NFCM} * 0.29'
++ as='int(({NFCM} + 2)/2) * {WCM/WCM_M} / {NFCM} * 0.29' pd='2*int(({NFCM} + 1)/2) * ({WCM/WCM_M} / {NFCM} + 0.29)' ps='2*int(({NFCM} + 2)/2) * ({WCM/WCM_M} / {NFCM} + 0.29)'
++ nrd='0.29 / {WCM/WCM_M} ' nrs='0.29 / {WCM/WCM_M} ' sa=0 sb=0 sd=0 mult={WCM_M} m={WCM_M}
+XM17 net025 VREF net020 VDD sky130_fd_pr__pfet_01v8_lvt L={LCM} W={WCM/WCM_M} nf={NFCM} ad='int(({NFCM} + 1)/2) * {WCM/WCM_M} / {NFCM} * 0.29'
++ as='int(({NFCM} + 2)/2) * {WCM/WCM_M} / {NFCM} * 0.29' pd='2*int(({NFCM} + 1)/2) * ({WCM/WCM_M} / {NFCM} + 0.29)' ps='2*int(({NFCM} + 2)/2) * ({WCM/WCM_M} / {NFCM} + 0.29)'
++ nrd='0.29 / {WCM/WCM_M} ' nrs='0.29 / {WCM/WCM_M} ' sa=0 sb=0 sd=0 mult={WCM_M} m={WCM_M}
+XM19 net025 VREF net028 VDD sky130_fd_pr__pfet_01v8_lvt L={LCM} W={WCM/WCM_M} nf={NFCM} ad='int(({NFCM} + 1)/2) * {WCM/WCM_M} / {NFCM} * 0.29'
++ as='int(({NFCM} + 2)/2) * {WCM/WCM_M} / {NFCM} * 0.29' pd='2*int(({NFCM} + 1)/2) * ({WCM/WCM_M} / {NFCM} + 0.29)' ps='2*int(({NFCM} + 2)/2) * ({WCM/WCM_M} / {NFCM} + 0.29)'
++ nrd='0.29 / {WCM/WCM_M} ' nrs='0.29 / {WCM/WCM_M} ' sa=0 sb=0 sd=0 mult={WCM_M} m={WCM_M}
+XM18 vcmfb OUTM net028 VDD sky130_fd_pr__pfet_01v8_lvt L={LCM} W={WCM/WCM_M} nf={NFCM} ad='int(({NFCM} + 1)/2) * {WCM/WCM_M} / {NFCM} * 0.29'
++ as='int(({NFCM} + 2)/2) * {WCM/WCM_M} / {NFCM} * 0.29' pd='2*int(({NFCM} + 1)/2) * ({WCM/WCM_M} / {NFCM} + 0.29)' ps='2*int(({NFCM} + 2)/2) * ({WCM/WCM_M} / {NFCM} + 0.29)'
++ nrd='0.29 / {WCM/WCM_M} ' nrs='0.29 / {WCM/WCM_M} ' sa=0 sb=0 sd=0 mult={WCM_M} m={WCM_M}
+XMP1c net020 VBIAS_P VDD VDD sky130_fd_pr__pfet_01v8 L={LPU} W={WPU} nf={NFPU} ad='int(({NFPU} + 1)/2) * {WPU} / {NFPU} * 0.29' as='int(({NFPU} + 2)/2) * {WPU} / {NFPU} * 0.29'
++ pd='2*int(({NFPU} + 1)/2) * ({WPU} / {NFPU} + 0.29)' ps='2*int(({NFPU} + 2)/2) * ({WPU} / {NFPU} + 0.29)' nrd='0.29 / {WPU} ' nrs='0.29 / {WPU} '
++ sa=0 sb=0 sd=0 mult=2 m=2
+XM20 net028 VBIAS_P VDD VDD sky130_fd_pr__pfet_01v8 L={LPU} W={WPU} nf={NFPU} ad='int(({NFPU} + 1)/2) * {WPU} / {NFPU} * 0.29' as='int(({NFPU} + 2)/2) * {WPU} / {NFPU} * 0.29'
++ pd='2*int(({NFPU} + 1)/2) * ({WPU} / {NFPU} + 0.29)' ps='2*int(({NFPU} + 2)/2) * ({WPU} / {NFPU} + 0.29)' nrd='0.29 / {WPU} ' nrs='0.29 / {WPU} '
++ sa=0 sb=0 sd=0 mult=2 m=2
+XM13 vcmfb vcmfb VSS VSS sky130_fd_pr__nfet_01v8_lvt L={LNU} W={WNU} nf={NFNU} ad='int(({NFNU} + 1)/2) * {WNU} / {NFNU} * 0.29' as='int(({NFNU} + 2)/2) * {WNU} / {NFNU} * 0.29'
++ pd='2*int(({NFNU} + 1)/2) * ({WNU} / {NFNU} + 0.29)' ps='2*int(({NFNU} + 2)/2) * ({WNU} / {NFNU} + 0.29)' nrd='0.29 / {WNU} ' nrs='0.29 / {WNU} '
++ sa=0 sb=0 sd=0 mult=2 m=2
+XM12 net025 net025 VSS VSS sky130_fd_pr__nfet_01v8_lvt L={LNU} W={WNU} nf={NFNU} ad='int(({NFNU} + 1)/2) * {WNU} / {NFNU} * 0.29' as='int(({NFNU} + 2)/2) * {WNU} / {NFNU} * 0.29'
++ pd='2*int(({NFNU} + 1)/2) * ({WNU} / {NFNU} + 0.29)' ps='2*int(({NFNU} + 2)/2) * ({WNU} / {NFNU} + 0.29)' nrd='0.29 / {WNU} ' nrs='0.29 / {WNU} '
++ sa=0 sb=0 sd=0 mult=2 m=2
+XMD0 VSS VSS VSS VSS sky130_fd_pr__nfet_01v8 L={L1} W={W1/(W1_M*NF1)} nf=1 ad='int((1 + 1)/2) * {W1/(W1_M*NF1)} / 1 * 0.29' as='int((1 + 2)/2) * {W1/(W1_M*NF1)} / 1 * 0.29'
++ pd='2*int((1 + 1)/2) * ({W1/(W1_M*NF1)} / 1 + 0.29)' ps='2*int((1 + 2)/2) * ({W1/(W1_M*NF1)} / 1 + 0.29)' nrd='0.29 / {W1/(W1_M*NF1)} '
++ nrs='0.29 / {W1/(W1_M*NF1)} ' sa=0 sb=0 sd=0 mult={MD0_M} m={MD0_M}
+XMDN VSS VSS VSS VSS sky130_fd_pr__nfet_01v8_lvt L={LNU} W={WNU/NFNU} nf=1 ad='int((1 + 1)/2) * {WNU/NFNU} / 1 * 0.29' as='int((1 + 2)/2) * {WNU/NFNU} / 1 * 0.29'
++ pd='2*int((1 + 1)/2) * ({WNU/NFNU} / 1 + 0.29)' ps='2*int((1 + 2)/2) * ({WNU/NFNU} / 1 + 0.29)' nrd='0.29 / {WNU/NFNU} ' nrs='0.29 / {WNU/NFNU} '
++ sa=0 sb=0 sd=0 mult={MDN_M} m={MDN_M}
+XMDP VDD VDD VDD VDD sky130_fd_pr__pfet_01v8 L={LPU} W={WPU/NFPU} nf=1 ad='int((1 + 1)/2) * {WPU/NFPU} / 1 * 0.29' as='int((1 + 2)/2) * {WPU/NFPU} / 1 * 0.29'
++ pd='2*int((1 + 1)/2) * ({WPU/NFPU} / 1 + 0.29)' ps='2*int((1 + 2)/2) * ({WPU/NFPU} / 1 + 0.29)' nrd='0.29 / {WPU/NFPU} ' nrs='0.29 / {WPU/NFPU} '
++ sa=0 sb=0 sd=0 mult={MDP_M} m={MDP_M}
+XMD1 VDD VDD VDD VDD sky130_fd_pr__pfet_01v8_lvt L={L2} W={W2/(W2_M*NF2)} nf=1 ad='int((1 + 1)/2) * {W2/(W2_M*NF2)} / 1 * 0.29' as='int((1 + 2)/2) * {W2/(W2_M*NF2)} / 1 * 0.29'
++ pd='2*int((1 + 1)/2) * ({W2/(W2_M*NF2)} / 1 + 0.29)' ps='2*int((1 + 2)/2) * ({W2/(W2_M*NF2)} / 1 + 0.29)' nrd='0.29 / {W2/(W2_M*NF2)} '
++ nrs='0.29 / {W2/(W2_M*NF2)} ' sa=0 sb=0 sd=0 mult={MD1_M} m={MD1_M}
+XMDCM VDD VDD VDD VDD sky130_fd_pr__pfet_01v8_lvt L={LCM} W={WCM/(WCM_M*NFCM)} nf=1 ad='int((1 + 1)/2) * {WCM/(WCM_M*NFCM)} / 1 * 0.29'
++ as='int((1 + 2)/2) * {WCM/(WCM_M*NFCM)} / 1 * 0.29' pd='2*int((1 + 1)/2) * ({WCM/(WCM_M*NFCM)} / 1 + 0.29)' ps='2*int((1 + 2)/2) * ({WCM/(WCM_M*NFCM)} / 1 + 0.29)'
++ nrd='0.29 / {WCM/(WCM_M*NFCM)} ' nrs='0.29 / {WCM/(WCM_M*NFCM)} ' sa=0 sb=0 sd=0 mult={MDCM_M} m={MDCM_M}
+XRD1 VSS VSS VSS sky130_fd_pr__res_high_po_0p69 L={RZ_L} mult=1
+XRD2 VSS VSS VSS sky130_fd_pr__res_high_po_0p69 L={RZ_L} mult=1
+Rwt dt tail {RW*L_T}
+Cwta dt VSS {CW*L_T/2}
+Cwtb tail VSS {CW*L_T/2}
+Rwo6 d6 OUTP {RW*L_O}
+Cwo6a d6 VSS {CW*L_O/2}
+Cwo6b OUTP VSS {CW*L_O/2}
+Rwo9 d9 OUTM {RW*L_O}
+Cwo9a d9 VSS {CW*L_O/2}
+Cwo9b OUTM VSS {CW*L_O/2}
+.ends
