@@ -109,6 +109,10 @@ def make_ota(w: dict) -> str:
     # gate line: the diode M4 keeps vbias_n, the mirror gates sit on vbf
     for dev in ('XM10', 'XM6', 'XM9'):
         text = set_node(text, dev, 1, 'vbf')
+    # optional gate offsets (mismatch.py: worst-case mirror errors referred to the gates)
+    ofs = w.get('ofs', {})
+    for dev in ofs:
+        text = set_node(text, dev, 1, f'g_{dev}')
     # VSS line: sources and bodies of the mirror row on VSSF
     for dev in ('XM10', 'XM11', 'XM6', 'XM9', 'XM13', 'XM12'):
         text = set_node(text, dev, 2, 'VSSF')
@@ -125,7 +129,7 @@ def make_ota(w: dict) -> str:
         pi_wire('wt', 'dt', 'tail', w['rt'], w['ct']),
         'Vi6 d6a d6 0', pi_wire('wo6', 'd6a', 'OUTP', w['ro'], w['co']),
         'Vi9 d9a d9 0', pi_wire('wo9', 'd9a', 'OUTM', w['ro'], w['co']),
-    ])
+    ] + [f'V{dev}ofs g_{dev} vbf {v:.6g}' for dev, v in ofs.items()])
     ota = re.sub(r'^\.ends', extra + '\n.ends', text, count=1, flags=re.MULTILINE | re.I)
 
     cml = re.sub(r'^(\.subckt\s+)ota1x(\s.*)$', r'\1ota1x_cml\2 CMG CMS', ota, count=1,

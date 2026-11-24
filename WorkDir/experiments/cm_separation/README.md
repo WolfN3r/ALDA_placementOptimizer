@@ -117,3 +117,97 @@ mirror row next to the input pair's tail node and route the long lines to the 2n
 
 Limits: lumped π wires to an ideal VSS, min width (a wider wire scales R by 1/W), no coupling to
 other nets, no mismatch (Monte Carlo) or gradient effects of the distance, no extracted layout.
+
+---
+
+## Mismatch, gradient and heat source with the diode far away (`mismatch.py`, `plot_mismatch.py`)
+
+Case c1a (gate line only, so there is no ground drop), diode M4 1–100 µm from the mirror row.
+
+**Step 1: mirror alone.** IB → M5 → M7 → M4, then the gate line → M10, M6, M9. The drains are
+held at the OTA's operating point. This bench reproduces the full OTA exactly (35.35 / 300.8 µA,
+gate line at 652.3 mV).
+
+- **Random**: sky130 mismatch models, tt_mm 27 °C, 200 samples. Each _mm corner also gets
+  100 samples.
+- **Gradient**: the diode's Vth is shifted by G × d, with G = 0.5 … 5 µV/µm (literature range;
+  sky130 gives none).
+- **Temperature**: the bias block (M5, M7, M4) sits at T + ΔT and the mirror at T. ngspice ignores
+  `dtemp` on the sky130 devices, so the bias block is solved at T + ΔT first and its gate voltage
+  then drives the mirror at T. This is exact at DC because the gates draw no current.
+- **Heat source**: 20 mW (e.g. a small output buffer or LDO pass device) in a 50 × 50 µm block,
+  10 µm from the near element, with ΔT(r) = P/(2πkr). H1: mirror next to the source (diode
+  cooler). H2: diode next to the source (diode hotter). At 100 µm the diode–mirror ΔT is 0.46 K.
+
+**Step 2: whole OTA.** The mean ± 3σ mirror currents are referred to gate offsets on
+M10/M6/M9 and injected into the full OTA at tt 27 °C and fs −20 °C (the tightest corner). This
+is done twice: random only, and random + heat + 5 µV/µm at 100 µm in the same direction.
+
+### Mirror currents (tt_mm 27 °C, 200 samples)
+
+| | expected (ratio × IB) | nominal | MC mean | σ | min / max (vs nominal) |
+|---|---|---|---|---|---|
+| input I(M7) | 18.51 µA | 18.48 (−0.14 %) | 18.48 | 0.54 % | −1.3 / +1.4 % |
+| I(M10) tail | 37.01 µA | 35.35 (−4.5 %) | 35.34 | 1.82 % | −4.3 / +5.4 % |
+| I(M6) | 296.1 µA | 300.8 (+1.6 %) | 301.0 | 1.61 % | −3.6 / +4.8 % |
+| I(M9) | 296.1 µA | 300.8 (+1.6 %) | 300.8 | 1.62 % | −3.9 / +4.4 % |
+| gate line V | – | 652.3 mV | – | 1.68 mV | – |
+| I(M6) − I(M9) | 0 | 0 | – | 0.50 % | – |
+
+- The gap between expected and nominal is systematic (Vds: tail 263 mV, sinks 887 mV, diode
+  652 mV), not mismatch.
+- The outputs are strongly correlated (r = 0.8–0.95) because the small diode M4 (2 units) sets
+  most of the random error, and all outputs share it.
+- The process corners barely change this: σ is 1.8–2.0 % (tail) and 1.5–1.6 % (sinks) at every
+  _mm corner, and the error vs expected stays −4.3 … −5.4 % (tail) and +1.3 … +1.9 % (sinks).
+
+### Effect of distance (systematic, added on top of the random spread)
+
+| at 100 µm | ΔI (all outputs) | gate line |
+|---|---|---|
+| heat source 20 mW (H1/H2) | ±0.12 % | ±0.12 mV |
+| gradient 1 / 5 µV/µm | ±0.09 / ±0.47 % | ±0.10 / ±0.50 mV |
+| heat + 5 µV/µm, same direction | ±0.58 % | ±0.62 mV |
+| (random 1σ, for scale) | 1.6 % | 1.7 mV |
+
+- At 10 µm everything stays below 0.09 %.
+- The diode-vs-mirror temperature sensitivity is −0.25 %/K at tt 27 °C (−0.14 … −0.34 %/K over
+  corners). The diode's Vgs drifts only −0.27 mV/K at this bias, close to its zero-TC point.
+- A heat source would need to make the diode about 6 K hotter or cooler than the mirror to equal
+  1σ of the random mismatch.
+
+### Whole OTA with the worst case injected
+
+| | tt 27 °C nominal | −3σ random | −3σ, 100 µm | fs −20 °C nominal | −3σ random | −3σ, 100 µm |
+|---|---|---|---|---|---|---|
+| I(M6) µA | 300.8 | 286.1 | 284.4 | 299.9 | 284.0 | 282.1 |
+| sat. margin mV (≥ 50) | 88.7 | 85.0 | 84.6 | 50.5 | **47.0** | **46.6** |
+| VOCM mV (±30) | −13.2 | −21.4 | −22.2 | −18.5 | −26.9 | −27.8 |
+| power mW | 1.348 | 1.295 | 1.288 | 1.345 | 1.287 | 1.280 |
+| UGB MHz | 191.1 | 186.5 | 185.9 | 219.4 | 212.9 | 212.1 |
+| PM ° | 64.1 | 63.5 | 63.4 | 62.8 | 62.3 | 62.3 |
+| gain dB | 68.45 | 68.51 | 68.52 | 69.14 | 69.19 | 69.20 |
+
+- In the +3σ direction everything improves except power (1.41 mW, still under 1.5).
+- The M6/M9 split at 3σ (±1.5 %) gives an input offset of only 18 µV and costs 0.6 dB of the
+  CMRR proxy.
+- Moving the diode 100 µm away adds about 0.4 mV of saturation margin loss, 0.9 mV of VOCM and
+  0.6 MHz of UGB on top of the random worst case.
+- At fs −20 °C the random −3σ alone already breaks the 50 mV saturation spec (47.0 mV). That is
+  a pre-existing margin issue of the design (README 06: 50.5 mV nominal), not a result of the
+  separation.
+
+**Verdict:** with the diode 1–100 µm away and only the gate line between, random mismatch
+dominates by a wide margin. The distance adds at most 0.6 % (≈ 0.35σ) with a 20 mW heat source
+and a 5 µV/µm gradient together. Separating the diode costs nothing measurable at the OTA
+level, provided the ground is not shared (case c1b).
+
+![currents](plots/mm_currents.png)
+![distance](plots/mm_distance.png)
+![corners](plots/mm_corners.png)
+![ota](plots/mm_ota.png)
+
+Limits: the gradient value and the heat-spreading formula are assumptions (no thermal simulation,
+no package); only the bias block is heated, not a temperature gradient across the mirror row
+itself; the worst cases are injected as gate offsets (DC-equivalent), not as full Monte Carlo of
+the whole OTA.
